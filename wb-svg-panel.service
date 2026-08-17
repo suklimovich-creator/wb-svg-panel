@@ -1,0 +1,30 @@
+[Unit]
+Description=SVG-панели умного дома (wb-svg-panel)
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+# Всё лежит на /mnt/data — это единственный раздел, который переживает
+# обновление прошивки. На rootfs (/opt, /etc) держать код нельзя.
+User=root
+WorkingDirectory=/mnt/data/wb-svg-panel
+Environment=PYTHONUNBUFFERED=1
+Environment=WB_PANEL_CONFIG=/mnt/data/wb-svg-panel/config.yaml
+ExecStart=/usr/bin/python3 /mnt/data/wb-svg-panel/panel.py
+Restart=always
+RestartSec=5
+
+# Логи только в journald — ничего не пишем на eMMC.
+StandardOutput=journal
+StandardError=journal
+
+# Сервису нечего писать на диск вообще: состояние в памяти,
+# история читается через MQTT-RPC.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

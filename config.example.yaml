@@ -1,0 +1,205 @@
+# wb-svg-panel — пример конфига.
+#
+#   cp config.example.yaml config.yaml
+#
+# Имена каналов посмотрите на странице /panel/channels — там все устройства
+# контроллера с текущими значениями. Здесь показан каждый тип плитки по разу.
+#
+# Конфиг перечитывается сам, как только меняется файл: правите — жмёте F5.
+
+theme: light           # light | dark
+
+# Нажатия на плитки. По умолчанию выключены — панель только показывает.
+# При interactive: true страница <имя>.html вешает обработчик на плитки
+# switch / dimmer / light / curtain и публикует команду в
+# /devices/<устройство>/controls/<канал>/on. Демону разрешено писать ТОЛЬКО
+# в каналы нарисованных плиток.
+interactive: false
+
+# Строка «Включено / Выключено» под названием плитки. По умолчанию скрыта:
+# состояние видно по оранжевой рамке и по тумблеру.
+show_status: false
+
+mqtt:
+  host: localhost
+  port: 1883
+  client_id: wb-svg-panel
+
+http:
+  host: 127.0.0.1      # наружу выходим только через nginx
+  port: 8088
+  refresh: 10          # раз во сколько секунд страница перезапрашивает картинку
+
+history:
+  source: auto         # auto | sqlite | rpc
+  cache_ttl: 60
+
+panels:
+
+  # =========================================================================
+  # Сводная панель: открывается по /main.svg и /main.html
+  main:
+    title: "Дом"
+    cols: 4
+    tiles:
+
+      # --- график: до трёх кривых на одной плитке ---------------------------
+      - type: chart
+        title: "Гостиная"
+        icon: thermo
+        w: 2                 # двойная ширина
+        range: 12h           # 30m | 6h | 12h | 3d
+        points: 90
+        grid_labels: true    # значения на линиях сетки
+        time_labels: true    # время под кривой
+        series:
+          - channel: "wb-msw-v4_11/Temperature"
+            unit: "°C"
+            color: "#E08A2D"
+          - channel: "wb-msw-v4_11/Humidity"
+            unit: "%"
+            color: "#3B93C4"
+            digits: 0
+
+      # Пороги перекрашивают кривую, когда значение выше заданного.
+      - type: chart
+        title: "Воздух"
+        icon: co2
+        w: 2
+        range: 12h
+        points: 90
+        series:
+          - channel: "wb-msw-v4_11/CO2"
+            unit: "ppm"
+            color: "#4E9A6B"
+            digits: 0
+            thresholds:
+              - {above: 1000, color: "#D9A227"}
+              - {above: 1500, color: "#C4553B"}
+
+      # --- прогноз погоды ---------------------------------------------------
+      # Ждёт виртуальное устройство с каналами прогноза. Готовый сценарий
+      # wb-rules, который тянет Open-Meteo, лежит в extras/ (если вы его
+      # положили) — либо подставьте своё устройство.
+      - type: forecast
+        title: "Погода"
+        icon: sun
+        w: 2
+        device: weather
+        hours: 12
+
+      # --- термостат --------------------------------------------------------
+      # Уставка крупно, фактическая температура в углу. Рамка загорается,
+      # только когда головка реально греет, а не когда просто включён режим.
+      # Здесь пример со Sprut.hub: канал задан полным MQTT-топиком.
+      - type: thermostat
+        title: "Гостиная"
+        channel_target:  "Sprut.hub-XXXXXXXX_1/accessories/100/13/18"  # уставка
+        channel_current: "Sprut.hub-XXXXXXXX_1/accessories/100/13/17"  # факт
+        channel_state:   "Sprut.hub-XXXXXXXX_1/accessories/100/13/15"  # 0 ждёт / 1 греет
+        channel_mode:    "Sprut.hub-XXXXXXXX_1/accessories/100/13/16"  # 0 выкл / 1 нагрев / 2 охл / 3 авто
+
+      # --- кондиционер ------------------------------------------------------
+      # Ждёт виртуальное устройство с каналами режима, вентилятора и уставки.
+      - type: ac
+        title: "Гостиная"
+        device: haier_livingroom
+        temp_min: 16
+        temp_max: 30
+
+      # --- выключатель ------------------------------------------------------
+      - type: switch
+        title: "Отопление"
+        channel: "wb-mr3_66/K2"
+        icon: power
+        on_text: "Греет"
+        off_text: "Ждёт"
+
+      # Реле с нормально замкнутым контактом: логика перевёрнута.
+      - type: switch
+        title: "Клапан воды"
+        channel: "wb-mr6cu_3/K1"
+        icon: drop
+        invert: true
+
+      # --- значение без графика --------------------------------------------
+      - type: value
+        title: "Улица"
+        channel: "wb-w1_28/External Sensor 1"
+        unit: "°C"
+        icon: thermo
+        w: 0.5
+        h: 0.5
+
+      # --- ссылка на другую панель -----------------------------------------
+      - type: link
+        title: "Гостиная"
+        panel: livingroom
+        icon: door
+
+  # =========================================================================
+  # Комнатная панель. hidden: true — не показывается в списке на главной,
+  # но открывается по прямой ссылке и служит источником плиток для сводных.
+  livingroom:
+    title: "Гостиная"
+    hidden: true
+    cols: 4
+    tiles:
+
+      # --- лента с яркостью и цветовой температурой -------------------------
+      - type: light
+        w: 0.5
+        h: 1
+        title: "Лента у окна"
+        channel_switch: "wb-led_42/CCT1"
+        channel_brightness: "wb-led_42/CCT1 Brightness"
+        channel_temp: "wb-led_42/CCT1 Temperature"
+        temp_unit: percent   # percent | kelvin — зависит от настройки канала
+        temp_min: 2700
+        temp_max: 6500
+
+      # --- диммер: отдельный канал включения и отдельный яркости ------------
+      - type: dimmer
+        w: 0.5
+        h: 1
+        title: "Трек правый"
+        channel: "wb-mdm3_87/K1"
+        channel_brightness: "wb-mdm3_87/Channel 1"
+
+      # --- штора ------------------------------------------------------------
+      # channel — куда писать положение, channel_state — откуда читать текущее.
+      - type: curtain
+        title: "Штора"
+        channel: "Sprut.hub-XXXXXXXX_1/accessories/108/13/16"
+        channel_state: "Sprut.hub-XXXXXXXX_1/accessories/108/13/17"
+
+      - type: switch
+        title: "Люстра"
+        channel: "wb-mr6cu_1/K1"
+        icon: bulb
+
+  kitchen:
+    title: "Кухня"
+    hidden: true
+    cols: 4
+    tiles:
+      - type: switch
+        title: "Рабочая зона"
+        channel: "wb-mr6cu_1/K2"
+        icon: bulb
+
+  # =========================================================================
+  # Сводная панель из чужих плиток: они не дублируются в конфиге, а берутся
+  # из комнатных панелей целиком.
+  all:
+    title: "Весь дом"
+    cols: 4
+    sections:
+      - from: livingroom
+        title: "Гостиная"
+      - from: kitchen
+        title: "Кухня"
+
+# Доступные иконки:
+#   blind bulb co2 curtain door drop fan heat leaf moon motion next power
+#   snow socket strip sun swing tap thermo tv wind window

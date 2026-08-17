@@ -1,0 +1,27 @@
+# Конфиг у каждого свой: имена устройств, каналы, комнаты.
+# В репозитории живёт только config.example.yaml.
+config.yaml
+
+# Пароли и всё, что рядом с ними
+*.passwd
+*.htpasswd
+.htpasswd
+secrets.*
+
+# Бэкапы, которые оставляют после себя патч-скрипты
+*.bak
+*.bak-*
+*.orig
+*.rej
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Хлам редакторов и систем
+.vscode/
+.idea/
+*.swp
+.DS_Store

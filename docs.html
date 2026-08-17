@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Как собирать панели</title>
+<style>
+ :root{--ink:#3A3A3E;--dim:#8A8A90;--line:rgba(60,60,67,.16);--accent:#E09B2D;
+       --bg:#F1F1F3;--card:#fff;--code:#F6F6F8}
+ *{box-sizing:border-box}
+ body{font:15px/1.6 -apple-system,'Segoe UI',Inter,system-ui,sans-serif;
+      margin:0;background:var(--bg);color:var(--ink)}
+ .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 80px;
+       display:grid;grid-template-columns:220px 1fr;gap:34px}
+ nav{position:sticky;top:24px;align-self:start;font-size:14px}
+ nav a{display:block;color:var(--dim);text-decoration:none;padding:3px 0}
+ nav a:hover{color:var(--accent)}
+ nav .lvl2{padding-left:12px;font-size:13.5px}
+ nav hr{border:none;border-top:1px solid var(--line);margin:10px 0}
+ main{min-width:0}
+ h1{font-size:28px;letter-spacing:-.6px;margin:0 0 6px}
+ h2{font-size:21px;letter-spacing:-.3px;margin:38px 0 10px;
+    padding-top:12px;border-top:1px solid var(--line)}
+ h3{font-size:16.5px;margin:24px 0 8px}
+ p,li{margin:8px 0}
+ code{font:13.5px ui-monospace,Menlo,Consolas,monospace;
+      background:var(--code);padding:1px 5px;border-radius:5px}
+ pre{background:var(--card);border:1px solid var(--line);border-radius:12px;
+     padding:14px 16px;overflow-x:auto;margin:12px 0}
+ pre code{background:none;padding:0;font-size:13px;line-height:1.55}
+ table{border-collapse:collapse;width:100%;margin:12px 0;background:var(--card);
+       border:1px solid var(--line);border-radius:12px;overflow:hidden}
+ th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);
+       vertical-align:top;font-size:14px}
+ th{background:#EAEAEE;font-weight:600}
+ tr:last-child td{border-bottom:none}
+ td:first-child{white-space:nowrap}
+ .note{background:var(--card);border-left:3px solid var(--accent);
+       border-radius:0 10px 10px 0;padding:11px 15px;margin:14px 0}
+ .lead{color:var(--dim);font-size:16px;margin-bottom:4px}
+ .back{display:inline-block;margin-bottom:18px;color:var(--dim);
+       text-decoration:none;font-size:14px}
+ .back:hover{color:var(--accent)}
+ .sw{display:inline-block;width:11px;height:11px;border-radius:3px;
+     vertical-align:-1px;margin-right:5px;border:1px solid rgba(0,0,0,.15)}
+ @media(max-width:820px){.wrap{grid-template-columns:1fr}nav{position:static}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <a href="./">← К списку панелей</a>
+  <hr>
+  <a href="#start">С чего начать</a>
+  <a href="#structure">Структура файла</a>
+  <a href="#channels">Имена каналов</a>
+  <a href="#panels">Панели и сетка</a>
+  <a href="#sections">Разделы</a>
+  <a href="#hidden">Скрытые панели</a>
+  <a href="#sizes">Размеры плиток</a>
+  <a href="#tiles">Типы плиток</a>
+  <a class="lvl2" href="#t-chart">chart — график</a>
+  <a class="lvl2" href="#t-switch">switch — выключатель</a>
+  <a class="lvl2" href="#t-dimmer">dimmer — диммер</a>
+  <a class="lvl2" href="#t-light">light — лента</a>
+  <a class="lvl2" href="#t-curtain">curtain — шторы</a>
+  <a class="lvl2" href="#t-thermostat">thermostat — термостат</a>
+  <a class="lvl2" href="#t-forecast">forecast — погода</a>
+  <a class="lvl2" href="#t-ac">ac — кондиционер</a>
+  <a class="lvl2" href="#t-link">link — переход</a>
+  <a class="lvl2" href="#t-value">value — значение</a>
+  <a href="#dots">Индикатор данных</a>
+  <a href="#icons">Значки</a>
+  <a href="#colors">Цвета</a>
+  <a href="#interactive">Нажатия на плитки</a>
+  <a href="#urls">Адреса</a>
+  <a href="#flat">Подстановка переменных</a>
+  <a href="#kiosk">Планшет на стене</a>
+  <a href="#recipes">Готовые рецепты</a>
+  <a href="#trouble">Что делать, если</a>
+</nav>
+
+<main>
+<a class="back" href="./">← К списку панелей</a>
+<h1>Как собирать панели</h1>
+<p class="lead">Всё описывается одним файлом <code>config.yaml</code>.
+Изменения подхватываются на лету — сохранили файл, обновили страницу.</p>
+
+<h2 id="start">С чего начать</h2>
+<ol>
+  <li>Откройте <a href="channels">список каналов</a> и найдите нужные.
+      Кнопка ⧉ копирует имя в буфер.</li>
+  <li>Впишите плитку в <code>config.yaml</code> на контроллере
+      (<code>/mnt/data/wb-svg-panel/config.yaml</code>).</li>
+  <li>Обновите страницу панели. Перезапускать сервис не нужно.</li>
+</ol>
+<div class="note">
+  Перезапуск <code>systemctl restart wb-svg-panel</code> нужен только когда
+  менялся сам <code>panel.py</code>. Правки конфига и шаблона
+  <code>panel.svg.j2</code> применяются без него.
+</div>
+
+<h2 id="structure">Структура файла</h2>
+<pre><code>theme: light           # light | dark
+show_status: false     # подпись «Включено/Выключено» под названием
+
+mqtt:
+  host: localhost
+  port: 1883
+
+http:
+  host: 127.0.0.1
+  port: 8088
+  refresh: 10          # период автообновления .html-обёртки, секунд
+
+history:
+  source: auto         # auto | sqlite | rpc
+  cache_ttl: 60
+
+panels:
+  main:                # ← имя панели, оно же кусок адреса: /main.svg
+    title: "Дом"
+    cols: 4
+    tiles:
+      - type: switch
+        title: "Кухня"
+        channel: "wb-mr6c_183/K1"</code></pre>
+
+<h2 id="channels">Имена каналов</h2>
+<p>Соглашение Wiren Board — <b>ровно один слэш</b>:
+<code>устройство/канал</code>. Из топика
+<code>/devices/wb-msw-v4_149/controls/Temperature</code> получается
+<code>wb-msw-v4_149/Temperature</code>.</p>
+
+<p>Всё, где слэшей больше, считается <b>полным MQTT-топиком</b> — так на
+панель попадают устройства чужих интеграций (Sprut.hub, Zigbee2MQTT,
+самописные шлюзы). Подписка на такие топики оформляется автоматически:</p>
+<pre><code>      - type: curtain
+        title: "Штора"
+        channel: "Sprut.hub-XXXXXXXX_1/accessories/108/13/16"</code></pre>
+<p>У сторонних топиков нет метаданных <code>/meta</code>, поэтому единицы
+измерения и максимум задавайте в конфиге вручную.</p>
+
+<h2 id="panels">Панели и сетка</h2>
+<table>
+<tr><th>Поле</th><th>Смысл</th></tr>
+<tr><td><code>title</code></td><td>Заголовок в шапке панели</td></tr>
+<tr><td><code>cols</code></td><td>Число колонок, по умолчанию 4.
+  Ширина = <code>cols × 170 + зазоры</code>: 4 колонки — 762 px, 2 — 394 px</td></tr>
+<tr><td><code>theme</code></td><td><code>light</code> / <code>dark</code>,
+  переопределяет глобальную</td></tr>
+<tr><td><code>show_status</code></td><td>Показывать вторую строку подписи
+  у всех плиток панели</td></tr>
+<tr><td><code>tiles</code></td><td>Список плиток</td></tr>
+<tr><td><code>sections</code></td><td>Вместо <code>tiles</code> — панель из
+  озаглавленных разделов</td></tr>
+<tr><td><code>hidden</code></td><td><code>true</code> — убрать панель из
+  списка на главной; по прямой ссылке она продолжит открываться</td></tr>
+</table>
+
+<p>Каждая плитка занимает <code>w</code> × <code>h</code> ячеек (по умолчанию
+1×1) и укладывается автоматически: первое свободное место сверху вниз, слева
+направо. Порядок в списке — порядок укладки.</p>
+
+<div class="note">
+  Отдельную панель для телефона заводить не нужно: число колонок
+  переопределяется в адресе — <code>/main.svg?cols=2</code>. Плитки
+  переукладываются сами.
+</div>
+<p><b>Переключатель на странице.</b> В правом верхнем углу панели и рядом с
+заголовком на главной есть выбор: <code>авто · 2 · 3 · 4 · 6 · 8</code>.
+«Авто» — как задано в конфиге, остальное переопределяет.</p>
+<p>Значение <b>запоминается в браузере</b> и переносится между панелями: на
+горизонтальном экране достаточно один раз выбрать 6, и переходы больше не
+сбрасывают раскладку. Хранится отдельно на каждом устройстве, так что
+планшет, телефон и ноутбук друг другу не мешают.</p>
+
+<h2 id="hidden">Скрытые панели</h2>
+<p>Панель можно убрать из списка на главной, не удаляя её:</p>
+<pre><code>  livingroom:
+    title: "Гостиная"
+    hidden: true
+    cols: 4
+    tiles: [...]</code></pre>
+<p>По прямой ссылке <code>/livingroom.svg</code> она открывается как обычно —
+скрытие влияет только на список. На главной появляется галочка
+«Показать скрытые» с их числом; при каждом открытии страницы она снята,
+так что по умолчанию видны только основные панели. Скрытые показываются
+пунктирной рамкой и меткой «скрыта».</p>
+<div class="note">
+  Типичный случай — комнаты, уже собранные в объединённую панель через
+  <code>sections</code> / <code>from</code>. Например
+  <code>livingroom</code> и <code>kitchen</code> внутри
+  <code>kitchen-livingroom</code>: они нужны как источник плиток, но
+  дублируют её в списке.
+</div>
+
+<h2 id="sections">Разделы</h2>
+<p>Панель можно собрать из нескольких озаглавленных частей. Ключевое —
+<code>from</code>: раздел ссылается на другую панель и подтягивает её плитки
+целиком, не дублируя их в конфиге. Правите комнату — меняется и объединённая
+панель.</p>
+<pre><code>  kuhnya-gostinaya:
+    title: "Кухня-гостиная"
+    cols: 4
+    sections:
+      - from: gostinaya
+        title: "Гостиная"
+      - from: kuhnya
+        title: "Кухня"</code></pre>
+<p>Раздел может задавать и свои плитки, и совмещать одно с другим:</p>
+<pre><code>    sections:
+      - title: "Климат"
+        tiles:
+          - {type: chart, title: "Гостиная", w: 2, range: 12h, series: [...]}
+      - from: gostinaya
+        title: "Свет"
+        tiles:                      # сначала плитки из gostinaya, потом эти
+          - {type: switch, title: "Ночник", channel: "wb-mr6c_183/K6"}</code></pre>
+<p>Каждый раздел начинается с новой строки сетки. Панель без
+<code>sections</code> — это один безымянный раздел.</p>
+
+<h2 id="sizes">Размеры плиток</h2>
+<p>Сетка считается в половинках плитки, поэтому кроме обычных и двойных
+появились мелкие — под простые выключатели, которым не нужна ни цифра, ни
+подпись состояния.</p>
+<table>
+<tr><th><code>w</code> / <code>h</code></th><th>Размер</th><th>Для чего</th></tr>
+<tr><td><code>0.5</code></td><td>78 × 78</td><td>Простой выключатель: значок
+  и короткая подпись по центру</td></tr>
+<tr><td><code>1</code> (по умолчанию)</td><td>170 × 170</td><td>Лента, диммер,
+  шторы, значение</td></tr>
+<tr><td><code>2</code></td><td>354 × 170</td><td>График</td></tr>
+<tr><td><code>3</code></td><td>538 × 170</td><td>Широкий график</td></tr>
+</table>
+<pre><code>      - type: switch
+        title: "Бра"
+        channel: "wb-mr6c_183/K4"
+        icon: bulb
+        w: 0.5
+        h: 0.5</code></pre>
+<p>Мелкая плитка сама переключается на компактный вид: значок по центру
+сверху, подпись мельче и по центру снизу, цифра в углу и вторая строка
+скрываются. Шесть таких помещаются в ряд там, где раньше было четыре обычных.</p>
+<div class="note">
+  Размеры существующих плиток не изменились: <code>w: 1</code> — это по-прежнему
+  170 px. Мелкие просто добавились как новая возможность.
+</div>
+
+<h2 id="tiles">Типы плиток</h2>
+<p>Общие поля любой плитки:</p>
+<table>
+<tr><th>Поле</th><th>Смысл</th></tr>
+<tr><td><code>type</code></td><td>chart, switch, dimmer, light, curtain, value</td></tr>
+<tr><td><code>title</code></td><td>Название под плиткой. Можно в две строки —
+  вставьте перенос:
+  <code>title: "Дим трек\nправый"</code> (в YAML это двойные кавычки)</td></tr>
+<tr><td><code>w</code>, <code>h</code></td><td>Размер, по умолчанию 1×1.
+  <code>2</code> — двойная, <code>0.5</code> — мелкая (см.
+  <a href="#sizes">размеры</a>)</td></tr>
+<tr><td><code>icon</code></td><td>Значок, см. <a href="#icons">список</a></td></tr>
+<tr><td><code>show_status</code></td><td>Показать вторую строку подписи
+  («Включено» / «Выключено»)</td></tr>
+</table>
+
+<h3 id="t-chart">chart — график</h3>
+<pre><code>      - type: chart
+        title: "Гостиная"
+        w: 2
+        range: 12h              # 6h, 8h, 12h, 24h, 90m, 7d
+        points: 90              # сколько точек тянуть из базы
+        series:
+          - channel: "wb-msw-v4_149/Temperature"
+            unit: "°C"
+            color: "#E08A2D"
+            digits: 1
+          - channel: "wb-msw-v4_149/Humidity"
+            unit: "%"
+            color: "#3B93C4"
+            digits: 0</code></pre>
+<table>
+<tr><th>Поле серии</th><th>Смысл</th></tr>
+<tr><td><code>channel</code></td><td>Что рисуем</td></tr>
+<tr><td><code>unit</code></td><td>Подпись единиц; по умолчанию из <code>/meta</code></td></tr>
+<tr><td><code>color</code></td><td>Цвет линии</td></tr>
+<tr><td><code>digits</code></td><td>Знаков после запятой в крупной цифре</td></tr>
+<tr><td><code>min</code>, <code>max</code></td><td>Жёсткие границы шкалы</td></tr>
+<tr><td><code>grid</code></td><td>Шаг горизонтальной сетки</td></tr>
+<tr><td><code>thresholds</code></td><td>Цвет по текущему значению</td></tr>
+<tr><td><code>text_color</code></td><td>Цвет цифры, если не устраивает
+  автоматический</td></tr>
+</table>
+
+<p><b>Шкала.</b> По умолчанию шаг сетки считается от размаха данных, а не от
+единиц измерения. Это важно: комнатная температура за 12 часов гуляет на
+полтора градуса, и жёсткий шаг 5 °C растянул бы шкалу втрое шире данных,
+превратив кривую в плоскую нитку. При автоподборе данные занимают 70–90 %
+высоты. Число делений у всех рядов плитки одинаковое, поэтому линии
+температуры и влажности совпадают.</p>
+
+<p>Когда нужен именно фиксированный вид:</p>
+<pre><code>          - channel: "wb-msw-v4_149/Temperature"
+            min: 20            # жёсткие границы
+            max: 26
+            grid: 2            # линия каждые 2 °C</code></pre>
+<p>Можно и по отдельности: только <code>grid</code> оставит автоматические
+границы, только <code>min</code>/<code>max</code> — автоматический шаг.</p>
+
+<p><b>Пороговая окраска.</b> Цвет линии и цифры меняется по текущему
+значению — удобно для CO₂ и качества воздуха:</p>
+<pre><code>          - channel: "wb-msw-v4_232/CO2"
+            unit: "ppm"
+            color: "#4E9A6B"                      # норма
+            thresholds:
+              - {above: 1000, color: "#D9A227"}   # душно
+              - {above: 1500, color: "#C4553B"}   # пора проветрить</code></pre>
+<p>Правила перебираются по порядку, побеждает последний подошедший.</p>
+
+<p><b>Подписи осей.</b> Шкала подгоняется под сами данные, поэтому колебание
+на полградуса растягивается на всю высоту плитки — без подписей это читается
+как обвал. Включаются тремя независимыми флагами у плитки:</p>
+<table>
+<tr><th>Поле</th><th>Что добавляет</th></tr>
+<tr><td><code>grid_labels: true</code></td><td>Значения на горизонтальных
+  линиях: первая серия слева, вторая справа, каждая своим цветом</td></tr>
+<tr><td><code>time_labels: true</code></td><td>Время под кривой на «круглых»
+  часах</td></tr>
+<tr><td><code>show_span: true</code></td><td>Диапазон рядом с названием,
+  например «24.0–25.0 °C»</td></tr>
+</table>
+<pre><code>      - type: chart
+        title: "Спальня"
+        w: 2
+        range: 12h
+        grid_labels: true
+        time_labels: true
+        series: [...]</code></pre>
+
+<div class="note">
+  График появится только у каналов, которые пишутся в базу
+  <code>wb-mqtt-db</code>. На <a href="channels">странице каналов</a> у них
+  стоит пометка «история». Если её нет — канал нужно добавить в
+  <code>/etc/wb-mqtt-db.conf</code>.
+</div>
+
+<h3 id="t-switch">switch — выключатель</h3>
+<pre><code>      - type: switch
+        title: "Кухня"
+        channel: "wb-mr6c_183/K1"
+        icon: bulb
+        on_text: "Греет"        # если включён show_status
+        off_text: "Ждёт"</code></pre>
+<p>Иконка по умолчанию — <code>toggle</code>, тумблер с бегунком.
+Включённая плитка обводится оранжевой рамкой.</p>
+
+<h3 id="t-dimmer">dimmer — диммируемый светильник</h3>
+<pre><code>      - type: dimmer
+        title: "Дим трек правый"
+        channel: "wb-mdm3_87/K1"                # вкл/выкл
+        channel_brightness: "wb-mdm3_87/Channel 1"
+        color: "#E0A050"                        # приглушённый тёплый</code></pre>
+<p>Заливка снизу вверх на высоту яркости. У <code>wb-mdm3</code> выключатель
+и яркость — разные каналы: <code>K1</code> и <code>Channel 1</code>,
+<code>K2</code> и <code>Channel 2</code> и так далее.</p>
+
+<h3 id="t-light">light — светодиодная лента</h3>
+<pre><code>      - type: light
+        title: "Подсветка кухни"
+        channel_switch: "wb-led_122/CCT1"
+        channel_brightness: "wb-led_122/CCT1 Brightness"
+        channel_temp: "wb-led_122/CCT1 Temperature"
+        temp_unit: percent      # percent | kelvin
+        temp_min: 2700
+        temp_max: 6500</code></pre>
+<p>Плитка — поле из двух осей: по горизонтали цветовая температура (слева
+холодный, справа тёплый), по вертикали яркость (сверху ярко, снизу темно).
+Точка с перекрестьем показывает фактическое положение, оранжевая рамка —
+что лента включена. Выключенная гаснет целиком, чтобы не отвлекать на общей
+панели.</p>
+<p><code>temp_min</code> / <code>temp_max</code> задают и крайние цвета поля,
+поэтому подгоните их под реальный диапазон ленты. Если канал отдаёт 0–100
+вместо Кельвинов — <code>temp_unit: percent</code>. При <code>w: 2</code> в
+подписи появляются Кельвины, при <code>w: 1</code> только проценты.</p>
+
+<h3 id="t-curtain">curtain — раздвижные шторы</h3>
+<pre><code>      - type: curtain
+        title: "Штора"
+        channel: "Sprut.hub-.../accessories/108/13/16"      # 0…100
+        channel_state: "Sprut.hub-.../accessories/108/13/17" # необязательно
+        # channel_left / channel_right — если створки независимые
+        # inverted: true — если 0 у вас «открыто»</code></pre>
+<p>В проёме между створками виден силуэт окна с переплётом и подоконником —
+плитка читается как шторы даже мельком. Створки едут от краёв к центру,
+ширина каждой пропорциональна тому, насколько она <i>не</i> открыта. <code>channel_state</code> — соглашение
+HomeKit (<code>PositionState</code>): 0 закрывается, 1 открывается, 2 стоит.
+Пока привод едет, в подписи вместо процента будет «Открывается».</p>
+
+<h3 id="t-thermostat">thermostat — термостат</h3>
+<pre><code>      - type: thermostat
+        title: "Термостат"
+        channel_target:  ".../288/13/18"   # уставка, её и крутят
+        channel_current: ".../288/13/17"   # фактическая температура
+        channel_state:   ".../288/13/15"   # 0 ждёт / 1 греет
+        channel_mode:    ".../288/13/16"   # 0 выкл / 1 нагрев / 2 охл / 3 авто
+        scale_min: 14                      # границы шкалы циферблата
+        scale_max: 30</code></pre>
+<p>По умолчанию плитка рисуется <b>циферблатом</b>: незамкнутая дуга со
+шкалой, в центре уставка, под ней фактическая температура, а в разрыве
+дуги снизу — режим работы.</p>
+<p>Закрашен участок дуги <b>между фактической температурой и уставкой</b> —
+ровно тот разрыв, который прибору предстоит закрыть. Две засечки отмечают
+обе границы: тонкая с точкой на конце — где сейчас, толстая оранжевая —
+куда греем. Когда
+температуры сошлись, закрашенный сектор исчезает, и это видно издалека.</p>
+<table>
+<tr><th>Поле</th><th>Смысл</th></tr>
+<tr><td><code>scale_min</code>, <code>scale_max</code></td>
+    <td>Границы шкалы дуги, по умолчанию 14 и 30 °C</td></tr>
+<tr><td><code>dial: false</code></td>
+    <td>Плоский вид вместо циферблата: значок, крупная уставка слева,
+    фактическая в углу</td></tr>
+<tr><td><code>digits</code></td><td>Знаков после запятой в уставке,
+    по умолчанию 0</td></tr>
+</table>
+<div class="note">
+  Оранжевая рамка загорается по <code>channel_state</code>, то есть когда
+  прибор <b>реально работает</b>, а не когда просто выбран режим нагрева.
+  Иначе она горела бы круглосуточно и ничего не значила.
+</div>
+<p>Что показывается снизу:</p>
+<table>
+<tr><th>Подпись</th><th>Что происходит</th></tr>
+<tr><td><b>Греет</b></td><td>Режим нагрева, головка открыта, тепло идёт</td></tr>
+<tr><td><b>Не греет</b></td><td>Термостат включён, но уставка уже достигнута —
+  головка закрыта. Нормальное состояние прогретой комнаты</td></tr>
+<tr><td><b>Охлаждает</b></td><td><code>channel_state</code> = 2</td></tr>
+<tr><td><b>Выключен</b></td><td><code>channel_mode</code> = 0, термостат
+  не управляет отоплением вовсе</td></tr>
+</table>
+<p>Каналы соответствуют службе Thermostat в HomeKit: у виртуальных
+термостатов Sprut.hub это характеристики 15–19 внутри службы 13.
+<code>channel_state</code> и <code>channel_mode</code> необязательны — без
+них плитка покажет только числа.</p>
+
+<h3 id="t-forecast">forecast — погода и прогноз</h3>
+<pre><code>      - type: forecast
+        title: "Погода"
+        icon: sun
+        w: 2
+        device: weather      # префикс каналов виртуального устройства
+        hours: 12            # глубина прогноза</code></pre>
+<p>Слева значок, справа текущая температура и описание, по всей плитке —
+кривая прогноза по часам с подписями времени внизу. Точками отмечены
+минимум и максимум за период, рядом их значения.</p>
+<table>
+<tr><th>Поле</th><th>Смысл</th></tr>
+<tr><td><code>device</code></td><td>Префикс каналов, по умолчанию
+  <code>weather</code></td></tr>
+<tr><td><code>hours</code></td><td>Сколько часов прогноза рисовать,
+  по умолчанию 12</td></tr>
+<tr><td><code>grid</code></td><td>Шаг шкалы; по умолчанию от размаха</td></tr>
+</table>
+<p>Имена каналов подставляются сами по префиксу — перечислять их не нужно:
+<code>temperature</code>, <code>description</code>, <code>humidity</code>,
+<code>pressure</code>, <code>windspeed</code>, <code>forecast_ok</code> и
+<code>temp_00</code>…<code>temp_NN</code>.</p>
+<div class="note">
+  Это <b>прогноз</b>, а не история: данные берутся из каналов
+  <code>temp_00…temp_NN</code>, которые публикует скрипт wb-rules, а не из
+  <code>wb-mqtt-db</code>. Поэтому график появится сразу, ничего накапливать
+  не нужно. Жёлтая точка в углу — <code>forecast_ok = false</code>, то есть
+  скрипт не смог обновить прогноз целиком.
+</div>
+<p>Ветер из описания убирается автоматически: скрипт дописывает его туда
+строкой, а на плитке он и так есть отдельной цифрой. Длинное описание
+подрезается по ширине плитки.</p>
+
+<h3 id="t-ac">ac — кондиционер</h3>
+<pre><code>      - type: ac
+        title: "Кондиционер"
+        device: haier_livingroom   # префикс контролов моста wb-haier
+        temp_min: 16
+        temp_max: 30
+        step: 1</code></pre>
+<p>Раскладка: значок режима слева сверху, название комнаты справа, дуга-шкала,
+крупная уставка и под ней одна строка — «сейчас 27.5° · вент. Авто». Режим
+словом не дублируется, его показывает значок; когда работают жалюзи, рядом
+со значком появляется вторая пиктограмма. Подписи градусов на дуге
+показываются только при <code>w: 2</code> — на узкой плитке они наезжают.</p>
+<p><b>Положение лопастей</b> рисуется пиктограммой с реальным наклоном.
+Вертикальные: <code>upper</code>, <code>position_2</code>…<code>position_4</code>,
+<code>bottom</code>. Горизонтальные у Haier пронумерованы не по порядку —
+физически они идут так:</p>
+<table>
+<tr><th>Значение</th><th>Положение</th></tr>
+<tr><td><code>position_4</code></td><td>лево</td></tr>
+<tr><td><code>position_5</code></td><td>лево-центр</td></tr>
+<tr><td><code>position_1</code></td><td>центр</td></tr>
+<tr><td><code>position_6</code></td><td>центр-право</td></tr>
+<tr><td><code>position_7</code></td><td>право</td></tr>
+<tr><td><code>auto</code></td><td>качание</td></tr>
+</table>
+<p>Кнопки в пульте расставлены в этом же порядке: <code>Авто ◀◀ ◀ ● ▶ ▶▶</code>.
+<code>position_2</code> и <code>position_3</code> устройство не отдаёт, поэтому
+их нет.</p>
+<p>Имена контролов подставляются по префиксу — <code>power</code>, <code>mode</code>,
+<code>current_temp</code>, <code>target_temp</code>, <code>fan_mode</code>,
+<code>quiet</code>.</p>
+<table>
+<tr><th>Жест</th><th>Что делает</th></tr>
+<tr><td>Короткое нажатие</td><td>Включает и выключает</td></tr>
+<tr><td>Долгое нажатие</td><td>Открывает пульт</td></tr>
+</table>
+<p><b>Пульт.</b> Сверху колесо: шкала едет под неподвижной меткой по центру,
+тянешь влево — теплее. Значение уходит в MQTT при отпускании. Ниже пять
+режимов (охлаждение, нагрев, осушение, вентиляция, авто), скорость
+вентилятора 1/2/3/Авто и переключатель питания.</p>
+<p>Границы шкалы берутся из <code>temp_min</code> и <code>temp_max</code>;
+у Haier это 16–30. Шаг задаётся полем <code>step</code>.</p>
+
+<h3 id="t-link">link — переход на другую панель</h3>
+<pre><code>      - type: link
+        title: "Гостиная"
+        panel: livingroom      # имя панели из config.yaml
+        icon: door
+        subtitle: "свет и климат"</code></pre>
+<p>Ничего не читает из MQTT — просто открывает другую панель. Нужен, чтобы с
+общей проваливаться в комнату. Вместо <code>panel</code> можно указать
+<code>url</code> с произвольным адресом.</p>
+<p>Выбранное число колонок при переходе сохраняется. Обратно — ссылка
+<b>«← Панели»</b> в левом верхнем углу любой панели.</p>
+
+<h3 id="t-value">value — просто число</h3>
+<pre><code>      - type: value
+        title: "Давление"
+        channel: "wb-msw-v4_149/Pressure"
+        unit: "гПа"
+        digits: 0</code></pre>
+
+<h2 id="dots">Индикатор состояния данных</h2>
+<p>Маленькая точка в углу плитки говорит о самих данных, а не об устройстве:</p>
+<table>
+<tr><th>Точка</th><th>Что значит</th></tr>
+<tr><td><span class="sw" style="background:#8A8A90"></span>серая</td>
+    <td>Канала нет в MQTT либо у него выставлен флаг ошибки. Обычно опечатка
+    в имени — сверьтесь со <a href="channels">списком каналов</a></td></tr>
+<tr><td><span class="sw" style="background:#E09B2D"></span>жёлтая</td>
+    <td>Значение не обновлялось дольше 5 минут: устройство молчит</td></tr>
+<tr><td>нет точки</td><td>Данные свежие</td></tr>
+</table>
+<p>Порог задаётся константой <code>STALE_AFTER</code> в <code>panel.py</code>.
+Не путайте с оранжевой <b>рамкой</b> — та показывает, что устройство включено.</p>
+
+<h2 id="icons">Значки</h2>
+<p>Задаются полем <code>icon</code> у любой плитки. Все нарисованы в одном
+стиле — только штрихи, единый бокс 24×24 — и красятся автоматически: серым
+в покое, оранжевым когда устройство включено.</p>
+<table>
+<tr><th>Имя</th><th>Что изображено и подо что</th></tr>
+<tr><td><code>toggle</code></td><td>тумблер с бегунком, по умолчанию у switch</td></tr>
+<tr><td><code>bulb</code></td><td>лампа — свет</td></tr>
+<tr><td><code>power</code></td><td>кнопка питания — реле, отопление</td></tr>
+<tr><td><code>socket</code></td><td>розетка</td></tr>
+<tr><td><code>strip</code></td><td>светодиодная лента, по умолчанию у light</td></tr>
+<tr><td><code>blind</code></td><td>жалюзи, по умолчанию у curtain</td></tr>
+<tr><td><code>curtain</code></td><td>портьера</td></tr>
+<tr><td><code>window</code></td><td>окно</td></tr>
+<tr><td><code>thermo</code></td><td>термометр, по умолчанию у chart</td></tr>
+<tr><td><code>drop</code></td><td>капля — влажность</td></tr>
+<tr><td><code>co2</code></td><td>облако — CO₂</td></tr>
+<tr><td><code>leaf</code></td><td>лист — качество воздуха, VOC</td></tr>
+<tr><td><code>wind</code></td><td>поток — вентиляция, проветривание</td></tr>
+<tr><td><code>fan</code></td><td>вентилятор</td></tr>
+<tr><td><code>heat</code></td><td>волны тепла — тёплый пол, радиатор</td></tr>
+<tr><td><code>tap</code></td><td>кран — вода</td></tr>
+<tr><td><code>sun</code></td><td>солнце — день, яркий свет</td></tr>
+<tr><td><code>moon</code></td><td>луна — ночь, ночник</td></tr>
+<tr><td><code>tv</code></td><td>телевизор, монитор</td></tr>
+<tr><td><code>door</code></td><td>дверь</td></tr>
+<tr><td><code>motion</code></td><td>движение — датчик присутствия</td></tr>
+</table>
+<p>Наглядно все значки видно на макете <code>icons.svg</code>. Свой значок
+добавляется в <code>panel.svg.j2</code>: скопируйте любой
+<code>&lt;symbol id="ic-…"&gt;</code>, замените пути и укажите имя без
+префикса <code>ic-</code> в поле <code>icon</code>.</p>
+
+<h2 id="colors">Цвета</h2>
+<p>Палитра подобрана так, чтобы на одной панели величины не путались:</p>
+<table>
+<tr><th>Величина</th><th>Цвет</th><th>Код</th></tr>
+<tr><td>Температура</td><td><span class="sw" style="background:#E08A2D"></span>оранжевый</td><td><code>#E08A2D</code></td></tr>
+<tr><td>Влажность</td><td><span class="sw" style="background:#3B93C4"></span>синий</td><td><code>#3B93C4</code></td></tr>
+<tr><td>CO₂ — норма</td><td><span class="sw" style="background:#4E9A6B"></span>зелёный</td><td><code>#4E9A6B</code></td></tr>
+<tr><td>VOC — норма</td><td><span class="sw" style="background:#8E6BC4"></span>фиолетовый</td><td><code>#8E6BC4</code></td></tr>
+<tr><td>Тревога, первый порог</td><td><span class="sw" style="background:#D9A227"></span>янтарный</td><td><code>#D9A227</code></td></tr>
+<tr><td>Тревога, второй порог</td><td><span class="sw" style="background:#C4553B"></span>красный</td><td><code>#C4553B</code></td></tr>
+<tr><td>Включённое устройство</td><td><span class="sw" style="background:#E09B2D"></span>рамка</td><td><code>#E09B2D</code></td></tr>
+</table>
+<p>Цифра на графике автоматически красится в цвет своей линии, затемнённый
+для читаемости. Общие цвета темы правятся в <code>panel.svg.j2</code>,
+в блоке <code>&lt;style&gt;</code> вверху файла.</p>
+
+<h2 id="interactive">Нажатия на плитки</h2>
+<p>По умолчанию панель только показывает. Управление включается одной
+строкой — в корне конфига, у панели или у отдельной плитки:</p>
+<pre><code>interactive: true</code></pre>
+
+<p><b>Как это устроено.</b> Сама картинка <code>&lt;имя&gt;.svg</code>
+остаётся неинтерактивной: браузер не выполняет скрипты внутри
+<code>&lt;img&gt;</code>, и повесить обработчик там не на что. Поэтому
+страница <code>&lt;имя&gt;.html</code> не подставляет картинку в
+<code>&lt;img&gt;</code>, а <b>встраивает SVG прямо в разметку</b> — тогда
+плитки становятся обычными элементами страницы, и по ним можно кликать.</p>
+
+<p>У кликабельной плитки в SVG появляются атрибуты
+<code>data-topic</code>, <code>data-on</code>, <code>data-off</code> и
+<code>data-state</code>. Нажатие отправляет
+<code>POST /api/publish</code>, демон публикует значение в MQTT, а через
+0.4 и 1.2 секунды картинка перерисовывается — к этому моменту драйвер уже
+успевает отдать новое состояние.</p>
+
+<table>
+<tr><th>Тип плитки</th><th>Короткое нажатие</th><th>Долгое (0.5 с)</th></tr>
+<tr><td><code>switch</code></td><td>Переключает</td><td>—</td></tr>
+<tr><td><code>dimmer</code></td><td>Переключает</td>
+    <td>Вертикальный ползунок яркости</td></tr>
+<tr><td><code>light</code></td><td>Переключает</td>
+    <td>Поле «холодный–тёплый» по горизонтали, яркость по вертикали</td></tr>
+<tr><td><code>ac</code></td><td>Включает и выключает</td>
+    <td>Пульт: колесо температуры, режимы, вентилятор</td></tr>
+<tr><td><code>curtain</code></td><td>Открывает или закрывает целиком</td><td>—</td></tr>
+<tr><td><code>chart</code>, <code>forecast</code></td>
+    <td>Раскрывает на весь экран</td><td>—</td></tr>
+<tr><td><code>thermostat</code>, <code>value</code></td><td>—</td><td>—</td></tr>
+</table>
+
+<p><b>Полноэкранный вид.</b> График раскрывается не растяжением картинки, а
+перерисовкой: страница запрашивает
+<code>/tile/&lt;панель&gt;/&lt;номер&gt;.svg?w=…&amp;h=…</code> под размер
+экрана. Поэтому подписи, сетка и толщина линий остаются нормальными, а не
+раздуваются вместе с масштабом.</p>
+
+<p><b>Пульты.</b> Долгое нажатие на ленту открывает квадратное поле: точка
+задаёт сразу две величины — по горизонтали цветовую температуру (слева
+холодный), по вертикали яркость (вверх ярче). Значения уходят в MQTT при
+отпускании, а не на каждое движение пальца, иначе брокер завалило бы
+сообщениями. Для диммера то же самое, но одномерное: вертикальный ползунок
+с заливкой снизу.</p>
+
+<p>Пока открыт пульт или полноэкранный вид, автообновление панели на паузе —
+иначе картинка перерисовывалась бы под пальцем.</p>
+
+<p><b>Куда пишется команда.</b> У Wiren Board значение приходит в
+<code>/devices/&lt;устройство&gt;/controls/&lt;канал&gt;</code>, а команда
+уходит в тот же топик с суффиксом <code>/on</code>. Писать в топик состояния
+бесполезно — его тут же перетрёт драйвер. Для устройств сторонних шлюзов
+соглашение своё, поэтому топик задают явно:</p>
+<pre><code>      - type: curtain
+        title: "Штора"
+        channel: "Sprut.hub-.../accessories/108/13/16"
+        command_topic: "Sprut.hub-.../accessories/108/13/15"
+        command_open: "100"
+        command_close: "0"</code></pre>
+
+<p><b>Пароль и облако.</b> Панель закрыта так же, как штатный веб-интерфейс:
+из домашней сети открывается молча, снаружи — по паролю. Через Wiren Board
+Cloud второй пароль не спрашивается: облако уже проверило вход, а его запросы
+приходят с локального адреса и попадают под <code>allow 127.0.0.1</code>.
+Пароль из <code>/etc/nginx/panel.passwd</code> остаётся страховкой на случай,
+если порт 80 пробросят наружу напрямую.</p>
+
+<div class="note">
+  <b>Что демон может публиковать.</b> Только те командные топики, которые
+  соответствуют плиткам на интерактивных панелях — список пересобирается при
+  каждом запросе. Всё остальное отклоняется с кодом 403 и записью в лог.
+  Это важно: брокер на Wiren Board по умолчанию без пароля, и без такого
+  ограничения панель стала бы открытым шлюзом в MQTT — включая реле котла и
+  краны воды.
+</div>
+
+<p>Отдельные поля плитки: <code>command_topic</code>,
+<code>command_on</code>, <code>command_off</code> (для штор —
+<code>command_open</code> и <code>command_close</code>).</p>
+
+<h2 id="urls">Адреса</h2>
+<table>
+<tr><th>Адрес</th><th>Что отдаёт</th></tr>
+<tr><td><code>/</code></td><td>Список панелей с превью</td></tr>
+<tr><td><code>/&lt;имя&gt;.svg</code></td><td>Картинка панели</td></tr>
+<tr><td><code>/&lt;имя&gt;.svg?cols=2</code></td><td>Она же в две колонки</td></tr>
+<tr><td><code>/&lt;имя&gt;.html</code></td><td>Обёртка с автообновлением — для планшета</td></tr>
+<tr><td><code>/channels</code></td><td>Все каналы контроллера с фильтром</td></tr>
+<tr><td><code>/channels?format=text</code></td><td>То же для консоли</td></tr>
+<tr><td><code>/healthz</code></td><td>Состояние демона в JSON</td></tr>
+<tr><td><code>/api/publish</code></td><td>POST <code>{"topic":…,"value":…}</code>
+  — публикация в MQTT, только разрешённые топики</td></tr>
+<tr><td><code>/&lt;имя&gt;.svg?flat=0</code></td><td>Картинка с CSS-переменными
+  в исходном виде. По умолчанию они подставляются — см. ниже.</td></tr>
+<tr><td><code>/docs</code></td><td>Эта страница</td></tr>
+</table>
+
+<h2 id="flat">Подстановка CSS-переменных</h2>
+<p>Шаблон написан на CSS-переменных: <code>fill: var(--tile)</code>,
+<code>stroke-width: calc(1.6px * var(--fs))</code>. Перед отдачей значения
+<b>подставляются в разметку</b>:</p>
+<pre><code>было:  .plate { fill: var(--tile); stroke-width: var(--edge-w); }
+стало: .plate { fill: #D9D9DC;     stroke-width: 1.5; }</code></pre>
+<div class="note">
+  Зачем. Там, где переменные не поддерживаются, свойство просто
+  игнорируется — и <code>fill</code> становится чёрным по умолчанию. Плитки
+  на месте, нажатия срабатывают, а на тёмном фоне не видно ничего. Так ведут
+  себя браузеры старых планшетов и <code>librsvg</code>, которым
+  рисуют картинки для ESP32-дисплеев.
+</div>
+<p>Современным браузерам подстановка не мешает: результат тот же самый, файл
+даже чуть меньше. Отключается параметром <code>?flat=0</code>, если
+понадобится сырой вариант — например, чтобы поиграть с темой в инструментах
+разработчика.</p>
+<p>Важно: подстановка касается только <b>картинки</b>. Страница
+<code>&lt;имя&gt;.html</code> остаётся полной — с пультами, полноэкранными
+графиками и нажатиями.</p>
+
+<h2 id="kiosk">Планшет на стене</h2>
+<p>Цель — панель на весь экран, без адресной строки, и чтобы дисплей не
+гас. Три шага, каждый работает сам по себе.</p>
+
+<h3>1. Убрать рамку браузера</h3>
+<p>Откройте нужную панель, например <code>/panel/all.html</code>, и в меню
+браузера выберите <b>«Добавить на главный экран»</b>. Страница объявляет себя
+устанавливаемым приложением, поэтому с ярлыка она запускается в отдельном
+окне — без адресной строки, вкладок и кнопок.</p>
+<p>Если пункта в меню нет, помогает <b>двойное касание</b> по панели: она
+развернётся на весь экран средствами браузера.</p>
+
+<h3>2. Не давать экрану гаснуть</h3>
+<p>Страница пытается удержать экран сама: сперва штатным способом, а если
+браузер его не знает — заводит беззвучное зацикленное видео размером меньше
+килобайта. Пока что-то воспроизводится, Android экран не гасит.</p>
+<div class="note">
+  Надёжнее сделать это средствами Android, особенно на старых версиях:
+  <br>1. <code>Настройки → О планшете</code>, семь раз нажать на «Номер сборки»
+  — появится раздел «Для разработчиков»;
+  <br>2. в нём включить <b>«Не выключать экран»</b> (при подключённом
+  питании).
+  <br>Планшет на стене и так всегда на зарядке, так что это самый простой и
+  беспроигрышный путь.
+</div>
+<p>Дополнительно: <code>Настройки → Экран → Спящий режим</code> — максимальное
+значение.</p>
+
+<h3>3. Автозапуск и защита от выхода</h3>
+<p>Штатными средствами Android этого нет. Если нужно, чтобы панель
+поднималась сама после перезагрузки и её нельзя было случайно закрыть —
+ставится <b>Fully Kiosk Browser</b>: он умеет автозапуск, блокировку кнопок,
+расписание включения экрана и датчик движения (гасить экран, когда никого нет
+рядом). APK скачивается прямо с сайта разработчика, Play Market не нужен.</p>
+<p>Fully Kiosk использует системный WebView. Если панель нормально работает в
+штатном браузере планшета, заработает и там.</p>
+
+<h3>Что ещё полезно на стене</h3>
+<table>
+<tr><th>Приём</th><th>Зачем</th></tr>
+<tr><td><code>?cols=2</code></td><td>Крупнее плитки на небольшом экране</td></tr>
+<tr><td><code>theme: dark</code></td><td>Ночью не слепит</td></tr>
+<tr><td><code>http.refresh</code></td><td>Период обновления; при 10 секундах
+  картинка перекачивается, только если состояние изменилось</td></tr>
+<tr><td>Отдельная панель для стены</td><td>Оставьте на ней только то, чем
+  реально пользуетесь на ходу</td></tr>
+</table>
+
+<h2 id="recipes">Готовые рецепты</h2>
+
+<h3>Панель для планшета на стене</h3>
+<p>Откройте <code>/main.html</code> в киоск-режиме. Картинка обновляется раз
+в <code>http.refresh</code> секунд, но перекачивается только если состояние
+реально изменилось.</p>
+
+<h3>Панель для телефона</h3>
+<p><code>/main.html?cols=2</code> — та же панель, две колонки. Отдельная
+панель в конфиге не нужна.</p>
+
+<h3>Новая комната</h3>
+<pre><code>  kabinet:
+    title: "Кабинет"
+    cols: 4
+    tiles:
+      - type: chart
+        title: "Кабинет"
+        w: 2
+        range: 12h
+        series:
+          - {channel: "wb-msw-v4_XXX/Temperature", unit: "°C", color: "#E08A2D"}
+          - {channel: "wb-msw-v4_XXX/Humidity", unit: "%", color: "#3B93C4", digits: 0}
+      - type: switch
+        title: "Свет"
+        channel: "wb-mr6c_XXX/K1"</code></pre>
+<p>Панель появится на главной сама, сразу после сохранения файла.</p>
+
+<h3>Сборка конфига из вебморды</h3>
+<pre><code>cd /mnt/data/wb-svg-panel
+python3 wb-rooms-to-config.py \
+    --climate "Гостиная=wb-msw-v4_149" \
+    --climate "Детская=wb-msw-v4_174" \
+    --range 12h > config.new.yaml</code></pre>
+<p>Читает <code>/mnt/data/etc/wb-webui.conf</code> — настройки штатного
+веб-интерфейса. Каждый дашборд становится панелью, тройки CCT-каналов
+склеиваются в плитки лент, каналы <code>wb-mdm3</code> — в диммеры. Печатает
+результат в стандартный вывод, ничего не перезаписывает.</p>
+
+<h2 id="trouble">Что делать, если</h2>
+<table>
+<tr><th>Симптом</th><th>Причина и лечение</th></tr>
+<tr><td>Плитка серая, точка в углу</td>
+    <td>Канал не найден или в <code>/meta</code> флаг ошибки. Сверьте имя
+    на <a href="channels">странице каналов</a></td></tr>
+<tr><td>Жёлтая точка в углу</td>
+    <td>Значение не обновлялось больше 5 минут — датчик молчит.
+    На обычной плитке точка стоит над подписью справа, на мелкой —
+    в верхнем углу</td></tr>
+<tr><td>«нет истории» вместо графика</td>
+    <td>Канал не пишется в базу. Запустите
+    <code>sh check-history.sh</code> — он назовёт причину и выдаст готовый
+    блок для <code>/etc/wb-mqtt-db.conf</code></td></tr>
+<tr><td>График есть, но плоский</td>
+    <td>Заданы слишком широкие <code>min</code>/<code>max</code> либо крупный
+    <code>grid</code>. Уберите их — автоподбор растянет кривую по высоте</td></tr>
+<tr><td>Шторы едут в обратную сторону</td>
+    <td><code>inverted: true</code> у плитки</td></tr>
+<tr><td>Лента всегда выключена</td>
+    <td>Канал яркости отдаёт не 0–100 — проверьте <code>max</code> в
+    <code>/meta</code> на странице каналов</td></tr>
+<tr><td>404 на панели</td>
+    <td>Такого имени нет в <code>panels:</code></td></tr>
+<tr><td>Правки конфига не видны</td>
+    <td>Ошибка синтаксиса YAML — старый файл остаётся в силе. Проверьте:
+    <code>python3 -c "import yaml;yaml.safe_load(open('config.yaml'))"</code></td></tr>
+<tr><td>После обновления прошивки всё пропало</td>
+    <td>Ожидаемо: <code>sh /mnt/data/wb-svg-panel/install.sh</code></td></tr>
+</table>
+
+<p style="margin-top:34px"><a class="back" href="./">← К списку панелей</a></p>
+</main>
+</div>
+</body>
+</html>

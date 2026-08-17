@@ -1,0 +1,78 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Синтаксис Python 3.9
+        # В прошивках на Debian 11 стоит Python 3.9. Код, который туда не
+        # поедет (match, | в аннотациях), должен падать здесь, а не на
+        # контроллере в чужом доме.
+        run: |
+          python - <<'PY'
+          import ast, pathlib, sys
+          bad = 0
+          for path in sorted(pathlib.Path('.').rglob('*.py')):
+              if '.git' in path.parts:
+                  continue
+              try:
+                  ast.parse(path.read_text(encoding='utf-8'),
+                            filename=str(path), feature_version=(3, 9))
+              except SyntaxError as exc:
+                  print('НЕ 3.9: %s:%s: %s' % (path, exc.lineno, exc.msg))
+                  bad += 1
+              else:
+                  print('ok 3.9: %s' % path)
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Шаблон Jinja2 разбирается
+        run: |
+          pip install jinja2 pyyaml
+          python - <<'PY'
+          import pathlib, sys
+          from jinja2 import Environment, FileSystemLoader
+          dirs = [d for d in ('templates', '.') if pathlib.Path(d).is_dir()]
+          env = Environment(loader=FileSystemLoader(dirs), autoescape=True,
+                            trim_blocks=True, lstrip_blocks=True)
+          bad = 0
+          for path in sorted(pathlib.Path('.').rglob('*.j2')):
+              try:
+                  env.parse(path.read_text(encoding='utf-8'))
+                  print('ok: %s' % path)
+              except Exception as exc:
+                  print('ОШИБКА %s: %s' % (path, exc))
+                  bad += 1
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Пример конфига — валидный YAML
+        run: |
+          python - <<'PY'
+          import sys, yaml
+          data = yaml.safe_load(open('config.example.yaml', encoding='utf-8'))
+          panels = (data or {}).get('panels') or {}
+          if not panels:
+              print('в config.example.yaml нет ни одной панели')
+              sys.exit(1)
+          print('панелей: %d' % len(panels))
+          PY
+
+      - name: Шелл-скрипты
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # SC2086 (кавычки) и SC1091 (source) в этих скриптах намеренны
+          shellcheck -s sh -e SC2086,SC1091 ./*.sh
+
+      - name: Личные данные не уехали в репозиторий
+        run: sh check-secrets.sh

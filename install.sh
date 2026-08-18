@@ -12,6 +12,25 @@ set -e
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 
+EN8080=/etc/nginx/sites-enabled/wb-svg-panel
+
+# keep - не трогать текущее состояние порта 8080, yes - включить, no - выключить
+WITH_8080=keep
+for arg in "$@"; do
+    case "$arg" in
+        --with-8080) WITH_8080=yes ;;
+        --no-8080)   WITH_8080=no ;;
+        -h|--help)
+            echo "Использование: sh install.sh [--with-8080 | --no-8080]"
+            echo "  без ключей   состояние порта 8080 остаётся как есть"
+            echo "  --with-8080  включить запасной вход на порту 8080"
+            echo "  --no-8080    выключить его"
+            exit 0
+            ;;
+        *) echo "Неизвестный ключ: $arg (см. --help)"; exit 2 ;;
+    esac
+done
+
 case "$SRC" in
   /mnt/data/*) ;;
   *)
@@ -72,7 +91,27 @@ systemctl restart wb-svg-panel
 
 echo "==> nginx"
 install -m 644 "$SRC/nginx-wb-svg-panel.conf" /etc/nginx/sites-available/wb-svg-panel
-ln -sf /etc/nginx/sites-available/wb-svg-panel /etc/nginx/sites-enabled/wb-svg-panel
+
+# Запасной вход на порту 8080 - отдельный server nginx без пароля. Внутри дома
+# он удобен (короткий адрес для планшета или ESP32), но сам себя не защищает,
+# поэтому по умолчанию выключен.
+#
+# Правило простое: уже включённый порт остаётся включённым, выключенный сам не
+# включается. Так повторный запуск после обновления прошивки возвращает ровно
+# то состояние, которое было. Переопределяется ключами --with-8080 / --no-8080.
+if [ "$WITH_8080" = "yes" ] || { [ "$WITH_8080" = "keep" ] && [ -L "$EN8080" ]; }; then
+    ln -sf /etc/nginx/sites-available/wb-svg-panel "$EN8080"
+    echo "    порт 8080 включён — он не закрыт паролем, только сеть"
+    echo "    закрыть:  sh $SRC/close-8080.sh --off"
+else
+    if [ -L "$EN8080" ] || [ -e "$EN8080" ]; then
+        rm -f "$EN8080"
+        echo "    порт 8080 выключен (--no-8080)"
+    else
+        echo "    порт 8080 не включён — панель только через /panel/"
+        echo "    включить:  sh $SRC/install.sh --with-8080"
+    fi
+fi
 
 # Панель внутри штатного веб-интерфейса.
 # Кладём в официальную точку расширения - каталог не принадлежит пакету
@@ -110,5 +149,5 @@ case "$BODY" in
 esac
 echo
 echo "Панель:  http://$(hostname).local/panel/"
-echo "         http://$(hostname).local:8080/          (запасной порт)"
+[ -L "$EN8080" ] && echo "         http://$(hostname).local:8080/          (запасной порт)"
 echo "Если что-то не так: python3 $SRC/diag.py"

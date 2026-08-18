@@ -1051,6 +1051,13 @@ def build_switch(tile, state):
     snap = state.snapshot(tile.get("channel", ""))
     raw = (snap["raw"] or "").strip()
     on = raw not in ("", "0", "false", "False")
+
+    # invert - для нормально замкнутых контактов: реле обесточено, а нагрузка
+    # включена. Единица в канале означает "выключено". Инвертируем только
+    # известное значение: нет данных - значит нет данных, а не "включено".
+    if tile.get("invert") and raw != "":
+        on = not on
+
     return {
         "on": on,
         "status": tile.get("on_text", "Вкл") if on else tile.get("off_text", "Выкл"),
@@ -1868,9 +1875,17 @@ def tile_command(tile, conf, state):
         src_ch = conf.get("channel_switch") if kind == "light" else conf.get("channel")
         topic = command_topic(src_ch, conf.get("command_topic"))
         if topic:
+            v_on = str(conf.get("command_on", "1"))
+            v_off = str(conf.get("command_off", "0"))
+            # При invert плитка показывает логическое состояние, а в канал надо
+            # писать физическое: чтобы включить нагрузку - обесточить реле.
+            # state здесь логический, он же нарисован на плитке, поэтому
+            # достаточно поменять местами сами значения.
+            if conf.get("invert"):
+                v_on, v_off = v_off, v_on
             cmd = {"topic": topic,
-                   "on": str(conf.get("command_on", "1")),
-                   "off": str(conf.get("command_off", "0")),
+                   "on": v_on,
+                   "off": v_off,
                    "state": "1" if tile.get("on") else "0"}
     elif kind == "curtain":
         topic = command_topic(conf.get("channel"), conf.get("command_topic"))

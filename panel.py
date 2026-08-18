@@ -1890,10 +1890,26 @@ def tile_command(tile, conf, state):
     elif kind == "curtain":
         topic = command_topic(conf.get("channel"), conf.get("command_topic"))
         if topic:
+            pos = tile.get("left_open")
+            if pos is None:
+                pos = 0.0
             cmd = {"topic": topic,
                    "on": str(conf.get("command_open", "100")),
                    "off": str(conf.get("command_close", "0")),
-                   "state": "1" if (tile.get("left_open") or 0) > 0.5 else "0"}
+                   "state": "1" if pos > 0.5 else "0",
+                   # долгое нажатие открывает пульт: полоса положения,
+                   # кнопки «закрыть / стоп / открыть»
+                   "pad": "curtain",
+                   "pos": "%.3f" % pos}
+            # «Стоп» - отдельная команда, у HomeKit-совместимых приводов это
+            # C_TargetPositionState со значением 2. Топик только явный:
+            # для сырых топиков моста угадывать нечего.
+            stop = conf.get("command_topic_stop")
+            if stop:
+                cmd["stop"] = stop
+                cmd["stop_value"] = str(conf.get("command_stop", "2"))
+            if tile.get("moving"):
+                cmd["moving"] = tile["moving"]
 
     if kind == "ac":
         dev = conf.get("device", "")
@@ -1956,6 +1972,8 @@ CMD_ATTRS = [
     ("i", "data-i"), ("topic", "data-topic"), ("on", "data-on"),
     ("off", "data-off"), ("state", "data-state"), ("expand", "data-expand"),
     ("pad", "data-pad"), ("bright", "data-bright"), ("bright_max", "data-bright-max"),
+    ("pos", "data-pos"), ("stop", "data-stop"), ("stop_value", "data-stop-value"),
+    ("moving", "data-moving"),
     ("level", "data-level"), ("temp", "data-temp"), ("temp_max", "data-temp-max"),
     ("temp_unit", "data-temp-unit"), ("temp_lo", "data-temp-lo"),
     ("temp_hi", "data-temp-hi"), ("cold", "data-cold"), ("warm", "data-warm"),
@@ -2593,6 +2611,21 @@ def panel_html(name):
  #lvl .fill{position:absolute;left:0;right:0;bottom:0;background:#E0A050;opacity:.75}
  #lvl .val{position:absolute;left:0;right:0;bottom:14px;text-align:center;
            color:#fff;font-size:26px;font-weight:600}
+ /* пульт шторы: полоса кладётся горизонтально - штора едет вбок,
+    и вертикальная шкала здесь читалась бы неправильно */
+ #crt{position:relative;border-radius:20px;touch-action:none;overflow:hidden;
+      background:#2C2C31;margin:0 auto}
+ #crt .fill{position:absolute;left:0;top:0;bottom:0;background:#8FA6C4;opacity:.75}
+ #crt .val{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+           text-align:center;color:#fff;font-size:30px;font-weight:600;
+           text-shadow:0 1px 4px rgba(0,0,0,.5)}
+ #crt .mv{position:absolute;left:0;right:0;bottom:10px;text-align:center;
+          color:rgba(255,255,255,.75);font-size:13px}
+ #ov .crow{display:block;margin:10px auto 0;text-align:center}
+ #ov .cbtn{display:inline-block;margin:4px;padding:10px 18px;border-radius:12px;
+           border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.85);
+           font-size:15px;font-weight:600;cursor:pointer}
+ #ov .cbtn.stop{border-color:#C4553B;color:#FFD8CE}
  /* пульт кондиционера */
  #wheel{margin:0 auto;user-select:none;touch-action:none}
  #ov .wbig{color:#fff;font-size:64px;font-weight:300;line-height:1;
@@ -2703,7 +2736,7 @@ function pub(topic, value){
 
 /* ---------- оверлей ---------- */
 function closeOv(){ ov.classList.remove('on'); paused=false;
-  var k=ov.querySelector('.card,#pad,#lvl,.ttl,.hint');
+  var k=ov.querySelector('.card,#pad,#lvl,#crt,.ttl,.hint');
   while(ov.children.length>1) ov.removeChild(ov.lastChild); refresh(); }
 ov.addEventListener('click', function(e){ if(e.target===ov) closeOv(); });
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeOv(); });
@@ -3001,6 +3034,73 @@ function padLevel(node){
   drag(box, at, send);
 }
 
+/* Пульт шторы.
+   Полоса задаёт положение, кнопки под ней - «закрыть / стоп / открыть».
+   Пока палец ведёт, показываем то, что он выбрал; отпустил - отправляем
+   одно значение. Промежуточные значения слать нельзя: у привода каждая
+   команда это новая цель, и он дёргался бы за пальцем. */
+function padCurtain(node){
+  var box = el('div'); box.id='crt';
+  box.style.width  = Math.round(Math.min(window.innerWidth*0.8, 340)) + 'px';
+  box.style.height = Math.round(Math.min(window.innerHeight*0.35, 190)) + 'px';
+  var fill = el('div','fill'), val = el('div','val'), mv = el('div','mv');
+  box.appendChild(fill); box.appendChild(val); box.appendChild(mv);
+
+  var title = el('div','ttl', node.getAttribute('data-title') || 'Штора');
+  var hint  = el('div','hint','Ведите вправо — открыть, влево — закрыть');
+  var pos   = parseFloat(node.getAttribute('data-pos')||'0');
+  var moving = node.getAttribute('data-moving') || '';
+
+  function place(){
+    fill.style.width = (pos*100)+'%';
+    val.textContent = Math.round(pos*100)+' %';
+    mv.textContent = moving;
+  }
+  place();
+
+  var row = el('div','crow');
+  function button(text, cls, fn){
+    var b = el('span','cbtn'+(cls?' '+cls:''), text);
+    b.onclick = fn;
+    row.appendChild(b);
+    return b;
+  }
+  function send(value, label){
+    pub(node.getAttribute('data-topic'), value)
+      .then(function(){ setTimeout(refresh, 600); setTimeout(refresh, 2500); })
+      .catch(function(e){ flash('Не удалось: '+e.message); });
+    if(label){ moving = label; place(); }
+  }
+  button('Закрыть', '', function(){
+    pos = 0; place(); send(node.getAttribute('data-off'), 'Закрывается');
+  });
+  /* Стоп есть не у всех приводов: у HomeKit-совместимых это отдельная
+     характеристика, и топик задаётся в конфиге явно. Нет топика - нет кнопки,
+     рисовать неработающую хуже, чем не рисовать вовсе. */
+  var stopTopic = node.getAttribute('data-stop');
+  if(stopTopic){
+    button('Стоп', 'stop', function(){
+      pub(stopTopic, node.getAttribute('data-stop-value') || '2')
+        .then(function(){ moving=''; place(); setTimeout(refresh, 600); })
+        .catch(function(e){ flash('Не удалось: '+e.message); });
+    });
+  }
+  button('Открыть', '', function(){
+    pos = 1; place(); send(node.getAttribute('data-on'), 'Открывается');
+  });
+
+  openOv([title, box, row, hint]);
+
+  function at(ev){
+    var r = box.getBoundingClientRect();
+    var p = evPoint(ev);
+    pos = Math.max(0, Math.min(1, (p.clientX-r.left)/r.width));
+    place();
+  }
+  function done(){ send(Math.round(pos*100), ''); }
+  drag(box, at, done);
+}
+
 /* Перетаскивание: pointer-события есть не везде, поэтому с запасным
    вариантом на мышь и касания. */
 function drag(node, move, done, begin){
@@ -3105,6 +3205,7 @@ function openPad(node){
   var pad = node.getAttribute('data-pad');
   if(pad==='xy') padXY(node);
   else if(pad==='level') padLevel(node);
+  else if(pad==='curtain') padCurtain(node);
   else if(pad==='ac') padAC(node);
 }
 

@@ -2540,6 +2540,16 @@ def panel_html(name):
  #err{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
       background:#C4553B;color:#fff;padding:7px 14px;border-radius:9px;
       font-size:13px;display:none;z-index:30}
+ /* Порт 8080 - вход без пароля. Пока панель открыта через него, об этом
+    должно быть видно: предупреждение в документации читают один раз, а
+    плашку - каждый день, пока не уберёшь причину. */
+ #warn8080{position:fixed;left:0;right:0;top:0;z-index:40;display:none;
+           background:#8A5A1E;color:#FFE6BF;text-align:center;
+           padding:6px 10px;font-size:13px;line-height:1.35}
+ #warn8080 b{color:#fff}
+ #warn8080 a{color:#FFE6BF;text-decoration:underline}
+ body.warned{padding-top:38px}
+ body.warned #back,body.warned #cols{top:42px}
  /* оверлей: тот же язык, что и у плиток - тёмный фон, скруглённая карточка */
  /* inset и min() - свежий синтаксис, старые десктопные браузеры его не знают
     и оверлей получался нулевого размера: на телефоне работало, на ноутбуке нет.
@@ -2599,10 +2609,24 @@ def panel_html(name):
 <div id="cols"></div>
 <div id="host">загрузка…</div>
 <div id="err"></div>
+<div id="warn8080"></div>
 <div id="ov"><span class="close" onclick="closeOv()">&times;</span></div>
 
 <script>
 var NAME = __NAME_JS__, EVERY = __EVERY__000;
+
+/* Запасной вход на 8080 не закрыт паролем: кто попал в домашнюю сеть, тот
+   управляет светом и шторами. Годится, чтобы попробовать, но не как
+   постоянный режим - поэтому и написано «тестовый». */
+(function(){
+  if (location.port !== '8080') return;
+  var w = document.getElementById('warn8080');
+  if (!w) return;
+  w.innerHTML = '<b>Тестовый режим:</b> открыто через порт 8080, без пароля. ' +
+                'Постоянный адрес — <a href="/panel/' + NAME + '.html">/panel/</a>';
+  w.style.display = 'block';
+  document.body.className += ' warned';
+})();
 
 /* Число колонок.
    Берём из адреса, иначе из памяти браузера, иначе оставляем как в конфиге.

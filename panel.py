@@ -2338,6 +2338,10 @@ def allowed_topics():
                 if kind == "light":
                     pairs.append((tile.get("channel_temp"),
                                   tile.get("command_topic_temp")))
+                # «Стоп» у шторы - отдельный топик, не выводимый из канала
+                # положения. Без него пульт получал бы 403 на кнопку остановки.
+                if kind == "curtain" and tile.get("command_topic_stop"):
+                    allowed.add(tile["command_topic_stop"])
                 for ch, explicit in pairs:
                     topic = command_topic(ch, explicit)
                     if topic:
@@ -2611,16 +2615,17 @@ def panel_html(name):
  #lvl .fill{position:absolute;left:0;right:0;bottom:0;background:#E0A050;opacity:.75}
  #lvl .val{position:absolute;left:0;right:0;bottom:14px;text-align:center;
            color:#fff;font-size:26px;font-weight:600}
- /* пульт шторы: полоса кладётся горизонтально - штора едет вбок,
-    и вертикальная шкала здесь читалась бы неправильно */
- #crt{position:relative;border-radius:20px;touch-action:none;overflow:hidden;
-      background:#2C2C31;margin:0 auto}
- #crt .fill{position:absolute;left:0;top:0;bottom:0;background:#8FA6C4;opacity:.75}
- #crt .val{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
-           text-align:center;color:#fff;font-size:30px;font-weight:600;
-           text-shadow:0 1px 4px rgba(0,0,0,.5)}
- #crt .mv{position:absolute;left:0;right:0;bottom:10px;text-align:center;
-          color:rgba(255,255,255,.75);font-size:13px}
+ /* пульт шторы: сверху лежит прозрачный слой для жеста, под ним - та же
+    картинка плитки, что и на панели, только крупно */
+ #crtwrap{position:relative;margin:0 auto}
+ #crtview{position:absolute;left:0;right:0;top:0;bottom:0;touch-action:none;
+          cursor:ew-resize}
+ #crtview .mark{position:absolute;top:0;bottom:0;width:2px;display:none;
+                background:rgba(255,255,255,.85);
+                box-shadow:0 0 10px rgba(0,0,0,.6)}
+ #crtview .read{position:absolute;left:0;right:0;top:44%;display:none;
+                text-align:center;color:#fff;font-size:42px;font-weight:600;
+                text-shadow:0 2px 10px rgba(0,0,0,.7)}
  #ov .crow{display:block;margin:10px auto 0;text-align:center}
  #ov .cbtn{display:inline-block;margin:4px;padding:10px 18px;border-radius:12px;
            border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.85);
@@ -2736,7 +2741,7 @@ function pub(topic, value){
 
 /* ---------- оверлей ---------- */
 function closeOv(){ ov.classList.remove('on'); paused=false;
-  var k=ov.querySelector('.card,#pad,#lvl,#crt,.ttl,.hint');
+  var k=ov.querySelector('.card,#pad,#lvl,#crtwrap,.ttl,.hint');
   while(ov.children.length>1) ov.removeChild(ov.lastChild); refresh(); }
 ov.addEventListener('click', function(e){ if(e.target===ov) closeOv(); });
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeOv(); });
@@ -3040,65 +3045,94 @@ function padLevel(node){
    одно значение. Промежуточные значения слать нельзя: у привода каждая
    команда это новая цель, и он дёргался бы за пальцем. */
 function padCurtain(node){
-  var box = el('div'); box.id='crt';
-  box.style.width  = Math.round(Math.min(window.innerWidth*0.8, 340)) + 'px';
-  box.style.height = Math.round(Math.min(window.innerHeight*0.35, 190)) + 'px';
-  var fill = el('div','fill'), val = el('div','val'), mv = el('div','mv');
-  box.appendChild(fill); box.appendChild(val); box.appendChild(mv);
+  /* Раскрытая штора - это та же плитка, только крупно: рисует её сервер тем
+     же макросом, что и на панели. Своей вёрстки тут нет намеренно, иначе
+     пришлось бы поддерживать два разных изображения одной вещи.
+     Поверх картинки лежит прозрачный слой: ведём правую створку от центра
+     к правому краю, как саму штору руками. */
+  var i = node.getAttribute('data-i');
+  var w = Math.min(Math.round(window.innerWidth * 0.90), 1400);
+  var h = Math.min(Math.round(window.innerHeight * 0.62), 900);
+  var url = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h;
+
+  var card = el('div','card'); card.textContent = '…';
+  var wrap = el('div'); wrap.id = 'crtwrap';
+  var view = el('div'); view.id = 'crtview';
+  var mark = el('div','mark');            // куда поедет
+  var read = el('div','read');            // проценты крупно
+  view.appendChild(mark); view.appendChild(read);
+  wrap.appendChild(card); wrap.appendChild(view);
 
   var title = el('div','ttl', node.getAttribute('data-title') || 'Штора');
-  var hint  = el('div','hint','Ведите вправо — открыть, влево — закрыть');
+  var hint  = el('div','hint','Ведите правую створку от центра к краю');
   var pos   = parseFloat(node.getAttribute('data-pos')||'0');
-  var moving = node.getAttribute('data-moving') || '';
+  var shown = pos;
 
-  function place(){
-    fill.style.width = (pos*100)+'%';
-    val.textContent = Math.round(pos*100)+' %';
-    mv.textContent = moving;
+  function paint(){
+    // 0 - створка у центра (закрыто), 1 - у правого края (открыто)
+    mark.style.left = (50 + shown*50) + '%';
+    read.textContent = Math.round(shown*100) + ' %';
+    mark.style.display = read.style.display = dragging ? 'block' : 'none';
   }
-  place();
+  var dragging = false;
+
+  function load(){
+    fetch(url + '&t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+      .then(function(svg){
+        if(svg.indexOf('<svg') < 0) throw new Error('пустой ответ');
+        card.innerHTML = svg;
+      })
+      .catch(function(e){ card.textContent = 'Не удалось: ' + e.message; });
+  }
+  load();
 
   var row = el('div','crow');
   function button(text, cls, fn){
     var b = el('span','cbtn'+(cls?' '+cls:''), text);
-    b.onclick = fn;
-    row.appendChild(b);
-    return b;
+    b.onclick = fn; row.appendChild(b); return b;
   }
-  function send(value, label){
+  function send(value){
     pub(node.getAttribute('data-topic'), value)
-      .then(function(){ setTimeout(refresh, 600); setTimeout(refresh, 2500); })
+      .then(function(){
+        setTimeout(load, 700); setTimeout(load, 2500); setTimeout(load, 6000);
+        setTimeout(refresh, 800);
+      })
       .catch(function(e){ flash('Не удалось: '+e.message); });
-    if(label){ moving = label; place(); }
   }
-  button('Закрыть', '', function(){
-    pos = 0; place(); send(node.getAttribute('data-off'), 'Закрывается');
-  });
+  button('Закрыть', '', function(){ send(node.getAttribute('data-off')); });
   /* Стоп есть не у всех приводов: у HomeKit-совместимых это отдельная
-     характеристика, и топик задаётся в конфиге явно. Нет топика - нет кнопки,
+     характеристика, и топик задаётся в конфиге явно. Нет топика - нет кнопки:
      рисовать неработающую хуже, чем не рисовать вовсе. */
   var stopTopic = node.getAttribute('data-stop');
   if(stopTopic){
     button('Стоп', 'stop', function(){
       pub(stopTopic, node.getAttribute('data-stop-value') || '2')
-        .then(function(){ moving=''; place(); setTimeout(refresh, 600); })
+        .then(function(){ setTimeout(load, 700); setTimeout(load, 2000); })
         .catch(function(e){ flash('Не удалось: '+e.message); });
     });
   }
-  button('Открыть', '', function(){
-    pos = 1; place(); send(node.getAttribute('data-on'), 'Открывается');
-  });
+  button('Открыть', '', function(){ send(node.getAttribute('data-on')); });
 
-  openOv([title, box, row, hint]);
+  openOv([title, wrap, row, hint]);
+  if(!ov.offsetHeight){ closeOv(); window.open(url, '_blank'); return; }
 
   function at(ev){
-    var r = box.getBoundingClientRect();
+    var r = view.getBoundingClientRect();
     var p = evPoint(ev);
-    pos = Math.max(0, Math.min(1, (p.clientX-r.left)/r.width));
-    place();
+    // центр картинки = закрыто, правый край = открыто настежь
+    shown = Math.max(0, Math.min(1, (p.clientX - (r.left + r.width/2)) / (r.width/2)));
+    paint();
   }
-  function done(){ send(Math.round(pos*100), ''); }
-  drag(box, at, done);
+  function begin(ev){ dragging = true; at(ev); }
+  function done(){
+    dragging = false; paint();
+    pos = shown;
+    // Промежуточные значения не шлём: для привода каждое - новая цель,
+    // и он дёргался бы за пальцем.
+    send(Math.round(shown*100));
+  }
+  drag(view, at, done, begin);
 }
 
 /* Перетаскивание: pointer-события есть не везде, поэтому с запасным

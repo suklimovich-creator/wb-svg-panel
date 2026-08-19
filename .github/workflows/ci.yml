@@ -69,10 +69,16 @@ jobs:
           PY
 
       - name: Шелл-скрипты
+        # -S warning: ошибки и предупреждения роняют сборку, придирки уровня
+        # info и style - нет. Иначе CI краснеет из-за «используйте find вместо
+        # ls», а на реальные проблемы перестают смотреть.
+        #
+        # SC2086 (кавычки) и SC1091 (source) в этих скриптах намеренны.
+        # LC_ALL нужен из-за русских комментариев: без UTF-8 локали
+        # shellcheck спотыкается на выводе.
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          # SC2086 (кавычки) и SC1091 (source) в этих скриптах намеренны
-          shellcheck -s sh -e SC2086,SC1091 ./*.sh
+          LC_ALL=C.UTF-8 shellcheck -s sh -S warning -e SC2086,SC1091 ./*.sh
 
       - name: Личные данные не уехали в репозиторий
         run: sh check-secrets.sh

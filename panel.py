@@ -2617,15 +2617,19 @@ def panel_html(name):
            color:#fff;font-size:26px;font-weight:600}
  /* пульт шторы: сверху лежит прозрачный слой для жеста, под ним - та же
     картинка плитки, что и на панели, только крупно */
- #crtwrap{position:relative;margin:0 auto}
+ /* inline-block: обёртка должна быть ровно по картинке, иначе центр жеста
+    окажется в центре экрана, а не в центре окна со шторой */
+ #crtwrap{position:relative;display:inline-block;margin:0 auto}
+ /* z-index больше, чем у .card (там стоит 1): иначе картинка лежит поверх
+    прозрачного слоя и забирает касания себе - жест просто не доходит */
  #crtview{position:absolute;left:0;right:0;top:0;bottom:0;touch-action:none;
-          cursor:ew-resize}
+          cursor:ew-resize;z-index:3}
  #crtview .mark{position:absolute;top:0;bottom:0;width:2px;display:none;
-                background:rgba(255,255,255,.85);
-                box-shadow:0 0 10px rgba(0,0,0,.6)}
- #crtview .read{position:absolute;left:0;right:0;top:44%;display:none;
+                background:rgba(255,255,255,.9);
+                box-shadow:0 0 12px rgba(0,0,0,.7)}
+ #crtview .read{position:absolute;left:0;right:0;top:42%;display:none;
                 text-align:center;color:#fff;font-size:42px;font-weight:600;
-                text-shadow:0 2px 10px rgba(0,0,0,.7)}
+                text-shadow:0 2px 12px rgba(0,0,0,.8)}
  #ov .crow{display:block;margin:10px auto 0;text-align:center}
  #ov .cbtn{display:inline-block;margin:4px;padding:10px 18px;border-radius:12px;
            border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.85);
@@ -3070,7 +3074,14 @@ function padCurtain(node){
 
   function paint(){
     // 0 - створка у центра (закрыто), 1 - у правого края (открыто)
-    mark.style.left = (50 + shown*50) + '%';
+    var svg = card.querySelector('svg');
+    if(svg){
+      var rs = svg.getBoundingClientRect(), rv = view.getBoundingClientRect();
+      var left = rs.left - rv.left, mid = left + rs.width/2;
+      mark.style.left = Math.round(mid + shown*rs.width/2) + 'px';
+    } else {
+      mark.style.left = (50 + shown*50) + '%';
+    }
     read.textContent = Math.round(shown*100) + ' %';
     mark.style.display = read.style.display = dragging ? 'block' : 'none';
   }
@@ -3118,9 +3129,12 @@ function padCurtain(node){
   if(!ov.offsetHeight){ closeOv(); window.open(url, '_blank'); return; }
 
   function at(ev){
-    var r = view.getBoundingClientRect();
+    // Считаем от самого рисунка: у карточки есть поля, и если брать её
+    // границы, центр окна и центр жеста разъезжаются на ширину поля.
+    var box = card.querySelector('svg') || view;
+    var r = box.getBoundingClientRect();
     var p = evPoint(ev);
-    // центр картинки = закрыто, правый край = открыто настежь
+    // центр картинки = створки сомкнуты, правый край = открыто настежь
     shown = Math.max(0, Math.min(1, (p.clientX - (r.left + r.width/2)) / (r.width/2)));
     paint();
   }

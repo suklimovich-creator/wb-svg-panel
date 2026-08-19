@@ -2319,7 +2319,7 @@ def index():
     for name in sorted(config.panels):
         panel_conf = config.panels[name] or {}
         tiles = []
-        for _title, chunk in resolve_sections(panel_conf, config.panels):
+        for _title, chunk, _status in resolve_sections(panel_conf, config.panels):
             tiles.extend(chunk)
         kinds = {}
         for tile in tiles:
@@ -2471,7 +2471,7 @@ def allowed_topics():
                            config.get("interactive", False)))
         if not interactive:
             continue
-        for _title, tiles in resolve_sections(panel_conf, config.panels):
+        for _title, tiles, _status in resolve_sections(panel_conf, config.panels):
             for tile in tiles:
                 kind = tile.get("type")
                 pairs = []
@@ -2609,7 +2609,7 @@ def panel_svg(name):
 def panel_tiles(panel_conf):
     """Плоский список плиток панели в том же порядке, что и на картинке."""
     out = []
-    for _title, tiles in resolve_sections(panel_conf, config.panels):
+    for _title, tiles, _status in resolve_sections(panel_conf, config.panels):
         out.extend(tiles)
     return out
 

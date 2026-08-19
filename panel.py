@@ -148,6 +148,12 @@ class Config:
                 for s in tile.get("series", []) or []:
                     if s.get("channel"):
                         out.add(s["channel"])
+        # строка состояния - не плитка, её каналы надо собрать отдельно
+        for panel in (self.panels or {}).values():
+            for entry in status_entries(panel):
+                for key in ("channel", "value_channel"):
+                    if entry.get(key):
+                        out.add(entry[key])
         return out
 
     def raw_topics(self):
@@ -1764,6 +1770,133 @@ BUILDERS = {
 }
 
 
+# ==========================================================================
+# Строка состояния комнаты
+# ==========================================================================
+#
+# Показываем только события, а не измерения: присутствие, открытую дверь,
+# протечку, работающий прибор. Всё, у чего есть плитка с графиком, сюда не
+# попадает - дублировать незачем.
+#
+# Когда в комнате всё спокойно, строка пустая. Молчание само по себе
+# информативно, и глазу не за что цепляться.
+
+# Когда канал последний раз выходил за порог: {ключ: время}.
+# Живёт в памяти процесса и обновляется при отрисовке. Панель перерисовывают
+# раз в десять секунд, пока открыта хоть одна вкладка; если не смотрит никто,
+# то и показывать давность некому.
+SEEN = {}
+
+# Значок «был недавно» для тех, у кого активное состояние - движение
+FADED = {"motion": "person"}
+
+
+def status_entries(panel_conf):
+    """Список описаний статусов панели, всегда список словарей."""
+    out = []
+    for entry in (panel_conf or {}).get("status", []) or []:
+        if isinstance(entry, dict) and (entry.get("channel")
+                                        or entry.get("value_channel")):
+            out.append(entry)
+    return out
+
+
+def parse_span(text, default=0):
+    """'20m' -> 1200. Понимает s/m/h, голое число считает минутами."""
+    if text is None:
+        return default
+    raw = str(text).strip().lower()
+    if not raw:
+        return default
+    mult = {"s": 1, "m": 60, "h": 3600, "d": 86400}.get(raw[-1])
+    try:
+        return int(float(raw[:-1] if mult else raw)) * (mult or 60)
+    except ValueError:
+        return default
+
+
+def status_matches(entry, raw):
+    """Выполнено ли условие показа: above / below / when."""
+    if raw is None or raw == "":
+        return False
+    if entry.get("above") is not None or entry.get("below") is not None:
+        num = to_float(raw)
+        if num is None:
+            return False
+        if entry.get("above") is not None and num <= float(entry["above"]):
+            return False
+        if entry.get("below") is not None and num >= float(entry["below"]):
+            return False
+        return True
+    when = entry.get("when")
+    if when is not None:
+        allowed = when if isinstance(when, (list, tuple)) else [when]
+        return str(raw).strip() in [str(x) for x in allowed]
+    # ни одного условия - показываем всё, кроме явно выключенного
+    return str(raw).strip() not in ("0", "off", "false", "False", "none")
+
+
+def chip_width(value):
+    """Должно совпадать с макросом chip() в шаблоне."""
+    if not value:
+        return 7 + 26 + 7
+    return 10 + 26 + 6 + len(str(value)) * 8.5 + 12
+
+
+def build_status(panel_conf, state, now=None):
+    """Описания статусов -> чипы для шаблона."""
+    now = now or time.time()
+    chips = []
+    for entry in status_entries(panel_conf):
+        key = entry.get("channel")
+        raw = state.snapshot(key)["raw"] if key else None
+        icon = entry.get("icon", "power")
+        active = status_matches(entry, raw) if key else False
+
+        fade = parse_span(entry.get("fade"), 0)
+        if active:
+            SEEN[key] = now
+        elif fade and key:
+            # Условие уже не выполняется, но недавно выполнялось: показываем
+            # приглушённый вариант. Для движения это человечек стоя - тот же
+            # персонаж, другая поза, читается как «был, но не сейчас».
+            if now - SEEN.get(key, 0) > fade:
+                continue
+            icon = entry.get("icon_faded") or FADED.get(icon, icon)
+        else:
+            continue
+
+        # Бейдж режима: либо фиксированный, либо по значению канала
+        badge = entry.get("badge")
+        badges = entry.get("badges") or {}
+        if badges and raw is not None:
+            badge = badges.get(str(raw).strip(), badge)
+
+        # Число рядом со значком - только если оно меняет решение:
+        # уставка кондиционера, процент уборки. Давность движения не меняет.
+        value = None
+        if entry.get("value_channel"):
+            num = to_float(state.snapshot(entry["value_channel"])["raw"])
+            if num is not None:
+                digits = int(entry.get("value_digits", 0))
+                value = ("%.*f" % (digits, num)) + str(entry.get("value_unit", ""))
+
+        chips.append({"icon": icon, "badge": badge, "value": value,
+                      "active": active, "alarm": bool(entry.get("alarm")),
+                      "w": chip_width(value)})
+    return chips
+
+
+def place_chips(chips, right_edge, y, gap=12):
+    """Разложить чипы справа налево от правого края."""
+    total = sum(c["w"] for c in chips) + gap * (len(chips) - 1 if chips else 0)
+    x = right_edge - total
+    for c in chips:
+        c["x"], c["y"] = round(x, 1), y
+        x += c["w"] + gap
+    return chips
+
+
 def resolve_sections(panel_conf, all_panels):
     """
     Разделы панели -> [(заголовок или None, список плиток)].
@@ -1774,7 +1907,7 @@ def resolve_sections(panel_conf, all_panels):
     """
     sections = panel_conf.get("sections")
     if not sections:
-        return [(None, panel_conf.get("tiles", []) or [])]
+        return [(None, panel_conf.get("tiles", []) or [], panel_conf)]
 
     out = []
     for section in sections:
@@ -1782,15 +1915,21 @@ def resolve_sections(panel_conf, all_panels):
             continue
         tiles = list(section.get("tiles", []) or [])
         src_name = section.get("from")
+        # Откуда брать статусы раздела: свои, либо от панели-источника.
+        # Комната описывает статусы один раз у себя, а сводные панели
+        # подхватывают их вместе с плитками.
+        src = section
         if src_name:
             source = (all_panels or {}).get(src_name) or {}
             tiles = list(source.get("tiles", []) or []) + tiles
             title = section.get("title", source.get("title", src_name))
+            if not section.get("status"):
+                src = source
         else:
             title = section.get("title")
         if tiles:
-            out.append((title, tiles))
-    return out or [(None, [])]
+            out.append((title, tiles, src))
+    return out or [(None, [], panel_conf)]
 
 
 def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactive):
@@ -2022,10 +2161,18 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None):
     index = 0
     y_cursor = PAD + HEADER
 
-    for title, tiles_conf in sections:
+    right_edge = PAD * 2 + cols * CELL + (cols - 1) * GAP - PAD
+
+    for title, tiles_conf, status_src in sections:
         if title:
             y_cursor += 6
-            headers.append({"title": title, "x": PAD, "y": y_cursor + 22})
+            hd = {"title": title, "x": PAD, "y": y_cursor + 22, "chips": []}
+            # Чипы прижаты к правому краю заголовка раздела: там пусто,
+            # и не приходится гадать, какой ширины получился текст.
+            # Высота полосы раздела 44, чип 36 - помещается без сдвига плиток.
+            hd["chips"] = place_chips(
+                build_status(status_src, state), right_edge, y_cursor + 4)
+            headers.append(hd)
             y_cursor += SECTION
         placed, rows = layout(tiles_conf, cols)
 
@@ -2042,7 +2189,12 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None):
 
     width = PAD * 2 + cols * CELL + (cols - 1) * GAP
     height = max(y_cursor - GAP + PAD, PAD * 2 + HEADER)
-    return out, width, height, headers
+
+    # Статусы самой панели - в шапке, левее часов: справа стоит время,
+    # и наезжать на него нельзя.
+    top_chips = place_chips(build_status(panel_conf, state),
+                            width - PAD - 62, PAD + 6)
+    return out, width, height, headers, top_chips
 
 
 # ==========================================================================
@@ -2137,8 +2289,8 @@ def render_panel(name, cols=None):
     panel_conf = config.panels.get(name)
     if panel_conf is None:
         abort(404, "панель %r не найдена в конфиге" % name)
-    tiles, width, height, headers = prepare(panel_conf, state, history,
-                                            cols=cols, all_panels=config.panels)
+    tiles, width, height, headers, top_chips = prepare(
+        panel_conf, state, history, cols=cols, all_panels=config.panels)
     template = jinja.get_template(panel_conf.get("template", "panel.svg.j2"))
     return template.render(
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
@@ -2147,6 +2299,7 @@ def render_panel(name, cols=None):
         fs=1,
         tiles=tiles,
         headers=headers,
+        top_chips=top_chips,
         width=width,
         height=height,
         rx=RX,

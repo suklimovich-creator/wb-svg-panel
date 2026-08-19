@@ -952,8 +952,22 @@
 </text>
 {% endif %}
 
+{#- Строка состояния комнаты: чипы справа от заголовка раздела.
+    Координаты посчитаны в panel.py - ширина чипа зависит от длины числа,
+    а в шаблоне её не измерить. -#}
 {% for hd in headers or [] %}
 <text x="{{ hd.x }}" y="{{ hd.y }}" class="h2">{{ hd.title }}</text>
+{% for c in hd.chips or [] %}
+<g transform="translate({{ c.x }},{{ c.y }})">
+  {{ chip(c.icon, c.value, c.badge, c.active) }}
+</g>
+{% endfor %}
+{% endfor %}
+
+{% for c in top_chips or [] %}
+<g transform="translate({{ c.x }},{{ c.y }})">
+  {{ chip(c.icon, c.value, c.badge, c.active) }}
+</g>
 {% endfor %}
 
 {% for t in tiles %}

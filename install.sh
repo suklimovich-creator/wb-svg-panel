@@ -42,7 +42,7 @@ esac
 
 echo "==> проверка файлов"
 MISSING=""
-for f in panel.py config.yaml wb-svg-panel.service nginx-wb-svg-panel.conf; do
+for f in panel.py wbpanel/web.py config.yaml wb-svg-panel.service nginx-wb-svg-panel.conf; do
     if [ ! -f "$SRC/$f" ]; then
         MISSING="$MISSING $f"
         echo "    НЕТ: $f"

@@ -18,7 +18,7 @@ from .const import (BASE_DIR, CONFIG_PATH, DB_PATH, GAP, HEADER, PAD,
 from .config import Config
 from .state import MqttRpc, WbState, make_client, state, to_float
 from .history import History
-from .geometry import cells, text_width
+from .geometry import cells, parse_duration, text_width
 from .tiles import BUILDERS, command_topic
 from .status import status_entries
 from . import assemble
@@ -489,6 +489,14 @@ def chart_svg():
         height = max(200, min(int(request.args.get("h") or 480), 2000))
     except ValueError:
         width, height = 700, 480
+
+    # История греется в фоне по каналам плиток chart. Канала, который сюда
+    # пришёл, там может не быть вовсе - тогда кэш пуст и график выходит
+    # пустым. Просим источник прямо сейчас: это разовое действие человека,
+    # подождать полсекунды он готов.
+    span = parse_duration(request.args.get("range") or "12h")
+    if not history.get(channel, span, 120):
+        history.refresh(channel, span, 120)
 
     conf = {
         "type": "chart",

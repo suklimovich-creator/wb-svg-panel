@@ -789,6 +789,10 @@
     прибору предстоит закрыть. Две засечки отмечают обе границы,
     в разрыве дуги снизу стоит режим работы. -#}
 {% macro tile_thermostat(t) %}
+  {#- Невидимые зоны плюс и минус по краям плитки. Рисовать кнопки не нужно:
+      на плитке и так тесно, а место у краёв всё равно пустует. Долгое
+      нажатие открывает пульт, короткое по центру - ничего не делает,
+      чтобы случайное касание не меняло уставку. -#}
   {{ plate(t) }}
   {% if t.dial and not t.compact %}
     <g class="dial {{ 'live' if t.on }} {{ 'muted' if not t.enabled }}">
@@ -830,6 +834,12 @@
     {% endif %}
     {{ caption(t, t.status) }}
   {% endif %}
+  {% if t.pad_kind == 'thermostat' %}
+  <rect x="0" y="0" width="{{ t.w * 0.32 }}" height="{{ t.h }}" fill="transparent"
+        data-zone="down"/>
+  <rect x="{{ t.w * 0.68 }}" y="0" width="{{ t.w * 0.32 }}" height="{{ t.h }}"
+        fill="transparent" data-zone="up"/>
+  {% endif %}
 {% endmacro %}
 
 
@@ -861,6 +871,16 @@
     <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
           rx="2" fill="#3B8FD4" opacity="{{ b.opacity }}"/>
     {% endfor %}
+    {#- Значок погоды на каждый подписанный час. Над графиком места нет -
+        там строка про дождь и текущая температура, значки на них наезжали.
+        Поэтому внутри полосы, у верхнего края, приглушённо: кривая рисуется
+        позже и проходит поверх. -#}
+    {% for ic in t.icons or [] %}
+    <g transform="translate({{ ic.x - 7 }},{{ t.h * 0.40 + 3 }})" opacity=".38">
+      <use href="#{{ uid }}ic-{{ ic.name }}" xlink:href="#{{ uid }}ic-{{ ic.name }}"
+           width="14" height="14"/>
+    </g>
+    {% endfor %}
     {% if t.geom %}
     <linearGradient id="{{ uid }}wfade{{ t.i }}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0"   stop-color="#5AA9E6" stop-opacity=".34"/>
@@ -891,14 +911,6 @@
             text-anchor="{{ tm.anchor }}">{{ tm.text }}</text>
       {% endfor %}
     {% endif %}
-    {#- Значок погоды на каждый подписанный час: у самой верхней границы,
-        чтобы не спорить с кривой температуры. -#}
-    {% for ic in t.icons or [] %}
-    <g transform="translate({{ ic.x - 8 }},{{ t.h * 0.40 - 19 }})" opacity=".85">
-      <use href="#{{ uid }}ic-{{ ic.name }}" xlink:href="#{{ uid }}ic-{{ ic.name }}"
-           width="16" height="16"/>
-    </g>
-    {% endfor %}
   </g>
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
 

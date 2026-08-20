@@ -6,7 +6,7 @@
 import html
 import time
 from .const import BAND, CELL, GAP, HEADER, PAD, RX, SECTION, TILE, font_scale, log
-from .geometry import cells, layout, text_width
+from .geometry import _fmt, cells, layout, text_width
 from .state import to_float
 from .status import build_status, place_chips
 from .tiles import BUILDERS, command_topic
@@ -91,7 +91,6 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     conf = dict(conf)
     conf["inner_w"] = pw
     conf["chart_h"] = ph
-    conf["inner_h"] = ph
 
     if tile["kind"] == "chart":
         tile.update(build_chart(conf, state, history))
@@ -149,6 +148,39 @@ def tile_command(tile, conf, state):
                    "on": v_on,
                    "off": v_off,
                    "state": "1" if tile.get("on") else "0"}
+    elif kind == "thermostat":
+        topic = command_topic(conf.get("channel_target"), conf.get("command_topic"))
+        if topic:
+            target = tile.get("target_value")
+            step = float(conf.get("step", 0.5))
+            lo = float(conf.get("target_min", 5))
+            hi = float(conf.get("target_max", 35))
+            # Плюс и минус считаются на сервере: в браузере не должно быть
+            # знаний ни о шаге привода, ни о его пределах.
+            def clamp(value):
+                return max(lo, min(hi, round(value / step) * step))
+            digits = 0 if float(step).is_integer() else 1
+            if target is not None:
+                # Шаблону нужно знать про зоны, а из cmd он их не видит:
+                # команда уезжает в data-атрибуты, а не в поля плитки.
+                tile["pad_kind"] = "thermostat"
+                cmd = {"topic": topic,
+                       "pad": "thermostat",
+                       "target": _fmt(target, digits),
+                       "up": _fmt(clamp(target + step), digits),
+                       "down": _fmt(clamp(target - step), digits),
+                       "step": _fmt(step, digits),
+                       "min": _fmt(lo, digits),
+                       "max": _fmt(hi, digits)}
+                # Режим - отдельная характеристика, топик только явный:
+                # у сырых топиков моста адрес команды не выводится.
+                mode_topic = conf.get("command_topic_mode")
+                if mode_topic:
+                    cmd["mode_topic"] = mode_topic
+                    cmd["mode_off"] = str(conf.get("command_mode_off", "0"))
+                    cmd["mode_on"] = str(conf.get("command_mode_on", "1"))
+                    cmd["enabled"] = "1" if tile.get("enabled") else "0"
+
     elif kind == "curtain":
         topic = command_topic(conf.get("channel"), conf.get("command_topic"))
         if topic:
@@ -235,7 +267,11 @@ CMD_ATTRS = [
     ("off", "data-off"), ("state", "data-state"), ("expand", "data-expand"),
     ("pad", "data-pad"), ("bright", "data-bright"), ("bright_max", "data-bright-max"),
     ("pos", "data-pos"), ("stop", "data-stop"), ("stop_value", "data-stop-value"),
-    ("moving", "data-moving"),
+    ("moving", "data-moving"), ("target", "data-target"), ("up", "data-up"),
+    ("down", "data-down"), ("step", "data-step"), ("min", "data-min"),
+    ("max", "data-max"), ("mode_topic", "data-mode-topic"),
+    ("mode_off", "data-mode-off"), ("mode_on", "data-mode-on"),
+    ("enabled", "data-enabled"),
     ("level", "data-level"), ("temp", "data-temp"), ("temp_max", "data-temp-max"),
     ("temp_unit", "data-temp-unit"), ("temp_lo", "data-temp-lo"),
     ("temp_hi", "data-temp-hi"), ("cold", "data-cold"), ("warm", "data-warm"),
@@ -287,16 +323,11 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None):
     right_edge = PAD * 2 + cols * CELL + (cols - 1) * GAP - PAD
 
     for title, tiles_conf, status_src in sections:
-        for conf in tiles_conf:
-            if not isinstance(conf, dict):
-                continue
-            # плитки-ссылки должны знать, откуда на них нажали
-            if name and conf.get("type") == "link":
-                conf.setdefault("_from", name)
-            # Заголовку хватает половины высоты: там строка текста и чипы,
-            # а целая плитка оставляет под ними пустую полосу.
-            if conf.get("type") == "header":
-                conf.setdefault("h", 0.5)
+        # плитки-ссылки должны знать, откуда на них нажали
+        if name:
+            for conf in tiles_conf:
+                if isinstance(conf, dict) and conf.get("type") == "link":
+                    conf.setdefault("_from", name)
         if title:
             # Было 6: чипы высотой 36 подходили вплотную к плиткам сверху.
             y_cursor += 14

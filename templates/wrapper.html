@@ -118,6 +118,7 @@
            font-size:15px;font-weight:600;cursor:pointer}
  #ov .cbtn.stop{border-color:#C4553B;color:#FFD8CE}
  #ov .cbtn.on{border-color:#E09B2D;color:#FFD9A0}
+ #tset{text-align:center;color:#fff;font-size:64px;font-weight:600;margin:6px 0}
  /* пульт кондиционера */
  #wheel{margin:0 auto;user-select:none;touch-action:none}
  #ov .wbig{color:#fff;font-size:64px;font-weight:300;line-height:1;
@@ -759,7 +760,12 @@ function bind(){
     // порог был коротковат. Теперь следим за смещением и держим 600 мс.
     var down = function(e){
       var self = this, p = evPoint(e);
-      press = {node:self, long:false, x:p.clientX, y:p.clientY, moved:false,
+      // Зоны плюс/минус - прозрачные прямоугольники внутри плитки.
+      // Запоминаем, по какой попали: к моменту отпускания цель может
+      // смениться, если палец сдвинулся.
+      var zone = e.target && e.target.getAttribute
+                 ? e.target.getAttribute('data-zone') : null;
+      press = {node:self, long:false, zone:zone, x:p.clientX, y:p.clientY, moved:false,
         timer:setTimeout(function(){
           if(press && !press.moved){ press.long = true; openPad(self); }
         }, 600)};
@@ -778,6 +784,8 @@ function bind(){
       var href = this.getAttribute('data-href');
       if(!press.long && !press.moved){
         if(href) { location.href = href + Q(); }
+        else if(press.zone) stepTarget(this, press.zone);
+        else if(this.getAttribute('data-pad') === 'thermostat') { /* центр - молчим */ }
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -796,9 +804,75 @@ function bind(){
     n.oncontextmenu = function(e){ if(e.preventDefault) e.preventDefault(); return false; };
   }
 }
+/* Шаг уставки. Значения считает сервер и кладёт в data-up и data-down:
+   браузер не должен знать ни шага привода, ни его пределов. После записи
+   ждём подтверждения от прибора - следующий шаг возьмётся уже из него. */
+function stepTarget(node, zone){
+  var value = node.getAttribute(zone === 'up' ? 'data-up' : 'data-down');
+  if(value === null) return;
+  node.classList.add('busy');
+  pub(node.getAttribute('data-topic'), value)
+    .then(function(){ setTimeout(refresh, 500); setTimeout(refresh, 2000); })
+    .catch(function(e){ flash('Не удалось: ' + e.message); })
+    .then(function(){ node.classList.remove('busy'); });
+}
+
+/* Пульт термостата: крупная уставка и кнопки по краям.
+   Пока нажимают, показываем выбранное значение сразу, а отправляем одно
+   последнее - иначе головка получит десяток команд подряд. */
+function padThermostat(node){
+  var step = parseFloat(node.getAttribute('data-step') || '0.5');
+  var lo = parseFloat(node.getAttribute('data-min') || '5');
+  var hi = parseFloat(node.getAttribute('data-max') || '35');
+  var value = parseFloat(node.getAttribute('data-target') || '20');
+  var digits = (step % 1 === 0) ? 0 : 1;
+  var timer = null;
+
+  var title = el('div','ttl', node.getAttribute('data-title') || 'Термостат');
+  var big = el('div'); big.id = 'tset';
+  var row = el('div','crow');
+  var hint = el('div','hint','Нажмите вне карточки, чтобы закрыть');
+
+  function paint(){ big.textContent = value.toFixed(digits) + '\u00b0'; }
+  function send(){
+    clearTimeout(timer);
+    timer = setTimeout(function(){
+      pub(node.getAttribute('data-topic'), value.toFixed(digits))
+        .then(function(){ setTimeout(refresh, 600); })
+        .catch(function(e){ flash('Не удалось: ' + e.message); });
+    }, 600);
+  }
+  function shift(delta){
+    value = Math.max(lo, Math.min(hi, value + delta));
+    paint(); send();
+  }
+  function button(text, fn){
+    var b = el('span','cbtn', text); b.onclick = fn; row.appendChild(b); return b;
+  }
+  button('\u2212', function(){ shift(-step); });
+  button('+', function(){ shift(step); });
+
+  var modeTopic = node.getAttribute('data-mode-topic');
+  if(modeTopic){
+    var on = node.getAttribute('data-enabled') === '1';
+    var b = el('span','cbtn' + (on ? ' on' : ''), on ? 'Выключить' : 'Включить');
+    b.onclick = function(){
+      var v = node.getAttribute(on ? 'data-mode-off' : 'data-mode-on');
+      pub(modeTopic, v)
+        .then(function(){ closeOv(); setTimeout(refresh, 600); })
+        .catch(function(e){ flash('Не удалось: ' + e.message); });
+    };
+    row.appendChild(b);
+  }
+
+  paint();
+  openOv([title, big, row, hint]);
+}
+
 function openPad(node){
   var pad = node.getAttribute('data-pad');
   if(pad==='xy') padXY(node);
+  else if(pad==='thermostat') padThermostat(node);
   else if(pad==='level') padLevel(node);
   else if(pad==='curtain') padCurtain(node);
   else if(pad==='ac') padAC(node);

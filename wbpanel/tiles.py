@@ -462,6 +462,9 @@ def build_thermostat(tile, state):
     return {
         "dial": dial,
         "target_num": target_num,
+        # Число без округления: по нему считается шаг уставки.
+        # target_num уже причёсан под показ, и шаг от него уезжает.
+        "target_value": target,
         "deg_dx": round(deg_dx, 1),
         "deg_size": round(big * 0.60, 1),
         "on": working == 1,
@@ -928,35 +931,6 @@ def build_ac(tile, state):
     }
 
 
-def build_header(tile, state):
-    """
-    Заголовок области: название комнаты и чипы состояния.
-
-    Плитка, а не строка разметки - и поэтому её можно поставить в нужное
-    место сетки. Панель «кухня и гостиная» собирается так: два заголовка
-    закреплены сверху слева и справа, каждый накрывает свой столбец плиток.
-    """
-    from .status import build_status, chip_width
-
-    chips = build_status(tile, state)
-    # Чипы прижаты вправо: слева название, между ними пустота, которая и
-    # держит разницу между заголовком и обычной плиткой.
-    gap = 10
-    total = sum(c["w"] for c in chips) + gap * max(len(chips) - 1, 0)
-    x = tile.get("inner_w", 0) - 14 - total
-    for chip in chips:
-        chip["x"], chip["y"] = round(x, 1), round((tile.get("inner_h", 36) - 36) / 2.0, 1)
-        x += chip["w"] + gap
-
-    return {
-        "on": False,
-        "chips": chips,
-        "plain": bool(tile.get("plain", True)),
-        "status": "",
-        "snaps": [],
-    }
-
-
 def build_link(tile, state):
     """
     Ссылка на другую панель. Ничего не читает из MQTT - только переход.
@@ -999,7 +973,6 @@ BUILDERS = {
     "thermostat": build_thermostat,
     "forecast": build_forecast,
     "ac": build_ac,
-    "header": build_header,
     "link": build_link,
     "value": build_value,
 }

@@ -9,7 +9,7 @@ from .const import BAND, CELL, GAP, HEADER, PAD, RX, SECTION, TILE, font_scale, 
 from .geometry import _fmt, cells, layout, text_width
 from .state import to_float
 from .status import build_status, place_chips
-from .tiles import BUILDERS, command_topic
+from .tiles import BUILDERS, DIAL_START, DIAL_SWEEP, command_topic
 from .const import STALE_AFTER
 from .tiles import build_chart, build_value
 
@@ -180,6 +180,12 @@ def tile_command(tile, conf, state):
                     cmd["mode_off"] = str(conf.get("command_mode_off", "0"))
                     cmd["mode_on"] = str(conf.get("command_mode_on", "1"))
                     cmd["enabled"] = "1" if tile.get("enabled") else "0"
+                # Геометрия дуги нужна пульту: перетаскивание вдоль неё
+                # переводится в градусы теми же числами, что рисуют шкалу.
+                cmd["dial_start"] = "%.1f" % DIAL_START
+                cmd["dial_sweep"] = "%.1f" % DIAL_SWEEP
+                cmd["scale_min"] = _fmt(float(conf.get("scale_min", 14)), 1)
+                cmd["scale_max"] = _fmt(float(conf.get("scale_max", 30)), 1)
 
     elif kind == "curtain":
         topic = command_topic(conf.get("channel"), conf.get("command_topic"))
@@ -271,7 +277,9 @@ CMD_ATTRS = [
     ("down", "data-down"), ("step", "data-step"), ("min", "data-min"),
     ("max", "data-max"), ("mode_topic", "data-mode-topic"),
     ("mode_off", "data-mode-off"), ("mode_on", "data-mode-on"),
-    ("enabled", "data-enabled"),
+    ("enabled", "data-enabled"), ("dial_start", "data-dial-start"),
+    ("dial_sweep", "data-dial-sweep"), ("scale_min", "data-scale-min"),
+    ("scale_max", "data-scale-max"),
     ("level", "data-level"), ("temp", "data-temp"), ("temp_max", "data-temp-max"),
     ("temp_unit", "data-temp-unit"), ("temp_lo", "data-temp-lo"),
     ("temp_hi", "data-temp-hi"), ("cold", "data-cold"), ("warm", "data-warm"),

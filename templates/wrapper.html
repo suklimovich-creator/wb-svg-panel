@@ -785,7 +785,7 @@ function bind(){
       if(!press.long && !press.moved){
         if(href) { location.href = href + Q(); }
         else if(press.zone) stepTarget(this, press.zone);
-        else if(this.getAttribute('data-pad') === 'thermostat') { /* центр - молчим */ }
+        else if(this.getAttribute('data-pad') === 'thermostat') toggleMode(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -817,56 +817,141 @@ function stepTarget(node, zone){
     .then(function(){ node.classList.remove('busy'); });
 }
 
-/* Пульт термостата: крупная уставка и кнопки по краям.
-   Пока нажимают, показываем выбранное значение сразу, а отправляем одно
-   последнее - иначе головка получит десяток команд подряд. */
+/* Переключение режима: греет или выключен.
+   Отдельной функцией, потому что зовётся из двух мест - с плитки коротким
+   нажатием по центру и с пульта кнопкой. */
+function toggleMode(node, after){
+  var topic = node.getAttribute('data-mode-topic');
+  if(!topic){ flash('Режим не настроен: нет command_topic_mode'); return; }
+  var on = node.getAttribute('data-enabled') === '1';
+  var value = node.getAttribute(on ? 'data-mode-off' : 'data-mode-on');
+  node.setAttribute('data-enabled', on ? '0' : '1');
+  pub(topic, value)
+    .then(function(){
+      setTimeout(refresh, 500);
+      if(after) setTimeout(after, 700);
+    })
+    .catch(function(e){
+      node.setAttribute('data-enabled', on ? '1' : '0');
+      flash('Не удалось: ' + e.message);
+    });
+}
+
+/* Пульт термостата.
+   Показывает ту же плитку крупно - её рисует сервер тем же макросом, что и
+   на панели, вместе с циферблатом. Поверх лежит прозрачный слой: ведём
+   палец вдоль дуги, уставка следует за ним.
+
+   Угол считается теми же числами, что рисуют шкалу: начало и разворот дуги
+   приходят в data-атрибутах, чтобы разметка и жест не разъехались. */
 function padThermostat(node){
+  var i = node.getAttribute('data-i');
+  var w = Math.min(Math.round(window.innerWidth * 0.90), 1400);
+  var h = Math.min(Math.round(window.innerHeight * 0.62), 900);
+  var base = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h;
+
+  var start = parseFloat(node.getAttribute('data-dial-start') || '148');
+  var sweep = parseFloat(node.getAttribute('data-dial-sweep') || '244');
+  var lo = parseFloat(node.getAttribute('data-scale-min') || '14');
+  var hi = parseFloat(node.getAttribute('data-scale-max') || '30');
   var step = parseFloat(node.getAttribute('data-step') || '0.5');
-  var lo = parseFloat(node.getAttribute('data-min') || '5');
-  var hi = parseFloat(node.getAttribute('data-max') || '35');
-  var value = parseFloat(node.getAttribute('data-target') || '20');
+  var tlo = parseFloat(node.getAttribute('data-min') || '10');
+  var thi = parseFloat(node.getAttribute('data-max') || '38');
   var digits = (step % 1 === 0) ? 0 : 1;
-  var timer = null;
+  var value = parseFloat(node.getAttribute('data-target') || '20');
 
-  var title = el('div','ttl', node.getAttribute('data-title') || 'Термостат');
-  var big = el('div'); big.id = 'tset';
+  var card = el('div','card'); card.textContent = '…';
+  var wrap = el('div'); wrap.id = 'crtwrap';
+  var view = el('div'); view.id = 'crtview';
+  var read = el('div','read');
+  view.appendChild(read);
+  wrap.appendChild(card); wrap.appendChild(view);
+
   var row = el('div','crow');
-  var hint = el('div','hint','Нажмите вне карточки, чтобы закрыть');
+  var hint = el('div','hint','Ведите по дуге или нажимайте кнопки');
+  var timer = null, dragging = false;
 
-  function paint(){ big.textContent = value.toFixed(digits) + '\u00b0'; }
+  function load(){
+    fetch(base + '&t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(svg){
+        if(svg.indexOf('<svg') < 0) throw new Error('пустой ответ');
+        card.innerHTML = svg;
+      })
+      .catch(function(e){ card.textContent = 'Не удалось: ' + e.message; });
+  }
+  function paint(){
+    read.textContent = value.toFixed(digits) + '\u00b0';
+    read.style.display = dragging ? 'block' : 'none';
+  }
+  /* Отправляем не каждое движение пальца, а последнее: головка получила бы
+     десяток команд подряд и полезла бы их отрабатывать по очереди. */
   function send(){
     clearTimeout(timer);
     timer = setTimeout(function(){
       pub(node.getAttribute('data-topic'), value.toFixed(digits))
-        .then(function(){ setTimeout(refresh, 600); })
+        .then(function(){ node.setAttribute('data-target', value.toFixed(digits));
+                          setTimeout(load, 600); setTimeout(refresh, 700); })
         .catch(function(e){ flash('Не удалось: ' + e.message); });
-    }, 600);
+    }, 500);
   }
   function shift(delta){
-    value = Math.max(lo, Math.min(hi, value + delta));
-    paint(); send();
+    value = Math.max(tlo, Math.min(thi, value + delta));
+    dragging = true; paint(); dragging = false;
+    read.style.display = 'block';
+    setTimeout(function(){ read.style.display = 'none'; }, 900);
+    send();
   }
-  function button(text, fn){
-    var b = el('span','cbtn', text); b.onclick = fn; row.appendChild(b); return b;
+  function button(text, cls, fn){
+    var b = el('span','cbtn' + (cls ? ' ' + cls : ''), text);
+    b.onclick = fn; row.appendChild(b); return b;
   }
-  button('\u2212', function(){ shift(-step); });
-  button('+', function(){ shift(step); });
+  button('\u2212', '', function(){ shift(-step); });
+  button('+', '', function(){ shift(step); });
 
-  var modeTopic = node.getAttribute('data-mode-topic');
-  if(modeTopic){
-    var on = node.getAttribute('data-enabled') === '1';
-    var b = el('span','cbtn' + (on ? ' on' : ''), on ? 'Выключить' : 'Включить');
-    b.onclick = function(){
-      var v = node.getAttribute(on ? 'data-mode-off' : 'data-mode-on');
-      pub(modeTopic, v)
-        .then(function(){ closeOv(); setTimeout(refresh, 600); })
-        .catch(function(e){ flash('Не удалось: ' + e.message); });
-    };
-    row.appendChild(b);
+  var power = null;
+  if(node.getAttribute('data-mode-topic')){
+    function label(){ return node.getAttribute('data-enabled') === '1' ? 'Выключить' : 'Включить'; }
+    /* Раньше пульт закрывался сразу после переключения - неудобно, если
+       хочешь тут же поправить уставку. Теперь остаётся открытым, а
+       картинка перерисовывается. */
+    power = button(label(), node.getAttribute('data-enabled') === '1' ? 'on' : '', function(){
+      toggleMode(node, function(){
+        power.textContent = label();
+        power.className = 'cbtn' + (node.getAttribute('data-enabled') === '1' ? ' on' : '');
+        load();
+      });
+    });
   }
 
-  paint();
-  openOv([title, big, row, hint]);
+  openOv([wrap, row, hint]);
+  if(!ov.offsetHeight){ closeOv(); window.open(base, '_blank'); return; }
+  load();
+
+  function at(ev){
+    var svg = card.querySelector('svg');
+    var box = svg || view;
+    var r = box.getBoundingClientRect();
+    var p = evPoint(ev);
+    // Центр циферблата: build_dial ставит его на 0.59 высоты картинки
+    var cx = r.left + r.width / 2, cy = r.top + r.height * 0.59;
+    var deg = Math.atan2(p.clientY - cy, p.clientX - cx) * 180 / Math.PI;
+    // Приводим к отсчёту дуги: 0 у неё справа, растёт по часовой
+    var rel = deg - start;
+    while(rel < 0) rel += 360;
+    while(rel > 360) rel -= 360;
+    if(rel > sweep){
+      // Палец за пределами дуги - прижимаем к ближнему концу, иначе
+      // уставка прыгает с максимума на минимум через нижний разрыв.
+      rel = (rel - sweep < (360 - rel)) ? sweep : 0;
+    }
+    var raw = lo + (hi - lo) * (rel / sweep);
+    value = Math.max(tlo, Math.min(thi, Math.round(raw / step) * step));
+    paint();
+  }
+  function begin(ev){ dragging = true; at(ev); }
+  function done(){ dragging = false; paint(); send(); }
+  drag(view, at, done, begin);
 }
 
 function openPad(node){

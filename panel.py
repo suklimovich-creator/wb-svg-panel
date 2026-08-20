@@ -1790,6 +1790,19 @@ SEEN = {}
 # Значок «был недавно» для тех, у кого активное состояние - движение
 FADED = {"motion": "person"}
 
+# Цвет бейджа режима. Оранжевый чип означает «обрати внимание», и работающий
+# кондиционер под это не подходит - он просто работает. Поэтому у приборов
+# чип нейтральный, а режим показан цветом бейджа: холод синий, тепло красное,
+# обдув зелёный, авто и возврат на базу нейтральные.
+BADGE_COLORS = {
+    "snow":  "#3B8FD4",
+    "heat":  "#D9553B",
+    "fan":   "#4E9A6B",
+    "water": "#3B8FD4",
+    "auto":  None,
+    "home":  None,
+}
+
 
 def status_entries(panel_conf):
     """Список описаний статусов панели, всегда список словарей."""
@@ -1813,6 +1826,29 @@ def parse_span(text, default=0):
         return int(float(raw[:-1] if mult else raw)) * (mult or 60)
     except ValueError:
         return default
+
+
+def status_required(entry, state):
+    """
+    Дополнительное условие показа - обычно «прибор включён».
+
+    У кондиционера канал mode продолжает сообщать cool и после выключения,
+    поэтому по нему одному судить нельзя.
+
+        require:
+          channel: "haier_bedroom/power"
+          when: "1"
+    """
+    req = entry.get("require")
+    if not req:
+        return True
+    for item in (req if isinstance(req, list) else [req]):
+        if not isinstance(item, dict) or not item.get("channel"):
+            continue
+        raw = state.snapshot(item["channel"])["raw"]
+        if not status_matches(item, raw):
+            return False
+    return True
 
 
 def status_matches(entry, raw):
@@ -1851,7 +1887,8 @@ def build_status(panel_conf, state, now=None):
         key = entry.get("channel")
         raw = state.snapshot(key)["raw"] if key else None
         icon = entry.get("icon", "power")
-        active = status_matches(entry, raw) if key else False
+        active = bool(key) and status_matches(entry, raw) \
+            and status_required(entry, state)
 
         fade = parse_span(entry.get("fade"), 0)
         if active:
@@ -1881,8 +1918,19 @@ def build_status(panel_conf, state, now=None):
                 digits = int(entry.get("value_digits", 0))
                 value = ("%.*f" % (digits, num)) + str(entry.get("value_unit", ""))
 
+        # Оранжевый чип - это «обрати внимание». Работающий прибор внимания
+        # не требует, поэтому тонируется только то, что помечено attention
+        # (по умолчанию - всё, у чего нет бейджа режима: движение, дверь,
+        # протечка). Прибор различается цветом бейджа, а не заливкой.
+        attention = entry.get("attention")
+        if attention is None:
+            attention = not (badge or entry.get("badges"))
+
         chips.append({"icon": icon, "badge": badge, "value": value,
-                      "active": active, "alarm": bool(entry.get("alarm")),
+                      "active": bool(active and attention),
+                      "badge_color": (entry.get("badge_color")
+                                      or BADGE_COLORS.get(badge)),
+                      "alarm": bool(entry.get("alarm")),
                       "w": chip_width(value)})
     return chips
 
@@ -2165,13 +2213,17 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None):
 
     for title, tiles_conf, status_src in sections:
         if title:
-            y_cursor += 6
+            # Было 6: чипы высотой 36 подходили вплотную к плиткам сверху.
+            y_cursor += 14
             hd = {"title": title, "x": PAD, "y": y_cursor + 22, "chips": []}
             # Чипы прижаты к правому краю заголовка раздела: там пусто,
             # и не приходится гадать, какой ширины получился текст.
             # Высота полосы раздела 44, чип 36 - помещается без сдвига плиток.
+            # Чип центрируется по оптической середине заголовка, а не по
+            # полосе раздела: базовая линия текста ниже его середины на
+            # половину роста прописных, отсюда -2 вместо +4.
             hd["chips"] = place_chips(
-                build_status(status_src, state), right_edge, y_cursor + 4)
+                build_status(status_src, state), right_edge, y_cursor - 2)
             headers.append(hd)
             y_cursor += SECTION
         placed, rows = layout(tiles_conf, cols)
@@ -2192,8 +2244,9 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None):
 
     # Статусы самой панели - в шапке, левее часов: справа стоит время,
     # и наезжать на него нельзя.
+    # Заголовок панели: базовая линия на 44, значит середина чипа на 38.
     top_chips = place_chips(build_status(panel_conf, state),
-                            width - PAD - 62, PAD + 6)
+                            width - PAD - 62, 20)
     return out, width, height, headers, top_chips
 
 

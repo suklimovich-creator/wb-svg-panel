@@ -456,8 +456,11 @@ def build_thermostat(tile, state):
     # Знак градуса не должен участвовать в центрировании, иначе число
     # визуально уезжает влево. Считаем ширину числа и ставим "°" за ним.
     target_num = _fmt(target, int(tile.get("digits", 0))) if target is not None else "--"
-    big = 30.0
-    deg_dx = text_width(target_num, big) / 2.0 + 1.0
+    # Кегль числа растёт вместе с плиткой (--fs), а смещение знака градуса
+    # раньше считалось от постоянных 30 - на крупной плитке «°» наезжал
+    # на цифры. Берём тот же множитель, что и разметка.
+    big = 30.0 * float(tile.get("fs", 1.0))
+    deg_dx = text_width(target_num, big) / 2.0 + 1.0 * float(tile.get("fs", 1.0))
 
     return {
         "dial": dial,
@@ -465,6 +468,7 @@ def build_thermostat(tile, state):
         # Число без округления: по нему считается шаг уставки.
         # target_num уже причёсан под показ, и шаг от него уезжает.
         "target_value": target,
+        "current_value": current,
         "deg_dx": round(deg_dx, 1),
         "deg_size": round(big * 0.60, 1),
         "on": working == 1,

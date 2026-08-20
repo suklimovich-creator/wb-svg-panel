@@ -91,6 +91,10 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     conf = dict(conf)
     conf["inner_w"] = pw
     conf["chart_h"] = ph
+    conf["inner_h"] = ph
+    # Крупная плитка рисуется теми же макросами, но с увеличенным кеглем.
+    # Сборщикам это нужно, чтобы считать ширину текста в тех же единицах.
+    conf["fs"] = font_scale(ph)
 
     if tile["kind"] == "chart":
         tile.update(build_chart(conf, state, history))
@@ -186,6 +190,10 @@ def tile_command(tile, conf, state):
                 cmd["dial_sweep"] = "%.1f" % DIAL_SWEEP
                 cmd["scale_min"] = _fmt(float(conf.get("scale_min", 14)), 1)
                 cmd["scale_max"] = _fmt(float(conf.get("scale_max", 30)), 1)
+                # Фактическая температура - для тонкой засечки на пульте:
+                # видно, куда прибору идти от текущего значения.
+                if tile.get("current_value") is not None:
+                    cmd["current"] = _fmt(tile["current_value"], 1)
 
     elif kind == "curtain":
         topic = command_topic(conf.get("channel"), conf.get("command_topic"))
@@ -279,7 +287,7 @@ CMD_ATTRS = [
     ("mode_off", "data-mode-off"), ("mode_on", "data-mode-on"),
     ("enabled", "data-enabled"), ("dial_start", "data-dial-start"),
     ("dial_sweep", "data-dial-sweep"), ("scale_min", "data-scale-min"),
-    ("scale_max", "data-scale-max"),
+    ("scale_max", "data-scale-max"), ("current", "data-current"),
     ("level", "data-level"), ("temp", "data-temp"), ("temp_max", "data-temp-max"),
     ("temp_unit", "data-temp-unit"), ("temp_lo", "data-temp-lo"),
     ("temp_hi", "data-temp-hi"), ("cold", "data-cold"), ("warm", "data-warm"),

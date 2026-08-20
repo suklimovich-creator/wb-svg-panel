@@ -388,6 +388,33 @@
   </symbol>
   {#- Авто: буква, а не картинка. Режим «сам разберётся» рисунком не
       выразить, а буква А узнаётся мгновенно и на всех языках. -#}
+  {#- Погода по кодам WMO. Облако рисуется одним контуром: составное из
+      кругов на мелком размере превращается в кашу. -#}
+  <symbol id="{{ uid }}ic-cloud" viewBox="0 0 24 24">
+    <path class="icon" d="M7.4 18.4a4.2 4.2 0 0 1-.5-8.4 5.6 5.6 0 0 1 10.8-1.1
+                          3.9 3.9 0 0 1-.9 9.5z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-cloud-sun" viewBox="0 0 24 24">
+    <path class="icon" d="M5.6 8.2a3.4 3.4 0 1 1 6.2 2.4"/>
+    <path class="icon" d="M9 2.6v1.8M4.2 4.6l1.3 1.3M2.4 9.4h1.8M13.8 4.6l-1.3 1.3"/>
+    <path class="icon" d="M9.6 19.4a3.8 3.8 0 0 1-.4-7.6 5 5 0 0 1 9.6-1
+                          3.5 3.5 0 0 1-.8 8.6z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-rain" viewBox="0 0 24 24">
+    <path class="icon" d="M7.6 15.2a3.9 3.9 0 0 1-.5-7.8 5.2 5.2 0 0 1 10-1
+                          3.6 3.6 0 0 1-.8 8.8z"/>
+    <path class="icon" d="M8.6 18.2 7.4 21.4M12.4 18.2l-1.2 3.2M16.2 18.2 15 21.4"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-storm" viewBox="0 0 24 24">
+    <path class="icon" d="M7.6 14.8a3.9 3.9 0 0 1-.5-7.8 5.2 5.2 0 0 1 10-1
+                          3.6 3.6 0 0 1-.8 8.8z"/>
+    <path class="icon" d="M13.2 16.2 9.6 19.6h3.4l-1.4 3"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-fog" viewBox="0 0 24 24">
+    <path class="icon" d="M7.6 12.6a3.9 3.9 0 0 1-.5-7.8 5.2 5.2 0 0 1 10-1
+                          3.6 3.6 0 0 1-.8 8.8z"/>
+    <path class="icon" d="M4.6 16.4h14.8M6.8 19.8h11"/>
+  </symbol>
   <symbol id="{{ uid }}bg-auto" viewBox="0 0 12 12">
     <path class="sicon" d="M3.1 9.4 6 2.6l2.9 6.8"/>
     <path class="sicon" d="M4.3 7.3h3.4"/>
@@ -818,6 +845,18 @@
     <line x1="0" y1="{{ hl.y }}" x2="{{ t.w }}" y2="{{ hl.y }}"
           class="hline{{ ' edge' if hl.edge }}"/>
     {% endfor %}
+    {#- Облачность фоном под верхней границей: чем плотнее облака, тем
+        серее. Это подложка, а не данные для чтения, поэтому без шкалы. -#}
+    {% for c in t.sky or [] %}
+    <rect x="{{ c.x }}" y="{{ t.h * 0.40 }}" width="{{ c.w }}"
+          height="{{ t.h * 0.42 }}" fill="#8A9AAE" opacity="{{ c.opacity }}"/>
+    {% endfor %}
+    {#- Дождь столбиками от нижней линии: высота - вероятность,
+        насыщенность - количество. -#}
+    {% for b in t.bars or [] %}
+    <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
+          rx="2" fill="#3B8FD4" opacity="{{ b.opacity }}"/>
+    {% endfor %}
     {% if t.geom %}
     <linearGradient id="{{ uid }}wfade{{ t.i }}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0"   stop-color="#5AA9E6" stop-opacity=".34"/>
@@ -848,13 +887,21 @@
             text-anchor="{{ tm.anchor }}">{{ tm.text }}</text>
       {% endfor %}
     {% endif %}
+    {#- Значок погоды на каждый подписанный час: у самой верхней границы,
+        чтобы не спорить с кривой температуры. -#}
+    {% for ic in t.icons or [] %}
+    <g transform="translate({{ ic.x - 8 }},{{ t.h * 0.40 - 19 }})" opacity=".85">
+      <use href="#{{ uid }}ic-{{ ic.name }}" xlink:href="#{{ uid }}ic-{{ ic.name }}"
+           width="16" height="16"/>
+    </g>
+    {% endfor %}
   </g>
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
 
-  {{ icon_c(t, t.icon or 'sun', 26) }}
+  {{ icon_c(t, t.icon or t.icon_now or 'sun', 26) }}
   <text x="{{ t.w - 20 }}" y="42" class="wnow" text-anchor="end">{{ t.now_temp }}</text>
-  {% if t.desc %}
-  <text x="{{ t.w - 20 }}" y="60" class="status" text-anchor="end">{{ t.desc }}</text>
+  {% if t.rain_note or t.desc %}
+  <text x="{{ t.w - 20 }}" y="60" class="status" text-anchor="end">{{ t.rain_note or t.desc }}</text>
   {% endif %}
 
   <text x="20" y="{{ t.h - 20 }}" class="name">{{ t.title }}</text>

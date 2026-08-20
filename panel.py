@@ -1426,12 +1426,62 @@ def forecast_channels(tile):
     return out
 
 
+# Коды погоды WMO, которые отдаёт Open-Meteo, - в значки.
+# Диапазоны, а не перечисление: коды сгруппированы по десяткам, и внутри
+# группы разница только в силе явления, а значок один и тот же.
+WMO_ICONS = (
+    ((0,), "sun"),
+    ((1, 2), "cloud-sun"),
+    ((3,), "cloud"),
+    ((45, 48), "fog"),
+    ((51, 53, 55, 56, 57), "rain"),
+    ((61, 63, 65, 66, 67, 80, 81, 82), "rain"),
+    ((71, 73, 75, 77, 85, 86), "snow"),
+    ((95, 96, 99), "storm"),
+)
+
+
+def wmo_icon(code, day=True):
+    if code is None:
+        return "sun" if day else "moon"
+    code = int(code)
+    for codes, name in WMO_ICONS:
+        if code in codes:
+            if name == "sun" and not day:
+                return "moon"
+            return name
+    return "cloud"
+
+
+def parse_series(raw, limit=24):
+    """'13.3,13.2,...' -> [13.3, 13.2, ...]. Пропуски становятся None."""
+    out = []
+    for part in str(raw or "").split(","):
+        part = part.strip()
+        if not part:
+            out.append(None)
+            continue
+        out.append(to_float(part))
+    return out[:limit]
+
+
+def parse_iso_hour(raw):
+    """'2026-08-20T03:00' -> 3. Нужен, чтобы подписать часы от начала прогноза."""
+    m = re.match(r"\d{4}-\d{2}-\d{2}T(\d{2}):", str(raw or "").strip())
+    return int(m.group(1)) if m else None
+
+
 def build_forecast(tile, state):
     """
     Погода: слева текущая, дальше кривая прогноза по часам.
 
-    Данные не из базы истории, а из отдельных каналов temp_00…temp_NN -
-    это прогноз, а не прошлое, и wb-mqtt-db тут ни при чём.
+    Данные не из базы истории, а из каналов виртуального устройства - это
+    прогноз, а не прошлое, и wb-mqtt-db тут ни при чём.
+
+    Ряды приходят одной строкой на 24 значения (temp_series, code_series,
+    precip_prob_series, cloud_series). Старый формат с отдельными каналами
+    temp_00…temp_NN поддерживается как запасной: у кого-то устройство ещё
+    не обновлено.
     """
     dev = tile.get("device", "weather")
     hours = int(tile.get("hours", 12))
@@ -1449,22 +1499,31 @@ def build_forecast(tile, state):
     wind = to_float(val("windspeed")["raw"])
     ok_raw = (val("forecast_ok")["raw"] or "").strip()
 
-    points, missing = [], 0
+    temps = parse_series(val("temp_series")["raw"], hours)
+    codes = parse_series(val("code_series")["raw"], hours)
+    probs = parse_series(val("precip_prob_series")["raw"], hours)
+    rains = parse_series(val("precip_series")["raw"], hours)
+    clouds = parse_series(val("cloud_series")["raw"], hours)
+    start_hour = parse_iso_hour(val("forecast_start")["raw"])
+
     now = time.time()
-    for i in range(hours):
-        snap = state.snapshot("%s/temp_%02d" % (dev, i))
-        snaps.append(snap)
-        v = to_float(snap["raw"])
-        if v is None:
-            missing += 1
-            continue
-        points.append((now + i * 3600.0, v))
+    if not [v for v in temps if v is not None]:
+        # Запасной путь: устройство старого образца, ряды не публикует
+        temps = []
+        for i in range(hours):
+            snap = state.snapshot("%s/temp_%02d" % (dev, i))
+            snaps.append(snap)
+            temps.append(to_float(snap["raw"]))
+
+    points = [(now + i * 3600.0, v)
+              for i, v in enumerate(temps) if v is not None]
 
     inner_w = tile.get("inner_w") or 354
     chart_h = tile.get("chart_h") or 170
     pad_x = 3.0
 
     geom, hlines, times, marks, ticks = None, [], [], [], []
+    bars, sky, icons = [], [], []
     if len(points) >= 2:
         values = [v for _, v in points]
         # та же сетка, что у обычных графиков: шаг от размаха, 2-5 делений
@@ -1496,7 +1555,8 @@ def build_forecast(tile, state):
             return y_bot - (v - lo) / max(hi - lo, 1e-6) * (y_bot - y_top)
 
         step_h = 3 if len(points) >= 9 else 2
-        start_hour = time.localtime(now).tm_hour
+        if start_hour is None:
+            start_hour = time.localtime(now).tm_hour
         for i, (stamp, _v) in enumerate(points):
             x = px(stamp)
             # вертикаль на каждый час, как у обычных графиков; подписанные
@@ -1516,6 +1576,44 @@ def build_forecast(tile, state):
                           "x": round(px(points[idx][0]), 1),
                           "y": round(py(target), 1)})
 
+        # --- осадки и облачность -------------------------------------------
+        # Дождь - столбики от нижней линии: высота по вероятности, насыщенность
+        # по количеству. Вероятность отвечает на «брать ли зонт», количество -
+        # на «насколько промокну», и путать их не стоит.
+        half = (inner_w - 2 * pad_x) / max(len(points) - 1, 1) / 2.0
+        for i in range(len(points)):
+            prob = probs[i] if i < len(probs) else None
+            if not prob:
+                continue
+            mm = (rains[i] if i < len(rains) else None) or 0.0
+            x = px(points[i][0])
+            h = (y_bot - y_top) * 0.42 * min(prob, 100.0) / 100.0
+            bars.append({"x": round(x - half * 0.72, 1),
+                         "w": round(half * 1.44, 1),
+                         "y": round(y_bot - h, 1),
+                         "h": round(h, 1),
+                         # 0.2 мм/ч это морось, 2 мм/ч уже настоящий дождь
+                         "opacity": round(0.28 + 0.42 * min(mm / 2.0, 1.0), 2)})
+
+        # Облачность - полоса под верхней границей: чем плотнее, тем серее.
+        # Отдельной шкалы не нужно, это фон, а не данные для чтения.
+        for i in range(len(points)):
+            cloud = clouds[i] if i < len(clouds) else None
+            if cloud is None:
+                continue
+            x = px(points[i][0])
+            sky.append({"x": round(x - half, 1), "w": round(half * 2, 1),
+                        "opacity": round(0.06 + 0.30 * cloud / 100.0, 3)})
+
+        # Значок по коду погоды: раз в step_h часов, чтобы не рябило
+        for i in range(0, len(points), step_h):
+            code = codes[i] if i < len(codes) else None
+            if code is None:
+                continue
+            hour = (start_hour + i) % 24
+            icons.append({"x": round(px(points[i][0]), 1),
+                          "name": wmo_icon(code, 6 <= hour < 21)})
+
     # Скрипт дописывает ветер в описание, а он и так есть отдельной цифрой -
     # убираем дубль и подрезаем строку под ширину плитки.
     desc = (desc_snap["raw"] or "").strip()
@@ -1525,6 +1623,16 @@ def build_forecast(tile, state):
         while desc and text_width(desc + "…", 13.5) > avail:
             desc = desc[:-1]
         desc = desc.rstrip(" ,") + "…"
+
+    # Когда дождь ожидается, это важнее давления: строка снизу и так тесная
+    rain_note = ""
+    if (val("rain_expected")["raw"] or "").strip() in ("1", "true", "True"):
+        hrs = to_float(val("rain_in")["raw"])
+        prob = to_float(val("precip_prob_max_12h")["raw"])
+        if hrs is not None:
+            rain_note = "дождь через %s ч" % _fmt(hrs, 0)
+            if prob:
+                rain_note += ", %s %%" % _fmt(prob, 0)
 
     bits = []
     if hum is not None:
@@ -1542,6 +1650,13 @@ def build_forecast(tile, state):
         "extra": " · ".join(bits),
         "geom": geom,
         "marks": marks,
+        "bars": bars,
+        "sky": sky,
+        "icons": icons,
+        "icon_now": wmo_icon(to_float(val("code_series")["raw"].split(",")[0])
+                             if (val("code_series")["raw"] or "").strip() else None,
+                             6 <= time.localtime(now).tm_hour < 21),
+        "rain_note": rain_note,
         "hlines": hlines,
         "ticks": ticks,
         "times": times,

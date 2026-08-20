@@ -273,6 +273,14 @@ def allowed_topics():
                                  "swing_mode", "swing_h_mode"):
                         allowed.add("/devices/%s/controls/%s/on"
                                     % (tile["device"], name))
+                if kind == "thermostat":
+                    # Уставка и, если задан, переключатель режима. Оба
+                    # топика для сырых каналов моста задаются явно -
+                    # вывести их из имени канала нельзя.
+                    pairs.append((tile.get("channel_target"),
+                                  tile.get("command_topic")))
+                    if tile.get("command_topic_mode"):
+                        allowed.add(tile["command_topic_mode"])
                 if kind in ("light", "dimmer"):
                     pairs.append((tile.get("channel_brightness"),
                                   tile.get("command_topic_brightness")))

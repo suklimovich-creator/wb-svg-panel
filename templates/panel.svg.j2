@@ -553,6 +553,14 @@
     <line x1="0" y1="{{ hl.y }}" x2="{{ t.w }}" y2="{{ hl.y }}"
           class="hline{{ ' edge' if hl.edge }}"/>
     {% endfor %}
+    {#- Часы рисуются раньше подписей шкал: если где-то и наложится,
+        сверху окажется шкала - без неё график не прочитать вовсе. -#}
+    {% if t.time_labels %}
+      {% for tm in t.times %}
+      <text x="{{ tm.x }}" y="{{ t.h * 0.82 - 3 }}" class="axis"
+            text-anchor="{{ tm.anchor }}">{{ tm.text }}</text>
+      {% endfor %}
+    {% endif %}
     {% if t.grid_labels %}
       {#- первая серия подписана слева, вторая справа, каждая своим цветом -#}
       {% for s in t.series %}
@@ -565,12 +573,6 @@
               class="axis" fill="{{ s.text_color }}">{{ lb.text }}</text>
           {% endif %}
         {% endfor %}
-      {% endfor %}
-    {% endif %}
-    {% if t.time_labels %}
-      {% for tm in t.times %}
-      <text x="{{ tm.x }}" y="{{ t.h * 0.82 - 3 }}" class="axis"
-            text-anchor="{{ tm.anchor }}">{{ tm.text }}</text>
       {% endfor %}
     {% endif %}
     {% for s in t.series %}

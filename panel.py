@@ -1025,20 +1025,28 @@ def build_chart(tile, state, history):
         lo, hi = s["geom"]["lo"], s["geom"]["hi"]
         digits = label_digits(s.get("step") or ((hi - lo) / max(len(hlines) - 1, 1)))
         for hl in hlines:
-            # Нижняя линия и строка часов делят одну высоту - подпись шкалы
-            # там пришлось бы ставить поверх времени.
-            if with_time and hl["f"] == 0:
-                continue
+            # Нижнюю границу показываем всегда: без неё непонятно, от чего
+            # отсчитывается шкала. Раньше её прятали ради строки часов -
+            # теперь вместо этого убираются крайние подписи часов, они и
+            # были причиной наложения.
             s["labels"].append({"y": hl["y"],
                                 "text": _fmt(lo + hl["f"] * (hi - lo), digits)})
         s["span"] = "%s–%s %s" % (_fmt(lo, digits), _fmt(hi, digits), s["unit"])
 
+    # Часы. Крайние подписи прижимаются к самым краям плитки - туда же, где
+    # стоят подписи шкал слева и справа. Пока шкал нет, это нормально; когда
+    # есть, крайние часы накрывают границы шкалы, и понять её невозможно.
+    # Часов на графике много, потеря двух крайних ничего не стоит.
+    with_grid = bool(tile.get("grid_labels", False))
     times = []
     for tk in ticks:
-        if tk["major"]:
-            lx, anchor = edge_anchor(tk["x"], tile["inner_w"])
-            times.append({"x": round(lx, 1), "anchor": anchor,
-                          "text": "%02d:00" % tk["hour"]})
+        if not tk["major"]:
+            continue
+        lx, anchor = edge_anchor(tk["x"], tile["inner_w"])
+        if with_grid and anchor != "middle":
+            continue
+        times.append({"x": round(lx, 1), "anchor": anchor,
+                      "text": "%02d:00" % tk["hour"]})
 
     note = ""
     if series_out and series_out[0].get("span"):

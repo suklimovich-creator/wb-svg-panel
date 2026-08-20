@@ -194,6 +194,9 @@ def tile_command(tile, conf, state):
                 # видно, куда прибору идти от текущего значения.
                 if tile.get("current_value") is not None:
                     cmd["current"] = _fmt(tile["current_value"], 1)
+                cmd["status"] = tile.get("status", "")
+                cmd["live"] = "1" if tile.get("on") else "0"
+                cmd["cooling"] = "1" if tile.get("cooling") else "0"
 
     elif kind == "curtain":
         topic = command_topic(conf.get("channel"), conf.get("command_topic"))
@@ -288,6 +291,7 @@ CMD_ATTRS = [
     ("enabled", "data-enabled"), ("dial_start", "data-dial-start"),
     ("dial_sweep", "data-dial-sweep"), ("scale_min", "data-scale-min"),
     ("scale_max", "data-scale-max"), ("current", "data-current"),
+    ("status", "data-status"), ("live", "data-live"), ("cooling", "data-cooling"),
     ("level", "data-level"), ("temp", "data-temp"), ("temp_max", "data-temp-max"),
     ("temp_unit", "data-temp-unit"), ("temp_lo", "data-temp-lo"),
     ("temp_hi", "data-temp-hi"), ("cold", "data-cold"), ("warm", "data-warm"),

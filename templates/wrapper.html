@@ -118,9 +118,10 @@
            font-size:15px;font-weight:600;cursor:pointer}
  #ov .cbtn.stop{border-color:#C4553B;color:#FFD8CE}
  #ov .cbtn.on{border-color:#E09B2D;color:#FFD9A0}
- #tset{text-align:center;color:#fff;font-size:56px;font-weight:600;margin:2px 0}
- #tset .tdeg{font-size:.55em;vertical-align:top;margin-left:2px}
  #tdial{margin:0 auto;touch-action:none;user-select:none}
+ #tdial .tbig{fill:#fff;font-size:54px;font-weight:600;letter-spacing:-1px}
+ #tdial .tsub{fill:rgba(255,255,255,.55);font-size:16px;font-weight:500}
+ #tdial .tmode{fill:rgba(255,255,255,.65);font-size:17px;font-weight:600}
  /* пульт кондиционера */
  #wheel{margin:0 auto;user-select:none;touch-action:none}
  #ov .wbig{color:#fff;font-size:64px;font-weight:300;line-height:1;
@@ -787,10 +788,10 @@ function bind(){
       if(!press.long && !press.moved){
         if(href) { location.href = href + Q(); }
         else if(press.zone) stepTarget(this, press.zone);
-        // У термостата короткое нажатие по центру ничего не делает: режим
-        // выбирает сам прибор либо человек кнопкой на пульте. Случайно
-        // выключить отопление касанием экрана нельзя.
-        else if(this.getAttribute('data-pad') === 'thermostat') { /* тишина */ }
+        // Термостат: по краям плитки шаг уставки, в центре - открыть пульт.
+        // Режим короткое нажатие не трогает: случайно выключить отопление
+        // касанием экрана нельзя, для этого есть кнопка на пульте.
+        else if(this.getAttribute('data-pad') === 'thermostat') openPad(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -843,12 +844,13 @@ function toggleMode(node, after){
 }
 
 /* Пульт термостата.
-   Рисуется здесь, а не сервером: дуга должна отзываться на палец без
-   задержки, а любой запрос картинки - это полсекунды ожидания.
+   Повторяет плитку: та же дуга, две риски, число в центре, режим снизу.
+   Рисуется здесь, а не запрашивается картинкой у сервера, - дуга должна
+   отзываться на палец сразу, без похода по сети.
 
-   Луч из центра указывает на засечку уставки и едет вдоль дуги вместе с
-   пальцем. Вторая, тонкая засечка - фактическая температура в комнате:
-   видно, куда прибору идти. */
+   Заливка идёт ОТ риски текущей температуры ДО уставки: это ровно тот
+   разрыв, который прибору предстоит закрыть. Вверх - оранжевая, вниз -
+   синяя: одинаковая дуга не должна означать разные вещи. */
 function padThermostat(node){
   var lo = parseFloat(node.getAttribute('data-scale-min') || '14');
   var hi = parseFloat(node.getAttribute('data-scale-max') || '30');
@@ -858,78 +860,107 @@ function padThermostat(node){
   var digits = (step % 1 === 0) ? 0 : 1;
   var value = parseFloat(node.getAttribute('data-target') || '20');
   var current = parseFloat(node.getAttribute('data-current') || 'NaN');
+  var live = node.getAttribute('data-live') === '1';
   var timer = null;
 
-  var title = el('div','ttl', node.getAttribute('data-title') || 'Термостат');
-  var big = el('div'); big.id = 'tset';
-  var sub = el('div','hint','');
-
-  var S = Math.min(window.innerWidth - 40, Math.round(window.innerHeight * 0.46), 380);
+  var S = Math.min(window.innerWidth - 40, Math.round(window.innerHeight * 0.62), 460);
   var wrap = el('div'); wrap.id = 'tdial';
   wrap.style.width = S + 'px'; wrap.style.height = S + 'px';
   wrap.innerHTML =
       '<svg viewBox="0 0 ' + S + ' ' + S + '" width="' + S + '" height="' + S + '">'
-    + '<path class="tarc-bg" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="10" stroke-linecap="round"/>'
-    + '<path class="tarc" fill="none" stroke="#E09B2D" stroke-width="10" stroke-linecap="round"/>'
-    + '<line class="tray" stroke="#E09B2D" stroke-width="2" opacity=".5"/>'
-    + '<line class="tcur" stroke="rgba(255,255,255,.75)" stroke-width="3" stroke-linecap="round"/>'
-    + '<circle class="tknob" r="13" fill="#E09B2D"/>'
+    + '<path class="tarc-bg" fill="none" stroke-linecap="round"/>'
+    + '<path class="tarc" fill="none" stroke-linecap="round"/>'
+    + '<line class="tcur" stroke-linecap="round"/>'
+    + '<circle class="tcurdot" r="3.4"/>'
+    + '<line class="ttgt" stroke-linecap="round"/>'
+    + '<circle class="tknob"/>'
+    + '<text class="tbig" text-anchor="middle"></text>'
+    + '<text class="tsub" text-anchor="middle"></text>'
+    + '<text class="tmode" text-anchor="middle"></text>'
     + '</svg>';
   var pBg = wrap.querySelector('.tarc-bg'), pArc = wrap.querySelector('.tarc');
-  var lRay = wrap.querySelector('.tray'), lCur = wrap.querySelector('.tcur');
-  var cKnob = wrap.querySelector('.tknob');
+  var lCur = wrap.querySelector('.tcur'), dCur = wrap.querySelector('.tcurdot');
+  var lTgt = wrap.querySelector('.ttgt'), cKnob = wrap.querySelector('.tknob');
+  var tBig = wrap.querySelector('.tbig'), tSub = wrap.querySelector('.tsub');
+  var tMode = wrap.querySelector('.tmode');
 
-  /* Та же дуга, что и на плитке: снизу разрыв, начало слева внизу.
-     Числа приходят в атрибутах, чтобы разметка и жест не разъехались. */
   var START = parseFloat(node.getAttribute('data-dial-start') || '148');
   var SWEEP = parseFloat(node.getAttribute('data-dial-sweep') || '244');
-  var CX = S / 2, CY = S / 2, R = S * 0.38;
+  // Те же пропорции, что в build_dial: центр опущен, радиус от меньшей стороны
+  var CX = S / 2, CY = S * 0.55, R = S * 0.36;
+  var W = Math.max(8, Math.round(S * 0.042));
 
   function pt(deg, radius){
     var a = deg * Math.PI / 180;
     return [CX + radius * Math.cos(a), CY + radius * Math.sin(a)];
   }
   function arc(fromDeg, toDeg, radius){
+    if(Math.abs(toDeg - fromDeg) < 0.3) return '';
     var a = pt(fromDeg, radius), b = pt(toDeg, radius);
-    var large = (toDeg - fromDeg) > 180 ? 1 : 0;
+    var large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
+    var sweepFlag = toDeg > fromDeg ? 1 : 0;
     return 'M' + a[0].toFixed(1) + ' ' + a[1].toFixed(1) +
-           'A' + radius + ' ' + radius + ' 0 ' + large + ' 1 ' +
+           'A' + radius + ' ' + radius + ' 0 ' + large + ' ' + sweepFlag + ' ' +
            b[0].toFixed(1) + ' ' + b[1].toFixed(1);
   }
   function degOf(v){
     var f = (v - lo) / (hi - lo);
     return START + Math.max(0, Math.min(1, f)) * SWEEP;
   }
+  function mark(line, dot, v, inner, outer){
+    var a = pt(degOf(v), R * inner), b = pt(degOf(v), R * outer);
+    line.setAttribute('x1', a[0].toFixed(1)); line.setAttribute('y1', a[1].toFixed(1));
+    line.setAttribute('x2', b[0].toFixed(1)); line.setAttribute('y2', b[1].toFixed(1));
+    if(dot){ dot.setAttribute('cx', b[0].toFixed(1)); dot.setAttribute('cy', b[1].toFixed(1)); }
+  }
   function paint(){
+    var cool = !isNaN(current) && value < current;
+    var color = cool ? '#3B8FD4' : '#FFAE28';
+
     pBg.setAttribute('d', arc(START, START + SWEEP, R));
-    var d = degOf(value);
-    pArc.setAttribute('d', arc(START, d, R));
-    var k = pt(d, R);
+    pBg.setAttribute('stroke', 'rgba(255,255,255,.14)');
+    pBg.setAttribute('stroke-width', W);
+
+    // от текущей до уставки, а не от начала шкалы
+    var from = isNaN(current) ? START : degOf(current);
+    var to = degOf(value);
+    pArc.setAttribute('d', arc(Math.min(from, to), Math.max(from, to), R));
+    pArc.setAttribute('stroke', color);
+    pArc.setAttribute('stroke-width', W);
+    pArc.setAttribute('opacity', live ? '.95' : '.55');
+
+    if(!isNaN(current)){
+      mark(lCur, dCur, current, 0.86, 1.20);
+      lCur.setAttribute('stroke', 'rgba(255,255,255,.70)');
+      lCur.setAttribute('stroke-width', Math.max(2, W * 0.34));
+      dCur.setAttribute('fill', 'rgba(255,255,255,.70)');
+    }
+    mark(lTgt, null, value, 0.80, 1.20);
+    lTgt.setAttribute('stroke', color);
+    lTgt.setAttribute('stroke-width', Math.max(3, W * 0.46));
+    var k = pt(degOf(value), R * 1.20);
     cKnob.setAttribute('cx', k[0].toFixed(1));
     cKnob.setAttribute('cy', k[1].toFixed(1));
-    lRay.setAttribute('x1', CX); lRay.setAttribute('y1', CY);
-    lRay.setAttribute('x2', k[0].toFixed(1)); lRay.setAttribute('y2', k[1].toFixed(1));
-    if(!isNaN(current)){
-      var c1 = pt(degOf(current), R - 16), c2 = pt(degOf(current), R + 16);
-      lCur.setAttribute('x1', c1[0].toFixed(1)); lCur.setAttribute('y1', c1[1].toFixed(1));
-      lCur.setAttribute('x2', c2[0].toFixed(1)); lCur.setAttribute('y2', c2[1].toFixed(1));
-    } else {
-      lCur.setAttribute('x2', CX); lCur.setAttribute('y2', CY);
-      lCur.setAttribute('x1', CX); lCur.setAttribute('y1', CY);
-    }
-    big.innerHTML = value.toFixed(digits) + '<span class="tdeg">\u00b0</span>';
-    sub.textContent = isNaN(current) ? '' : ('в комнате ' + current.toFixed(1) + '\u00b0');
+    cKnob.setAttribute('r', Math.max(7, W * 0.62));
+    cKnob.setAttribute('fill', color);
+
+    tBig.setAttribute('x', CX); tBig.setAttribute('y', CY + S * 0.035);
+    tBig.textContent = value.toFixed(digits) + '\u00b0';
+    tSub.setAttribute('x', CX); tSub.setAttribute('y', CY + S * 0.105);
+    tSub.textContent = isNaN(current) ? '' : ('сейчас ' + current.toFixed(1) + '\u00b0');
+    tMode.setAttribute('x', CX); tMode.setAttribute('y', S - S * 0.03);
+    tMode.textContent = node.getAttribute('data-status') || '';
   }
   /* Отправляем последнее значение, а не каждое движение пальца: головка
-     иначе выстроит десяток команд в очередь и будет отрабатывать их. */
+     иначе выстроит десяток команд в очередь. */
   function send(){
     clearTimeout(timer);
     timer = setTimeout(function(){
       pub(node.getAttribute('data-topic'), value.toFixed(digits))
         .then(function(){ node.setAttribute('data-target', value.toFixed(digits));
-                          setTimeout(refresh, 600); })
+                          setTimeout(refresh, 400); })
         .catch(function(e){ flash('Не удалось: ' + e.message); });
-    }, 450);
+    }, 350);
   }
   function shift(delta){
     value = Math.max(tlo, Math.min(thi, value + delta));
@@ -953,17 +984,19 @@ function padThermostat(node){
       toggleMode(node, function(){
         power.textContent = label();
         power.className = 'cbtn' + (node.getAttribute('data-enabled') === '1' ? ' on' : '');
+        live = node.getAttribute('data-enabled') === '1';
+        paint();
       });
     });
   }
 
   paint();
-  openOv([title, big, wrap, row, sub]);
+  openOv([wrap, row]);
 
   function at(ev){
     var r = wrap.getBoundingClientRect();
     var p = evPoint(ev);
-    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    var cx = r.left + r.width * 0.5, cy = r.top + r.height * 0.55;
     var deg = Math.atan2(p.clientY - cy, p.clientX - cx) * 180 / Math.PI;
     var rel = deg - START;
     while(rel < 0) rel += 360;

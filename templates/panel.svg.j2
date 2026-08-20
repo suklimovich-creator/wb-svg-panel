@@ -144,6 +144,10 @@
   .dial .fill  { fill: none; stroke: var(--stroke); stroke-width: calc(7px * var(--fs));
                  stroke-linecap: round; opacity: .55; }
   .dial.live .fill { stroke: var(--active); opacity: .95; }
+  /* Уставка ниже фактической - прибору предстоит охлаждать. Тёплый цвет
+     тут сбивает: одинаковая дуга не должна означать разные вещи. */
+  .dial.cool .fill { stroke: #3B8FD4; }
+  .dial.cool .mark.target { stroke: #3B8FD4; }
   .dial .mark  { stroke: var(--ink); stroke-width: calc(2.4px * var(--fs)); stroke-linecap: round;
                  opacity: .70; }
   .dial .mark-dot { fill: var(--ink); opacity: .70; }
@@ -795,7 +799,7 @@
       чтобы случайное касание не меняло уставку. -#}
   {{ plate(t) }}
   {% if t.dial and not t.compact %}
-    <g class="dial {{ 'live' if t.on }} {{ 'muted' if not t.enabled }}">
+    <g class="dial {{ 'live' if t.on }} {{ 'cool' if t.cooling }} {{ 'muted' if not t.enabled }}">
       {% if t.dial.track %}<path d="{{ t.dial.track }}" class="track"/>{% endif %}
       {% if t.dial.fill %}<path d="{{ t.dial.fill }}" class="fill"/>{% endif %}
       {% for m in t.dial.marks %}

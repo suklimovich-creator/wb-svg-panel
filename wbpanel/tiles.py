@@ -469,6 +469,10 @@ def build_thermostat(tile, state):
         # target_num уже причёсан под показ, и шаг от него уезжает.
         "target_value": target,
         "current_value": current,
+        # Куда прибору идти: вниз - охлаждение, дуга синяя. Тёплый
+        # оранжевый на «остудить до 18» читается как ошибка.
+        "cooling": (current is not None and target is not None
+                    and target < current),
         "deg_dx": round(deg_dx, 1),
         "deg_size": round(big * 0.60, 1),
         "on": working == 1,

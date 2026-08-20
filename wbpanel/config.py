@@ -81,6 +81,14 @@ class Config:
                 for key in ("channel", "value_channel"):
                     if entry.get(key):
                         out.add(entry[key])
+                # Условие «прибор включён» читается из своего канала, и его
+                # тоже надо слушать. Без этого require всегда видит пустоту
+                # и считает прибор выключенным: чип не появляется вовсе,
+                # хотя канал режима приходит исправно.
+                req = entry.get("require")
+                for item in (req if isinstance(req, list) else [req]):
+                    if isinstance(item, dict) and item.get("channel"):
+                        out.add(item["channel"])
         return out
 
     def raw_topics(self):

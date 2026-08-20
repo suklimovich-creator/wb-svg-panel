@@ -242,7 +242,12 @@ function pub(topic, value){
 }
 
 /* ---------- оверлей ---------- */
+/* Пульты, которым нужно следить за состоянием, оставляют здесь функцию
+   уборки: при закрытии окна её надо позвать, иначе таймер продолжит
+   тикать в пустоту. */
+var ovCleanup = null;
 function closeOv(){ ov.classList.remove('on'); paused=false;
+  if(ovCleanup){ ovCleanup(); ovCleanup = null; }
   var k=ov.querySelector('.card,#pad,#lvl,#crtwrap,.ttl,.hint');
   while(ov.children.length>1) ov.removeChild(ov.lastChild); refresh(); }
 ov.addEventListener('click', function(e){ if(e.target===ov) closeOv(); });
@@ -834,7 +839,7 @@ function toggleMode(node, after){
   node.setAttribute('data-enabled', on ? '0' : '1');
   pub(topic, value)
     .then(function(){
-      setTimeout(refresh, 500);
+      setTimeout(function(){ refresh(true); }, 500);
       if(after) setTimeout(after, 700);
     })
     .catch(function(e){
@@ -861,7 +866,7 @@ function padThermostat(node){
   var value = parseFloat(node.getAttribute('data-target') || '20');
   var current = parseFloat(node.getAttribute('data-current') || 'NaN');
   var live = node.getAttribute('data-live') === '1';
-  var timer = null;
+  var timer = null, dragging = false;
 
   var S = Math.min(window.innerWidth - 40, Math.round(window.innerHeight * 0.62), 460);
   var wrap = el('div'); wrap.id = 'tdial';
@@ -956,9 +961,13 @@ function padThermostat(node){
   function send(){
     clearTimeout(timer);
     timer = setTimeout(function(){
+      // Пока сценарий переваривает команду, серверная уставка ещё старая.
+      // Держим свою цифру три секунды, дальше верим прибору.
+      quietUntil = Date.now() + 3000;
       pub(node.getAttribute('data-topic'), value.toFixed(digits))
         .then(function(){ node.setAttribute('data-target', value.toFixed(digits));
-                          setTimeout(refresh, 400); })
+                          setTimeout(function(){ refresh(true); }, 400);
+                          setTimeout(function(){ refresh(true); sync(); }, 1500); })
         .catch(function(e){ flash('Не удалось: ' + e.message); });
     }, 350);
   }
@@ -982,16 +991,51 @@ function padThermostat(node){
     };
     power = button(label(), node.getAttribute('data-enabled') === '1' ? 'on' : '', function(){
       toggleMode(node, function(){
+        // Дальше состояние подтянет sync(): режим меняет прибор, и его
+        // ответ может прийти позже нашего предположения.
         power.textContent = label();
         power.className = 'cbtn' + (node.getAttribute('data-enabled') === '1' ? ' on' : '');
-        live = node.getAttribute('data-enabled') === '1';
         paint();
       });
     });
   }
 
+  /* refresh() заменяет разметку панели целиком, и ссылка на плитку
+     становится битой: обновления состояния до пульта не доходят вовсе.
+     Поэтому после каждой перерисовки ищем плитку заново по её номеру и
+     перечитываем то, что мог поменять сам прибор или сценарий. */
+  var idx = node.getAttribute('data-i');
+  var quietUntil = 0;
+  function sync(){
+    var fresh = host.querySelector('[data-pad="thermostat"][data-i="' + idx + '"]');
+    if(!fresh) return;
+    node = fresh;
+    var c = parseFloat(node.getAttribute('data-current') || 'NaN');
+    if(!isNaN(c)) current = c;
+    live = node.getAttribute('data-live') === '1';
+    // Уставку с сервера подхватываем, только если сами недавно не писали:
+    // сценарий отвечает не мгновенно, и своё же значение перетёрло бы
+    // цифру обратно на старую.
+    if(Date.now() > quietUntil && !dragging){
+      var t = parseFloat(node.getAttribute('data-target') || 'NaN');
+      if(!isNaN(t)) value = t;
+    }
+    if(power){
+      power.textContent = node.getAttribute('data-enabled') === '1' ? 'Выключить' : 'Включить';
+      power.className = 'cbtn' + (node.getAttribute('data-enabled') === '1' ? ' on' : '');
+    }
+    paint();
+  }
+  var ticker = setInterval(function(){
+    // Сначала просим свежую панель, потом читаем из неё: пока оверлей
+    // открыт, само по себе обновление не сработает.
+    refresh(true);
+    sync();
+  }, 1200);
+
   paint();
   openOv([wrap, row]);
+  ovCleanup = function(){ clearInterval(ticker); };
 
   function at(ev){
     var r = wrap.getBoundingClientRect();
@@ -1010,7 +1054,9 @@ function padThermostat(node){
     value = Math.max(tlo, Math.min(thi, Math.round(raw / step) * step));
     paint();
   }
-  drag(wrap, at, send);
+  function begin(ev){ dragging = true; at(ev); }
+  function done(){ dragging = false; send(); }
+  drag(wrap, at, done, begin);
 }
 
 function openPad(node){
@@ -1023,8 +1069,11 @@ function openPad(node){
 }
 
 /* ---------- обновление ---------- */
-function refresh(){
-  if(paused) return;
+/* force нужен пультам: пока открыт оверлей, автообновление стоит - иначе
+   разметка меняется под пальцем. Но пульт термостата сам следит за
+   состоянием и переспрашивает панель осознанно, поэтому ему разрешено. */
+function refresh(force){
+  if(paused && !force) return;
   var q = Q();
   fetch(NAME + '.svg' + q + (q ? '&' : '?') + 't=' + Date.now(), {cache:'no-store'})
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })

@@ -471,7 +471,8 @@
     (RX 24 при высоте 170). Поля: 10 слева, 6 до числа, 12 справа -
     цифры прямоугольные и липнут к краю сильнее, чем скруглённый значок.
     active тонирует чип, как .plate.on тонирует плитку. -#}
-{% macro chip(name, value=None, badge=None, active=False, w=None, badge_color=None) %}
+{% macro chip(name, value=None, badge=None, active=False, w=None, badge_color=None,
+              chart=None, chart_title=None, unit=None) %}
   {% set icon_size = 26 %}
   {#- Поля разные для двух случаев. Со значком и числом: 10 слева, 6 между,
       12 справа - цифры прямоугольные и липнут к краю сильнее, чем
@@ -482,7 +483,10 @@
   {% set width = w or (pad_l + icon_size + (6 + text_w + 12 if value else 7)) %}
   {% set ink = 'var(--active-ink)' if active else 'var(--stroke)' %}
   {% set knock = 'var(--active-soft)' if active else 'var(--tile)' %}
-  <g color="{{ ink }}">
+  {#- data-chart делает чип кнопкой: по нажатию открывается график канала.
+      Ставится только там, где график осмыслен, - решает build_status. -#}
+  <g color="{{ ink }}"{% if chart %} data-chart="{{ chart }}"
+     data-chart-title="{{ chart_title }}" data-unit="{{ unit or '' }}"{% endif %}>
     <rect class="chip {{ 'on' if active }}" x="0.75" y="0.75"
           width="{{ width - 1.5 }}" height="34.5" rx="10"/>
     <g transform="translate({{ pad_l }},5)">
@@ -990,7 +994,8 @@
         class="h2">{{ t.title }}</text>
   {% for c in t.chips or [] %}
   <g transform="translate({{ c.x }},{{ c.y }})">
-    {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color) }}
+    {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,
+            c.chart, c.chart_title, c.unit) }}
   </g>
   {% endfor %}
 {% endmacro %}
@@ -1034,14 +1039,16 @@
 <text x="{{ hd.x }}" y="{{ hd.y }}" class="h2">{{ hd.title }}</text>
 {% for c in hd.chips or [] %}
 <g transform="translate({{ c.x }},{{ c.y }})">
-  {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color) }}
+  {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,
+            c.chart, c.chart_title, c.unit) }}
 </g>
 {% endfor %}
 {% endfor %}
 
 {% for c in top_chips or [] %}
 <g transform="translate({{ c.x }},{{ c.y }})">
-  {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color) }}
+  {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,
+            c.chart, c.chart_title, c.unit) }}
 </g>
 {% endfor %}
 

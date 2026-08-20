@@ -165,7 +165,19 @@ def build_status(panel_conf, state, now=None):
         if attention is None:
             attention = not (badge or entry.get("badges"))
 
+        # Нажатие на чип открывает график канала - но только если по нему
+        # вообще есть что рисовать. Числовые условия (above/below) означают
+        # величину с историей, дискретные (when) - состояние вроде «дверь
+        # открыта», где график выродится в две ступеньки.
+        chartable = entry.get("chart")
+        if chartable is None:
+            chartable = (entry.get("above") is not None
+                         or entry.get("below") is not None)
+
         chips.append({"icon": icon, "badge": badge, "value": value,
+                      "chart": key if chartable else None,
+                      "chart_title": entry.get("title") or "",
+                      "unit": entry.get("value_unit", ""),
                       "active": bool(active and attention),
                       "badge_color": (entry.get("badge_color")
                                       or BADGE_COLORS.get(badge)),

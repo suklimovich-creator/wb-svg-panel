@@ -26,6 +26,12 @@ ORIG="$SRC/nginx-wb-svg-panel.conf"
 PASSWD=/etc/nginx/panel.passwd
 MARK="wb-svg-panel-acl"
 
+# Список доступа живёт отдельным файлом вне репозитория: подсети у каждого
+# свои, а править файл под контролем git нельзя - рабочая копия становится
+# грязной, и update.sh отказывается обновляться.
+INCDIR=/etc/nginx/includes
+ACL="$INCDIR/wb-svg-panel-acl.conf"
+
 MODE="${1:-check}"
 case "$MODE" in
     check|--lan|--off|--open) ;;
@@ -57,57 +63,48 @@ backup() {
 
 # Вставляет блок доступа первой строкой внутрь location / { ... }
 add_acl() {
-    f="$1"
-    [ -f "$f" ] || return 0
-    if has_acl "$f"; then
-        echo "    уже закрыт: $f"
+    # Аргумент больше не нужен - пишем всегда в один и тот же внешний файл,
+    # но оставлен ради совместимости с прежними вызовами.
+    if [ -f "$ACL" ]; then
+        echo "    уже закрыт: $ACL"
         return 0
     fi
+    mkdir -p "$INCDIR"
     AUTH=""
     [ -f "$PASSWD" ] && AUTH=1
-    backup "$f"
-    tmp="$f.new.$$"
-    awk -v mark="$MARK" -v auth="$AUTH" '
-        BEGIN { done = 0 }
-        {
-            print
-            if (!done && $0 ~ /^[[:space:]]*location \/ \{/) {
-                print "        # --- " mark " (вставлено close-8080.sh) ---"
-                print "        # satisfy any: пускаем ЛИБО по адресу, ЛИБО по паролю."
-                print "        # Свою подсеть посмотрите командой: ip -4 addr show"
-                print "        satisfy any;"
-                print "        allow 127.0.0.1;"
-                print "        allow ::1;"
-                print "        allow 192.168.0.0/16;"
-                print "        allow 10.0.0.0/8;"
-                print "        allow 172.16.0.0/12;"
-                print "        deny  all;"
-                if (auth != "") {
-                    print "        auth_basic \"Панель\";"
-                    print "        auth_basic_user_file /etc/nginx/panel.passwd;"
-                }
-                print "        # --- конец " mark " ---"
-                done = 1
-            }
-        }
-        END { if (!done) exit 3 }
-    ' "$f" > "$tmp"
-    rc=$?
-    if [ "$rc" != "0" ]; then
-        rm -f "$tmp"
-        echo "    НЕ НАШЁЛ 'location / {' в $f — правьте руками"
-        return 1
-    fi
-    mv "$tmp" "$f"
-    echo "    закрыт: $f"
+    {
+        echo "# $MARK - создан close-8080.sh, в репозитории его нет."
+        echo "# satisfy any: пускаем ЛИБО по адресу, ЛИБО по паролю."
+        echo "# Свою подсеть посмотрите командой: ip -4 addr show"
+        echo "satisfy any;"
+        echo "allow 127.0.0.1;"
+        echo "allow ::1;"
+        echo "allow 192.168.0.0/16;"
+        echo "allow 10.0.0.0/8;"
+        echo "allow 172.16.0.0/12;"
+        echo "deny  all;"
+        if [ -n "$AUTH" ]; then
+            echo "auth_basic \"Панель\";"
+            echo "auth_basic_user_file $PASSWD;"
+        fi
+    } > "$ACL"
+    chmod 644 "$ACL"
+    echo "    закрыт: $ACL"
 }
 
 del_acl() {
-    f="$1"
-    has_acl "$f" || return 0
-    backup "$f"
-    sed -i "/--- $MARK (вставлено/,/--- конец $MARK ---/d" "$f"
-    echo "    список доступа убран: $f"
+    # Старые установки держали список внутри конфига - вычищаем и его,
+    # иначе после обновления останутся два списка сразу.
+    f="${1:-}"
+    if [ -n "$f" ] && [ -f "$f" ] && has_acl "$f"; then
+        backup "$f"
+        sed -i "/--- $MARK (вставлено/,/--- конец $MARK ---/d" "$f"
+        echo "    старый список убран из $f"
+    fi
+    if [ -f "$ACL" ]; then
+        rm -f "$ACL"
+        echo "    список доступа убран: $ACL"
+    fi
 }
 
 # Проверяет конфиг, при ошибке откатывает из последнего бэкапа
@@ -120,6 +117,8 @@ nginx_apply() {
     echo
     echo "  ОШИБКА: nginx -t не проходит. Откатываю."
     nginx -t 2>&1 | sed 's/^/      /'
+    # Файл списка доступа создаётся с нуля, поэтому откат - просто удалить.
+    [ -f "$ACL" ] && rm -f "$ACL" && echo "      убран $ACL"
     for f in "$AVAIL" "$ORIG"; do
         last=$(ls -1t "$f".bak-* 2>/dev/null | head -1)
         [ -n "$last" ] && cp -a "$last" "$f" && echo "      возвращено из $last"
@@ -144,8 +143,10 @@ echo "  основной вход /panel/ ........ $PANEL"
 
 if listens_8080; then
     echo "  порт 8080 .................... слушает"
+    P8080=1
 else
     echo "  порт 8080 .................... не слушает"
+    P8080=0
 fi
 
 if [ -L "$ENABLED" ] || [ -f "$ENABLED" ]; then
@@ -156,12 +157,12 @@ else
     LINKED=0
 fi
 
-if has_acl "$AVAIL"; then
+if [ -f "$ACL" ] || has_acl "$AVAIL"; then
     echo "  список доступа на 8080 ....... есть"
-    ACL=1
+    HAS_ACL=1
 else
     echo "  список доступа на 8080 ....... НЕТ (пускает всех)"
-    ACL=0
+    HAS_ACL=0
 fi
 
 if [ -f "$PASSWD" ]; then
@@ -181,7 +182,7 @@ else
 fi
 
 echo
-if [ "$LINKED" = "1" ] && [ "$ACL" = "0" ]; then
+if [ "$LINKED" = "1" ] && [ "$HAS_ACL" = "0" ]; then
     if [ "$INTERACTIVE" = "1" ]; then
         echo "  ВЫВОД: порт 8080 открыт всей сети и позволяет управлять домом."
     else
@@ -220,8 +221,7 @@ case "$MODE" in
 --lan)
     echo "Закрываю 8080 списком адресов"
     echo "=============================================================="
-    add_acl "$AVAIL" || exit 1
-    add_acl "$ORIG"  || exit 1
+    add_acl || exit 1
     nginx_apply || exit 1
     echo
     echo "  проверка с самого контроллера (должно быть 200):"
@@ -253,7 +253,7 @@ case "$MODE" in
     echo "Возвращаю как было"
     echo "=============================================================="
     del_acl "$AVAIL"
-    del_acl "$ORIG"
+    del_acl "$ORIG"   # чистим и старые установки, где список лежал внутри
     ln -sf "$AVAIL" "$ENABLED"
     echo "    включён $ENABLED"
     nginx_apply || exit 1

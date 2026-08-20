@@ -234,34 +234,108 @@ def cells(value, default=1.0):
     return max(1, n)
 
 
+def fixed_spot(tile, cols):
+    """
+    Координаты из конфига в мелких ячейках, либо None.
+
+    col и row задаются в плитках, как и размеры: 0.5 - мелкая ячейка,
+    1 - обычная. Отсчёт от нуля, левый верхний угол.
+    """
+    if tile.get("col") is None and tile.get("row") is None:
+        return None
+    def coord(value):
+        try:
+            return max(0, int(round(float(value) * 2)))
+        except (TypeError, ValueError):
+            return 0
+    return (coord(tile.get("row", 0)), coord(tile.get("col", 0)))
+
+
 def layout(tiles, cols):
     """
     Раскладка плиток разного размера. Размеры в конфиге задаются в плитках
     (1 - обычная, 2 - двойная, 0.5 - мелкая), внутри всё считается в мелких
     ячейках: cols тоже приходит уже в них.
 
-    Ищем первое свободное место сверху вниз, слева направо.
+    Сначала на сетку встают плитки с заданными col/row, потом остальные
+    заполняют, что осталось, - сверху вниз, слева направо.
+
+    Недостижимая координата не ломает панель, а просто теряет силу: плитка
+    уходит в общий поток. Иначе один опечатанный col оставил бы пустой
+    экран, а найти причину было бы негде.
     """
-    occupied = set()
-    placed = []
-    for tile in tiles:
-        w = min(cells(tile.get("w"), 1.0), cols)
-        h = cells(tile.get("h"), 1.0)
-        row = 0
-        while True:
-            spot = None
-            for col in range(cols - w + 1):
-                if all((row + dr, col + dc) not in occupied
-                       for dr in range(h) for dc in range(w)):
-                    spot = col
+    def place(demoted):
+        """Одна попытка раскладки. demoted - закреплённые, потерявшие место."""
+        occupied = set()
+        placed = []
+        flow = []
+
+        def free(row, col, w, h):
+            return all((row + dr, col + dc) not in occupied
+                       for dr in range(h) for dc in range(w))
+
+        def take(tile, row, col, w, h):
+            for dr in range(h):
+                for dc in range(w):
+                    occupied.add((row + dr, col + dc))
+            placed.append((tile, row, col, w, h))
+
+        # 1. закреплённые
+        for tile in tiles:
+            w = min(cells(tile.get("w"), 1.0), cols)
+            h = cells(tile.get("h"), 1.0)
+            spot = fixed_spot(tile, cols)
+            if spot is None or id(tile) in demoted:
+                flow.append(tile)
+                continue
+            row, col = spot
+            # За правый край не уходим: если col задан больше ширины панели,
+            # закрепление теряет смысл - на узком экране столбца просто нет.
+            if col + w > cols or not free(row, col, w, h):
+                flow.append(tile)
+                continue
+            take(tile, row, col, w, h)
+
+        # 2. остальные - в свободные места
+        for tile in flow:
+            w = min(cells(tile.get("w"), 1.0), cols)
+            h = cells(tile.get("h"), 1.0)
+            row = 0
+            while True:
+                spot = None
+                for col in range(cols - w + 1):
+                    if free(row, col, w, h):
+                        spot = col
+                        break
+                if spot is not None:
+                    take(tile, row, spot, w, h)
                     break
-            if spot is not None:
-                for dr in range(h):
-                    for dc in range(w):
-                        occupied.add((row + dr, spot + dc))
-                placed.append((tile, row, spot, w, h))
-                break
-            row += 1
+                row += 1
+        return placed, occupied
+
+    # Пустые строки означают, что кто-то закрепился слишком низко: плиток
+    # не хватило, чтобы дотянуть до него. Такой объект теряет закрепление и
+    # уходит в конец потока - иначе панель растянется дырами.
+    demoted = set()
+    for _ in range(len(tiles) + 1):
+        placed, occupied = place(demoted)
+        rows = max((r + h for _, r, _, _, h in placed), default=0)
+        empty = [r for r in range(rows)
+                 if not any((r, c) in occupied for c in range(cols))]
+        if not empty:
+            break
+        first_gap = empty[0]
+        below = [t for t, r, _c, _w, _h in placed
+                 if r > first_gap and fixed_spot(t, cols) and id(t) not in demoted]
+        if not below:
+            break
+        demoted.update(id(t) for t in below)
+
+    # Порядок в разметке должен совпадать с порядком в конфиге: от него
+    # зависят индексы плиток, по которым открывается раскрытый вид.
+    order = {id(t): i for i, t in enumerate(tiles)}
+    placed.sort(key=lambda item: order[id(item[0])])
+
     rows = max((r + h for _, r, _, _, h in placed), default=0)
     return placed, rows
 

@@ -75,8 +75,12 @@ class Config:
                 for s in tile.get("series", []) or []:
                     if s.get("channel"):
                         out.add(s["channel"])
-        # строка состояния - не плитка, её каналы надо собрать отдельно
-        for panel in (self.panels or {}).values():
+        # Строка состояния - не плитка, её каналы надо собрать отдельно.
+        # Плитка header несёт такой же блок status, поэтому обходим и панели,
+        # и плитки одним списком.
+        sources = list((self.panels or {}).values()) + [
+            t for t in self.all_tiles() if t.get("type") == "header"]
+        for panel in sources:
             for entry in status_entries(panel):
                 for key in ("channel", "value_channel"):
                     if entry.get(key):

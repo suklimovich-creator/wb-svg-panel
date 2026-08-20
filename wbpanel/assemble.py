@@ -91,6 +91,7 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     conf = dict(conf)
     conf["inner_w"] = pw
     conf["chart_h"] = ph
+    conf["inner_h"] = ph
 
     if tile["kind"] == "chart":
         tile.update(build_chart(conf, state, history))
@@ -286,11 +287,16 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None):
     right_edge = PAD * 2 + cols * CELL + (cols - 1) * GAP - PAD
 
     for title, tiles_conf, status_src in sections:
-        # плитки-ссылки должны знать, откуда на них нажали
-        if name:
-            for conf in tiles_conf:
-                if isinstance(conf, dict) and conf.get("type") == "link":
-                    conf.setdefault("_from", name)
+        for conf in tiles_conf:
+            if not isinstance(conf, dict):
+                continue
+            # плитки-ссылки должны знать, откуда на них нажали
+            if name and conf.get("type") == "link":
+                conf.setdefault("_from", name)
+            # Заголовку хватает половины высоты: там строка текста и чипы,
+            # а целая плитка оставляет под ними пустую полосу.
+            if conf.get("type") == "header":
+                conf.setdefault("h", 0.5)
         if title:
             # Было 6: чипы высотой 36 подходили вплотную к плиткам сверху.
             y_cursor += 14

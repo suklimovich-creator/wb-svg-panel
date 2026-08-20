@@ -857,16 +857,6 @@
     <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
           rx="2" fill="#3B8FD4" opacity="{{ b.opacity }}"/>
     {% endfor %}
-    {#- Значок погоды на каждый подписанный час. Над графиком места нет -
-        там строка про дождь и текущая температура, значки на них наезжали.
-        Поэтому внутри полосы, у верхнего края: кривая рисуется позже и
-        проходит поверх, а приглушённый значок ей не мешает. -#}
-    {% for ic in t.icons or [] %}
-    <g transform="translate({{ ic.x - 7 }},{{ t.h * 0.40 + 3 }})" opacity=".38">
-      <use href="#{{ uid }}ic-{{ ic.name }}" xlink:href="#{{ uid }}ic-{{ ic.name }}"
-           width="14" height="14"/>
-    </g>
-    {% endfor %}
     {% if t.geom %}
     <linearGradient id="{{ uid }}wfade{{ t.i }}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0"   stop-color="#5AA9E6" stop-opacity=".34"/>
@@ -897,6 +887,14 @@
             text-anchor="{{ tm.anchor }}">{{ tm.text }}</text>
       {% endfor %}
     {% endif %}
+    {#- Значок погоды на каждый подписанный час: у самой верхней границы,
+        чтобы не спорить с кривой температуры. -#}
+    {% for ic in t.icons or [] %}
+    <g transform="translate({{ ic.x - 8 }},{{ t.h * 0.40 - 19 }})" opacity=".85">
+      <use href="#{{ uid }}ic-{{ ic.name }}" xlink:href="#{{ uid }}ic-{{ ic.name }}"
+           width="16" height="16"/>
+    </g>
+    {% endfor %}
   </g>
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
 
@@ -982,6 +980,21 @@
 
 
 {#- ---- ссылка на другую панель ---- -#}
+{#- Заголовок области: название комнаты и чипы состояния.
+    Без плашки по умолчанию - иначе на панели появляется прямоугольник,
+    который выглядит как кнопка, но ничего не делает. С plain: false
+    рисуется как обычная плитка. -#}
+{% macro tile_header(t) %}
+  {% if not t.plain %}{{ plate(t) }}{% endif %}
+  <text x="{{ 6 if t.plain else 18 }}" y="{{ t.h / 2 + 7 }}"
+        class="h2">{{ t.title }}</text>
+  {% for c in t.chips or [] %}
+  <g transform="translate({{ c.x }},{{ c.y }})">
+    {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color) }}
+  </g>
+  {% endfor %}
+{% endmacro %}
+
 {% macro tile_link(t) %}
   {{ plate(t) }}
   {{ icon_c(t, t.icon or 'door', 26) }}
@@ -1042,10 +1055,13 @@
   {% elif t.kind == 'thermostat' %}{{ tile_thermostat(t) }}
   {% elif t.kind == 'forecast' %}{{ tile_forecast(t) }}
   {% elif t.kind == 'ac' %}{{ tile_ac(t) }}
+  {% elif t.kind == 'header' %}{{ tile_header(t) }}
   {% elif t.kind == 'link' %}{{ tile_link(t) }}
   {% else %}{{ tile_value(t) }}
   {% endif %}
-  {{ badge_dot(t) }}
+  {#- Точка «нет данных» заголовку не нужна: он ничего не измеряет,
+      а чипы про своё состояние говорят сами. -#}
+  {% if t.kind != 'header' %}{{ badge_dot(t) }}{% endif %}
 </g>
 {% endfor %}
 </g>

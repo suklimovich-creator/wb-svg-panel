@@ -133,26 +133,6 @@ def build_chart(tile, state, history):
             "range_label": tile.get("range", "24h")}
 
 
-def build_switch(tile, state):
-    snap = state.snapshot(tile.get("channel", ""))
-    raw = (snap["raw"] or "").strip()
-    on = raw not in ("", "0", "false", "False")
-
-    # invert - для нормально замкнутых контактов: реле обесточено, а нагрузка
-    # включена. Единица в канале означает "выключено". Инвертируем только
-    # известное значение: нет данных - значит нет данных, а не "включено".
-    if tile.get("invert") and raw != "":
-        on = not on
-
-    return {
-        "on": on,
-        "status": tile.get("on_text", "Вкл") if on else tile.get("off_text", "Выкл"),
-        "icon": tile.get("icon", "toggle"),
-        "short": tile.get("badge", ""),
-        "snap": snap,
-    }
-
-
 def build_curtain(tile, state):
     """
     Раздвижные шторы. Две створки едут от краёв к центру.
@@ -939,48 +919,44 @@ def build_ac(tile, state):
     }
 
 
-def build_link(tile, state):
+def from_registry(conf, state):
     """
-    Ссылка на другую панель. Ничего не читает из MQTT - только переход.
+    Мост между старым вызовом и новым контрактом.
 
-    Нужна, чтобы с общей панели проваливаться в комнату и обратно.
+    Сборщики зовутся как build_xxx(tile, state) и возвращают словарь для
+    шаблона. Плитки на ролях устроены иначе, поэтому переводим здесь -
+    остальной код о переезде знать не должен.
     """
-    target = tile.get("panel") or ""
-    # К адресу дописываем, с какой панели пришли: тогда кнопка «назад» на той
-    # стороне вернёт сюда, а не в общий список. Имя панели подставляет
-    # assemble - плитка своего расположения не знает.
-    href = tile.get("url") or ((target + ".html") if target else "")
-    if href and not tile.get("url") and tile.get("_from"):
-        href += "?from=" + tile["_from"]
-    return {
-        "on": False,
-        "href": href,
-        "icon": tile.get("icon", "door"),
-        "status": tile.get("subtitle", ""),
-        "snaps": [],
-    }
+    from .registry import build as build_by_roles
 
-
-def build_value(tile, state):
-    snap = state.snapshot(tile.get("channel", ""))
-    raw = to_float(snap["raw"])
-    return {
-        "value": _fmt(raw, int(tile.get("digits", 1))),
-        "unit": tile.get("unit", snap["units"]),
-        "on": False,
-        "snap": snap,
-    }
+    result = build_by_roles(conf, state)
+    data = dict(result["data"])
+    data["snaps"] = result["snaps"]
+    if result["problem"]:
+        log.warning("плитка %r: %s", conf.get("title") or conf.get("type"),
+                    result["problem"])
+    # Зоны и разрешения понадобятся, когда на роли переедет слой команд;
+    # пока кладём рядом, чтобы не потерять.
+    data["_zones"] = result["zones"]
+    data["_writable"] = result["writable"]
+    return data
 
 
 BUILDERS = {
     "chart": None,   # особый случай: нужен history
-    "switch": build_switch,
+    "switch": from_registry,
     "curtain": build_curtain,
     "light": build_light,
     "dimmer": build_dimmer,
     "thermostat": build_thermostat,
     "forecast": build_forecast,
     "ac": build_ac,
-    "link": build_link,
-    "value": build_value,
+    "link": from_registry,
+    "value": from_registry,
 }
+
+
+# Регистрация типов на новом контракте. Импорт в самом низу намеренно:
+# tiles_basic тянет registry и geometry, а те - ничего отсюда, кольца не
+# возникает. Без этой строки реестр пуст и BUILDERS не найдёт плитку.
+from . import tiles_basic  # noqa: E402,F401

@@ -11,7 +11,7 @@ from .state import to_float
 from .status import build_status, place_chips
 from .tiles import BUILDERS, DIAL_START, DIAL_SWEEP, command_topic
 from .const import STALE_AFTER
-from .tiles import build_chart, build_value
+from .tiles import build_chart, from_registry
 
 # Текущий конфиг. Заполняется в web.main() при старте: сюда сборка плиток
 # заглядывает за общими настройками панели (show_status, interactive).
@@ -102,7 +102,9 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
         snaps = [state.snapshot(s["channel"])
                  for s in conf.get("series", []) or [] if s.get("channel")]
     else:
-        builder = BUILDERS.get(tile["kind"], build_value)
+        # Неизвестный тип рисуем как value - и это тоже плитка на ролях,
+        # поэтому запасной сборщик берём из реестра.
+        builder = BUILDERS.get(tile["kind"], from_registry)
         tile.update(builder(conf, state))
         snaps = tile.pop("snaps", None) or [tile.pop("snap", None)]
         snaps = [s for s in snaps if s]

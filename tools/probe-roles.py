@@ -33,7 +33,9 @@ from wbpanel.registry import REGISTRY       # noqa: E402
 from wbpanel.roles import ROLES             # noqa: E402
 from wbpanel.sources import bind, pick_source   # noqa: E402
 from wbpanel.state import WbState           # noqa: E402
-import wbpanel.tiles_basic                  # noqa: E402,F401  (регистрирует типы)
+import wbpanel.tiles                       # noqa: E402,F401
+# Импорт нужен ради побочного действия: типы плиток регистрируются
+# при загрузке модуля. Без него реестр пуст и разбирать нечего.
 
 
 def listen(host, port, seconds):

@@ -133,158 +133,6 @@ def build_chart(tile, state, history):
             "range_label": tile.get("range", "24h")}
 
 
-def build_curtain(tile, state):
-    """
-    Раздвижные шторы. Две створки едут от краёв к центру.
-    open_pct = 100 - полностью раздвинуты, 0 - закрыты.
-    Если заданы channel_left/channel_right - створки независимые.
-    """
-    snaps = []
-    if tile.get("channel_left") or tile.get("channel_right"):
-        left_snap = state.snapshot(tile.get("channel_left", ""))
-        right_snap = state.snapshot(tile.get("channel_right", ""))
-        left = to_float(left_snap["raw"])
-        right = to_float(right_snap["raw"])
-        snaps = [left_snap, right_snap]
-    else:
-        snap = state.snapshot(tile.get("channel", ""))
-        left = right = to_float(snap["raw"])
-        snaps = [snap]
-
-    if tile.get("inverted"):
-        left = None if left is None else 100 - left
-        right = None if right is None else 100 - right
-
-    avg = [v for v in (left, right) if v is not None]
-    avg = sum(avg) / len(avg) if avg else None
-
-    # Необязательный канал состояния (у HomeKit-совместимых приводов
-    # PositionState: 0 - закрывается, 1 - открывается, 2 - стоит).
-    moving = None
-    if tile.get("channel_state"):
-        st_snap = state.snapshot(tile["channel_state"])
-        snaps.append(st_snap)
-        code = to_float(st_snap["raw"])
-        if code is not None and int(code) in (0, 1):
-            moving = "Закрывается" if int(code) == 0 else "Открывается"
-
-    return {
-        "moving": moving,
-        "left_open": 0.0 if left is None else max(0.0, min(100.0, left)) / 100.0,
-        "right_open": 0.0 if right is None else max(0.0, min(100.0, right)) / 100.0,
-        "known": avg is not None,
-        "on": bool(avg and avg > 1),
-        "status": moving or (("Открыто %d%%" % round(avg)) if avg is not None
-                             else "Нет данных"),
-        "short": ("%d %%" % round(avg)) if avg is not None else "",
-        "snaps": snaps,
-    }
-
-
-def build_light(tile, state):
-    """
-    Светодиодная лента: три величины на одной плитке.
-
-      по горизонтали  - цветовая температура: слева холодный, справа тёплый
-      по вертикали    - яркость: сверху ярко, снизу темно
-      точка           - фактическое положение по обеим осям
-      оранжевая рамка - включено
-
-    Плитка целиком залита этим полем, поэтому её вид сам по себе читается
-    как «тёплый приглушённый» или «холодный яркий», а точка даёт точное
-    значение.
-    """
-    b_snap = state.snapshot(tile.get("channel_brightness", ""))
-    t_snap = state.snapshot(tile.get("channel_temp", ""))
-    snaps = [b_snap, t_snap]
-
-    brightness = to_float(b_snap["raw"])
-    b_max = to_float(b_snap["meta"].get("max"), 100.0) or 100.0
-    if brightness is not None and b_max:
-        brightness = max(0.0, min(100.0, brightness / b_max * 100.0))
-
-    on = brightness is not None and brightness > 0
-    if tile.get("channel_switch"):
-        s_snap = state.snapshot(tile["channel_switch"])
-        snaps.append(s_snap)
-        raw = (s_snap["raw"] or "").strip()
-        on = raw not in ("", "0", "false", "False")
-
-    k_min = float(tile.get("temp_min", 2700))
-    k_max = float(tile.get("temp_max", 6500))
-    temp_raw = to_float(t_snap["raw"])
-    kelvin = None
-    if temp_raw is not None:
-        if str(tile.get("temp_unit", "kelvin")).lower() == "percent":
-            t_max = to_float(t_snap["meta"].get("max"), 100.0) or 100.0
-            kelvin = k_min + (k_max - k_min) * max(0.0, min(1.0, temp_raw / t_max))
-        else:
-            kelvin = temp_raw
-
-    # положение точки: 0 слева/сверху, 1 справа/снизу
-    if kelvin is None:
-        dot_x = None
-    else:
-        # слева холодный (k_max), справа тёплый (k_min)
-        dot_x = (k_max - max(k_min, min(k_max, kelvin))) / max(k_max - k_min, 1.0)
-    dot_y = None if brightness is None else 1.0 - brightness / 100.0
-
-    bits = []
-    if brightness is not None:
-        bits.append("%d %%" % round(brightness))
-    if kelvin is not None:
-        bits.append("%d K" % round(kelvin))
-    return {
-        "on": on,
-        "dot_x": dot_x,
-        "dot_y": dot_y,
-        "has_dot": dot_x is not None and dot_y is not None,
-        "cold": tile.get("cold_color") or field_color(k_max),
-        "warm": tile.get("warm_color") or field_color(k_min),
-        "color": field_color(kelvin if kelvin is not None else 3000),
-        "short": " · ".join(bits),
-        # на узкой плитке (w: 1) полная подпись не влезает
-        "short_min": bits[0] if bits else "",
-        "status": ("Включено" if on else "Выключено") if brightness is not None
-                  else "Нет данных",
-        "snaps": snaps,
-    }
-
-
-def build_dimmer(tile, state):
-    """
-    Диммируемый светильник: заполнение плитки снизу вверх на высоту яркости.
-
-    В отличие от ленты здесь одна величина, поэтому не поле, а простая
-    заливка одним цветом. Цвет по умолчанию - приглушённый тёплый; для
-    холодного света поставьте свой в `color`.
-    """
-    b_snap = state.snapshot(tile.get("channel_brightness", ""))
-    snaps = [b_snap]
-
-    brightness = to_float(b_snap["raw"])
-    b_max = to_float(b_snap["meta"].get("max"), 100.0) or 100.0
-    if brightness is not None and b_max:
-        brightness = max(0.0, min(100.0, brightness / b_max * 100.0))
-
-    on = brightness is not None and brightness > 0
-    if tile.get("channel"):
-        s_snap = state.snapshot(tile["channel"])
-        snaps.append(s_snap)
-        raw = (s_snap["raw"] or "").strip()
-        on = raw not in ("", "0", "false", "False")
-
-    return {
-        "on": on,
-        "fill": 0.0 if (not on or brightness is None) else brightness / 100.0,
-        "color": tile.get("color", "#E0A050"),
-        "short": ("%d %%" % round(brightness)) if brightness is not None else "",
-        "status": ("Включено" if on else "Выключено") if brightness is not None
-                  else "Нет данных",
-        "snaps": snaps,
-    }
-
-
 # Разрыв внизу увеличен со 90 до 116 градусов: строка «сейчас 25.5°» шире,
 # чем казалось на макетах, и почти касалась дуги. Заодно круг стал крупнее,
 # а нижняя подпись перестала выглядеть оторванной от него.
@@ -383,88 +231,6 @@ HEAT_MODE = {0: "Выключен", 1: "Нагрев", 2: "Охлаждение"
 # достигнута и головка закрыта. «Ожидание» звучало двусмысленно - будто
 # термостат чего-то ждёт от нас.
 HEAT_NOW = {0: "Не греет", 1: "Греет", 2: "Охлаждает"}
-
-
-def build_thermostat(tile, state):
-    """
-    Термостат: крупно уставка, в углу фактическая температура.
-
-    Оранжевая рамка загорается, когда прибор РЕАЛЬНО работает
-    (CurrentHeatingCoolingState = 1), а не когда просто включён режим
-    нагрева - иначе рамка горела бы круглосуточно и ничего не значила.
-    """
-    cur_snap = state.snapshot(tile.get("channel_current", ""))
-    tgt_snap = state.snapshot(tile.get("channel_target", ""))
-    snaps = [cur_snap, tgt_snap]
-
-    current = to_float(cur_snap["raw"])
-    target = to_float(tgt_snap["raw"])
-
-    working = None
-    if tile.get("channel_state"):
-        st_snap = state.snapshot(tile["channel_state"])
-        snaps.append(st_snap)
-        code = to_float(st_snap["raw"])
-        working = int(code) if code is not None else None
-
-    mode = None
-    if tile.get("channel_mode"):
-        md_snap = state.snapshot(tile["channel_mode"])
-        snaps.append(md_snap)
-        code = to_float(md_snap["raw"])
-        mode = int(code) if code is not None else None
-
-    if mode == 0:
-        status = HEAT_MODE[0]
-    elif working is not None:
-        status = HEAT_NOW.get(working, HEAT_MODE.get(mode, ""))
-    else:
-        status = HEAT_MODE.get(mode, "")
-
-    # насколько далеко до уставки - для полоски прогрева
-    reach = None
-    if current is not None and target is not None:
-        delta = target - current
-        reach = max(0.0, min(1.0, 1.0 - abs(delta) / 3.0))
-
-    dial = None
-    if tile.get("dial", True):
-        dial = build_dial(tile.get("inner_w") or 170, tile.get("chart_h") or 170,
-                          tile.get("scale_min", 14), tile.get("scale_max", 30),
-                          current, target)
-
-    # Знак градуса не должен участвовать в центрировании, иначе число
-    # визуально уезжает влево. Считаем ширину числа и ставим "°" за ним.
-    target_num = _fmt(target, int(tile.get("digits", 0))) if target is not None else "--"
-    # Кегль числа растёт вместе с плиткой (--fs), а смещение знака градуса
-    # раньше считалось от постоянных 30 - на крупной плитке «°» наезжал
-    # на цифры. Берём тот же множитель, что и разметка.
-    big = 30.0 * float(tile.get("fs", 1.0))
-    deg_dx = text_width(target_num, big) / 2.0 + 1.0 * float(tile.get("fs", 1.0))
-
-    return {
-        "dial": dial,
-        "target_num": target_num,
-        # Число без округления: по нему считается шаг уставки.
-        # target_num уже причёсан под показ, и шаг от него уезжает.
-        "target_value": target,
-        "current_value": current,
-        # Куда прибору идти: вниз - охлаждение, дуга синяя. Тёплый
-        # оранжевый на «остудить до 18» читается как ошибка.
-        "cooling": (current is not None and target is not None
-                    and target < current),
-        "deg_dx": round(deg_dx, 1),
-        "deg_size": round(big * 0.60, 1),
-        "on": working == 1,
-        "enabled": mode != 0,
-        "target": ("%s°" % target_num) if target is not None else "--",
-        "current": ("%s°" % _fmt(current, 1)) if current is not None else "",
-        "short": ("%s°" % _fmt(current, 1)) if current is not None else "",
-        "reach": reach,
-        "status": status or "Нет данных",
-        "always_status": True,
-        "snaps": snaps,
-    }
 
 
 def forecast_channels(tile):
@@ -945,10 +711,10 @@ def from_registry(conf, state):
 BUILDERS = {
     "chart": None,   # особый случай: нужен history
     "switch": from_registry,
-    "curtain": build_curtain,
-    "light": build_light,
-    "dimmer": build_dimmer,
-    "thermostat": build_thermostat,
+    "curtain": from_registry,
+    "light": from_registry,
+    "dimmer": from_registry,
+    "thermostat": from_registry,
     "forecast": build_forecast,
     "ac": build_ac,
     "link": from_registry,
@@ -959,4 +725,5 @@ BUILDERS = {
 # Регистрация типов на новом контракте. Импорт в самом низу намеренно:
 # tiles_basic тянет registry и geometry, а те - ничего отсюда, кольца не
 # возникает. Без этой строки реестр пуст и BUILDERS не найдёт плитку.
-from . import tiles_basic  # noqa: E402,F401
+from . import tiles_basic   # noqa: E402,F401
+from . import tiles_devices  # noqa: E402,F401

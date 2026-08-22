@@ -69,6 +69,11 @@ class Ctx(object):
         self.snaps.append(snap)
         return snap
 
+    def meta(self, name, key, default=None):
+        """Что канал рассказал о себе: max, units, precision…"""
+        b = self.bound.get(name)
+        return (b.meta.get(key, default) if b else default)
+
     def raw(self, name, default=None):
         snap = self._snap(name)
         return (snap or {}).get("raw") or default
@@ -131,13 +136,26 @@ class Tile(object):
     roles = ()
     template = None
 
+    # Имена полей, если они отличаются от принятых у роли. В конфигах уже
+    # сложились свои: у диммера выключатель зовётся channel, а не
+    # channel_switch. Ломать чужие конфиги ради стройности не стоит.
+    fields = {}
+    commands = {}
+
+    def field_of(self, role):
+        return self.fields.get(role.name, role.field)
+
+    def command_of(self, role):
+        return self.commands.get(role.name, role.command_field)
+
     def schema(self):
         return schema(self.roles)
 
     def check(self, conf, bound):
         for role in self.schema():
             if role.required and role.name not in bound:
-                return "не задана роль %s (поле %s)" % (role.name, role.field)
+                return "не задана роль %s (поле %s)" % (role.name,
+                                                        self.field_of(role))
         return None
 
     def prepare(self, ctx):
@@ -160,7 +178,7 @@ def build(conf, state, history=None):
 
     obj = cls()
     roles = obj.schema()
-    bound = bind(conf, roles, state)
+    bound = bind(conf, roles, state, obj)
     problem = obj.check(conf, bound)
 
     ctx = Ctx(conf, bound, state, history)
@@ -183,11 +201,12 @@ def channels_of(conf):
     if cls is None:
         return set()
     out = set()
-    for role in cls().schema():
-        value = conf.get(role.field)
+    obj = cls()
+    for role in obj.schema():
+        value = conf.get(obj.field_of(role))
         if value:
             out.add(value)
-        cmd = conf.get(role.command_field)
+        cmd = conf.get(obj.command_of(role))
         if cmd:
             out.add(cmd)
     if conf.get("service"):

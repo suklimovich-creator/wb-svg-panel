@@ -90,8 +90,15 @@ class Bound(object):
 class Source(object):
     name = "raw"
 
-    def resolve(self, conf, roles, state):
+    def resolve(self, conf, roles, state, tile=None):
         raise NotImplementedError
+
+    @staticmethod
+    def names(role, tile):
+        """Как роль называется в этом конфиге: своё имя или заданное плиткой."""
+        if tile is None:
+            return role.field, role.command_field
+        return tile.field_of(role), tile.command_of(role)
 
 
 class WbSource(Source):
@@ -102,10 +109,11 @@ class WbSource(Source):
     """
     name = "wb"
 
-    def resolve(self, conf, roles, state):
+    def resolve(self, conf, roles, state, tile=None):
         out = {}
         for role in roles:
-            key = conf.get(role.field)
+            field, command_field = self.names(role, tile)
+            key = conf.get(field)
             if not key or "/" not in key:
                 continue
             meta = state.meta.get(key, {}) if state else {}
@@ -113,7 +121,7 @@ class WbSource(Source):
             dev, ctl = key.split("/", 1)
             command = None
             if role.writable and not readonly:
-                command = (conf.get(role.command_field)
+                command = (conf.get(command_field)
                            or "/devices/%s/controls/%s/on" % (dev, ctl))
             out[role.name] = Bound(role, key, command, meta)
         return out
@@ -128,17 +136,16 @@ class RawSource(Source):
     """
     name = "raw"
 
-    def resolve(self, conf, roles, state):
+    def resolve(self, conf, roles, state, tile=None):
         out = {}
         for role in roles:
-            topic = conf.get(role.field)
+            field, command_field = self.names(role, tile)
+            topic = conf.get(field)
             if not topic:
                 continue
             command = None
             if role.writable:
-                command = (conf.get(role.command_field)
-                           or conf.get("command_topic")
-                           if role.name == "value" else conf.get(role.command_field))
+                command = conf.get(command_field)
             out[role.name] = Bound(role, topic, command,
                                    state.meta.get(topic, {}) if state else {})
         return out
@@ -173,7 +180,7 @@ class SprutSource(Source):
         "BatteryLevel": "progress",
     }
 
-    def resolve(self, conf, roles, state):
+    def resolve(self, conf, roles, state, tile=None):
         wanted = set(r.name for r in roles)
         prefix = (conf.get("service") or "").rstrip("/")
         out = {}
@@ -191,7 +198,7 @@ class SprutSource(Source):
                                   meta, auto=True)
         # Явно заданное сильнее разобранного: автоопределение ошибается
         # молча, и должен быть способ его перебить.
-        out.update(RawSource().resolve(conf, roles, state))
+        out.update(RawSource().resolve(conf, roles, state, tile))
         return out
 
 
@@ -216,6 +223,6 @@ def pick_source(conf):
     return SOURCES["wb"]
 
 
-def bind(conf, roles, state):
+def bind(conf, roles, state, tile=None):
     """conf + роли -> {имя роли: Bound}"""
-    return pick_source(conf).resolve(conf, roles, state)
+    return pick_source(conf).resolve(conf, roles, state, tile)

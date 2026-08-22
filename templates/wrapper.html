@@ -171,13 +171,14 @@ var COLS = readCols();
 
 /* Кнопка «назад». Если пришли с другой панели по плитке-ссылке, вернуться
    логичнее туда, а не в общий список: человек проваливался в комнату,
-   а не начинал обход заново. Имя панели передаётся параметром from. */
-(function(){
+   а не начинал обход заново. Имя панели передаётся параметром from.
+
+   Запоминаем в переменной, а не только в href: fixBack() перебивает адрес
+   кнопки, когда меняется число колонок, - и без этого возврат молча
+   превращался в переход к списку панелей. */
+var BACK_TO = (function(){
   var m = location.search.match(/[?&]from=([\w.-]+)/);
-  var back = document.getElementById('back');
-  if (!m || !back) return;
-  back.href = m[1] + '.html';
-  back.textContent = '\u2190 ' + decodeURIComponent(m[1]);
+  return m ? m[1] : '';
 })();
 function saveCols(v){
   COLS = v;
@@ -185,10 +186,17 @@ function saveCols(v){
 }
 function Q(){ return COLS ? ('?cols=' + COLS) : ''; }
 
-/* ссылка «назад» тоже должна нести выбранное число колонок */
+/* Ссылка «назад» тоже должна нести выбранное число колонок: на широком
+   экране незачем терять раскладку из-за перехода на соседнюю панель. */
 function fixBack(){
   var b = document.getElementById('back');
-  if (b) b.href = './' + Q();
+  if (!b) return;
+  if (BACK_TO) {
+    b.href = BACK_TO + '.html' + Q();
+    b.textContent = '\u2190 ' + decodeURIComponent(BACK_TO);
+  } else {
+    b.href = './' + Q();
+  }
 }
 
 function drawCols(){

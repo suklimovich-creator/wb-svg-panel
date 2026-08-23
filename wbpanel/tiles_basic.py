@@ -60,6 +60,59 @@ class Value(Tile):
         }
 
 
+@tile("header")
+class Header(Tile):
+    """
+    Заголовок области: название комнаты и чипы состояния.
+
+    Плитка, а не строка разметки - поэтому её можно поставить в нужное
+    место сетки. Панель «кухня и гостиная» собирается так: два заголовка
+    закреплены сверху слева и справа, каждый над своим столбцом.
+
+    Ролей нет: чипы описываются блоком status, у каждого свои каналы и
+    свои условия - это отдельный словарь, а не роли плитки.
+    """
+
+    roles = ()
+
+    @staticmethod
+    def channels(conf):
+        from .status import status_entries
+        out = set()
+        for entry in status_entries(conf):
+            for key in ("channel", "value_channel"):
+                if entry.get(key):
+                    out.add(entry[key])
+            req = entry.get("require")
+            for item in (req if isinstance(req, list) else [req]):
+                if isinstance(item, dict) and item.get("channel"):
+                    out.add(item["channel"])
+        return out
+
+    def prepare(self, ctx):
+        from .status import build_status
+
+        chips = build_status(ctx.conf, ctx.state)
+        # Чипы прижаты вправо: слева название, между ними пустота, которая
+        # и держит разницу между заголовком и обычной плиткой.
+        gap = 10
+        total = sum(c["w"] for c in chips) + gap * max(len(chips) - 1, 0)
+        x = ctx.opt("inner_w", 0) - 14 - total
+        y = round((ctx.opt("inner_h", 36) - 36) / 2.0, 1)
+        for chip in chips:
+            chip["x"], chip["y"] = round(x, 1), y
+            x += chip["w"] + gap
+
+        return {
+            "on": False,
+            "chips": chips,
+            # Без плашки по умолчанию: иначе на панели появляется
+            # прямоугольник, похожий на кнопку, которая ничего не делает.
+            "plain": bool(ctx.opt("plain", True)),
+            "status": "",
+        }
+
+
 @tile("link")
 class Link(Tile):
     """

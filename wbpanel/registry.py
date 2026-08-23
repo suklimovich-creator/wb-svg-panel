@@ -69,6 +69,33 @@ class Ctx(object):
         self.snaps.append(snap)
         return snap
 
+    def dev(self, suffix, default=None):
+        """
+        Канал устройства по имени из поля device.
+
+        Прогноз и кондиционер описываются одним устройством с десятком
+        каналов: перечислять их ролями бессмысленно, роль там у всех одна
+        - «часть этого прибора».
+        """
+        device = self.conf.get("device")
+        if not device:
+            return default
+        snap = self.state.snapshot("%s/%s" % (device, suffix))
+        self.snaps.append(snap)
+        return snap["raw"] if snap["raw"] not in (None, "") else default
+
+    def dev_number(self, suffix, default=None):
+        try:
+            return float(str(self.dev(suffix)).strip())
+        except (TypeError, ValueError):
+            return default
+
+    def series(self, channel, span, points):
+        """Ряд из истории. Без неё график просто пуст, а не падает."""
+        if not self.history:
+            return []
+        return self.history.get(channel, span, points)
+
     def meta(self, name, key, default=None):
         """Что канал рассказал о себе: max, units, precision…"""
         b = self.bound.get(name)

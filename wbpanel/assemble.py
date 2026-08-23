@@ -11,7 +11,7 @@ from .state import to_float
 from .status import build_status, place_chips
 from .tiles import BUILDERS, DIAL_START, DIAL_SWEEP, command_topic
 from .const import STALE_AFTER
-from .tiles import build_chart, from_registry
+from .tiles import from_registry
 
 # Текущий конфиг. Заполняется в web.main() при старте: сюда сборка плиток
 # заглядывает за общими настройками панели (show_status, interactive).
@@ -96,18 +96,12 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # Сборщикам это нужно, чтобы считать ширину текста в тех же единицах.
     conf["fs"] = font_scale(ph)
 
-    if tile["kind"] == "chart":
-        tile.update(build_chart(conf, state, history))
-        tile["on"] = False
-        snaps = [state.snapshot(s["channel"])
-                 for s in conf.get("series", []) or [] if s.get("channel")]
-    else:
-        # Неизвестный тип рисуем как value - и это тоже плитка на ролях,
-        # поэтому запасной сборщик берём из реестра.
-        builder = BUILDERS.get(tile["kind"], from_registry)
-        tile.update(builder(conf, state))
-        snaps = tile.pop("snaps", None) or [tile.pop("snap", None)]
-        snaps = [s for s in snaps if s]
+    # Все типы теперь идут одним путём через реестр. Историю принимает
+    # только график, остальные её просто не спрашивают.
+    builder = BUILDERS.get(tile["kind"], from_registry)
+    tile.update(builder(conf, state, history))
+    snaps = tile.pop("snaps", None) or [tile.pop("snap", None)]
+    snaps = [s for s in snaps if s]
 
     tile["cmd"] = (tile_command(tile, conf, state)
                    if (interactive or tile["kind"] == "link") else None)

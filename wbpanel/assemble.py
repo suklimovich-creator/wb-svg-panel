@@ -29,7 +29,7 @@ def resolve_sections(panel_conf, all_panels):
     """
     sections = panel_conf.get("sections")
     if not sections:
-        return [(None, panel_conf.get("tiles", []) or [], panel_conf)]
+        return [(None, panel_conf.get("tiles", []) or [], panel_conf, "")]
 
     out = []
     for section in sections:
@@ -50,8 +50,13 @@ def resolve_sections(panel_conf, all_panels):
         else:
             title = section.get("title")
         if tiles:
-            out.append((title, tiles, src))
-    return out or [(None, [], panel_conf)]
+            # Имя раздела - то, по чему его узнают в адресе: имя
+            # панели-источника, иначе заголовок. Порядковый номер не
+            # годится: добавили раздел в середину - и свёрнутым оказался
+            # чужой.
+            key = section.get("key") or src_name or title or ""
+            out.append((title, tiles, src, key))
+    return out or [(None, [], panel_conf, "")]
 
 
 def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactive):
@@ -324,7 +329,26 @@ def xml_escape(text):
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None):
+def folded_sections(panel_conf, sections, closed, opened):
+    """
+    Какие разделы свёрнуты.
+
+    Обычный режим: свёрнуто то, что перечислено в closed.
+    Режим гармошки (accordion): раскрыт ровно один раздел - тот, что
+    назван в opened, иначе первый. Так на сводной панели видно одну
+    комнату целиком, а не начало каждой.
+    """
+    keys = [key for _t, _tiles, _src, key in sections if key]
+    if not keys:
+        return set()
+    if panel_conf.get("accordion"):
+        current = opened if opened in keys else keys[0]
+        return set(k for k in keys if k != current)
+    return set(k for k in keys if k in closed)
+
+
+def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
+            closed=(), opened=None):
     big_cols = int(cols or panel_conf.get("cols", 4))
     interactive = bool(panel_conf.get("interactive",
                        (config.get("interactive", False) if config else False)))
@@ -338,7 +362,10 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None):
 
     right_edge = PAD * 2 + cols * CELL + (cols - 1) * GAP - PAD
 
-    for title, tiles_conf, status_src in sections:
+    hidden = folded_sections(panel_conf, sections, set(closed or ()), opened)
+
+    for title, tiles_conf, status_src, key in sections:
+        folded = bool(key) and key in hidden
         # плитки-ссылки должны знать, откуда на них нажали
         if name:
             for conf in tiles_conf:
@@ -347,7 +374,15 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None):
         if title:
             # Было 6: чипы высотой 36 подходили вплотную к плиткам сверху.
             y_cursor += 14
-            hd = {"title": title, "x": PAD, "y": y_cursor + 22, "chips": []}
+            hd = {"title": title, "x": PAD, "y": y_cursor + 22, "chips": [],
+                  # Заголовок становится кнопкой: нажатие сворачивает и
+                  # разворачивает раздел. Стрелка показывает, что будет.
+                  "key": key, "folded": folded,
+                  # Ширина считается для обычного начертания, а заголовок
+                  # полужирный - отсюда поправка 1.08. Плюс просвет, иначе
+                  # стрелка липнет к последней букве.
+                  "arrow_x": PAD + text_width(title, 18) * 1.08 + 16,
+                  "arrow_y": y_cursor + 16}
             # Чипы прижаты к правому краю заголовка раздела: там пусто,
             # и не приходится гадать, какой ширины получился текст.
             # Высота полосы раздела 44, чип 36 - помещается без сдвига плиток.
@@ -358,6 +393,13 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None):
                 build_status(status_src, state), right_edge, y_cursor - 2)
             headers.append(hd)
             y_cursor += SECTION
+
+        # Свёрнутый раздел не занимает места и не собирает плиток: их не
+        # надо ни считать, ни подписывать. Это и есть главная выгода -
+        # сводная панель из шести комнат перестаёт быть простынёй.
+        if folded:
+            continue
+
         placed, rows = layout(tiles_conf, cols)
 
         for conf, row, col, w, h in placed:

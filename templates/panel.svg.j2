@@ -70,6 +70,10 @@
   .h1     { font-size: calc(26px * var(--fs)); font-weight: 700; letter-spacing: -.6px; fill: var(--ink); }
   .h1-sub { font-size: calc(13px * var(--fs)); font-weight: 500; fill: var(--ink-faint); }
   .h2     { font-size: calc(18px * var(--fs)); font-weight: 650; letter-spacing: -.3px; fill: var(--ink); }
+  /* стрелка у заголовка раздела: вниз - раскрыт, вправо - свёрнут */
+  .fold-arrow { fill: none; stroke: var(--ink-dim);
+                stroke-width: calc(2px * var(--fs));
+                stroke-linecap: round; stroke-linejoin: round; }
   .name   { font-size: calc(15px * var(--fs));   font-weight: 500; fill: var(--ink); }
   .name-s { font-size: calc(11px * var(--fs));   font-weight: 500; fill: var(--ink); }
   .mid    { font-size: calc(19px * var(--fs)); font-weight: 600; fill: var(--ink);
@@ -1052,7 +1056,20 @@
     Координаты посчитаны в panel.py - ширина чипа зависит от длины числа,
     а в шаблоне её не измерить. -#}
 {% for hd in headers or [] %}
-<text x="{{ hd.x }}" y="{{ hd.y }}" class="h2">{{ hd.title }}</text>
+{#- Заголовок раздела - кнопка: сворачивает и разворачивает. Зона нажатия
+    шире текста, чтобы попадать пальцем, но не на всю ширину: справа живут
+    чипы, у них свои нажатия. -#}
+<g{% if hd.key %} data-section="{{ hd.key }}" data-folded="{{ 1 if hd.folded else 0 }}"{% if accordion %} data-accordion="1"{% endif %}{% endif %}>
+  {% if hd.key %}
+  <rect x="{{ hd.x - 6 }}" y="{{ hd.y - 24 }}" width="{{ hd.arrow_x - hd.x + 26 }}"
+        height="34" fill="transparent"/>
+  {% endif %}
+  <text x="{{ hd.x }}" y="{{ hd.y }}" class="h2">{{ hd.title }}</text>
+  {% if hd.key %}
+  {#- вниз - раскрыт, вправо - свёрнут -#}
+  <path class="fold-arrow" d="{% if hd.folded %}M{{ hd.arrow_x }} {{ hd.arrow_y - 5 }}l5 5l-5 5{% else %}M{{ hd.arrow_x - 2 }} {{ hd.arrow_y - 2 }}l5 5l5 -5{% endif %}"/>
+  {% endif %}
+</g>
 {% for c in hd.chips or [] %}
 <g transform="translate({{ c.x }},{{ c.y }})">
   {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,

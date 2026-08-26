@@ -26,7 +26,7 @@
     системное меню - на пультах это мешало. Запрещаем на всей панели. */
  #host,#ov{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;
            user-select:none;-webkit-touch-callout:none}
- [data-topic],[data-expand],[data-pad],[data-href],[data-chart]{cursor:pointer}
+ [data-topic],[data-expand],[data-pad],[data-href],[data-chart],[data-section]{cursor:pointer}
  [data-topic].busy,[data-pad].busy{opacity:.45}
  /* выбор числа колонок: значение запоминается и переносится между панелями */
  /* назад к списку панелей: маленькая, полупрозрачная, всегда на месте */
@@ -184,7 +184,54 @@ function saveCols(v){
   COLS = v;
   try { v ? localStorage.setItem(STORE, v) : localStorage.removeItem(STORE); } catch(e) {}
 }
-function Q(){ return COLS ? ('?cols=' + COLS) : ''; }
+/* Свёрнутые разделы. Список свой на каждом устройстве: на планшете в
+   коридоре и на телефоне нужны разные комнаты. Хранится рядом с числом
+   колонок и уезжает на сервер параметром - панель цельная картинка, и
+   спрятать плитки на стороне браузера нельзя, останутся дыры. */
+var FOLD_KEY = 'wb-panel-fold:' + NAME;
+var FOLDED = (function(){
+  try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '[]') || []; }
+  catch(e) { return []; }
+})();
+var OPENED = (function(){
+  try { return localStorage.getItem(FOLD_KEY + ':open') || ''; }
+  catch(e) { return ''; }
+})();
+var ACCORDION = false;   // узнаём из разметки: сервер помечает такие панели
+
+function saveFold(){
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify(FOLDED));
+    localStorage.setItem(FOLD_KEY + ':open', OPENED);
+  } catch(e) {}
+}
+
+function toggleSection(node){
+  var key = node.getAttribute('data-section');
+  if (!key) return;
+  if (ACCORDION) {
+    // В гармошке раскрыт ровно один раздел: нажатие на свёрнутый
+    // раскрывает его, на раскрытый - ничего не меняет, иначе панель
+    // осталась бы без содержимого вовсе.
+    if (node.getAttribute('data-folded') === '1') OPENED = key;
+  } else {
+    var i = FOLDED.indexOf(key);
+    if (i < 0) FOLDED.push(key); else FOLDED.splice(i, 1);
+  }
+  saveFold();
+  refresh(true);
+}
+
+function Q(){
+  var parts = [];
+  if (COLS) parts.push('cols=' + COLS);
+  if (ACCORDION) {
+    if (OPENED) parts.push('open=' + encodeURIComponent(OPENED));
+  } else if (FOLDED.length) {
+    parts.push('closed=' + FOLDED.map(encodeURIComponent).join(','));
+  }
+  return parts.length ? ('?' + parts.join('&')) : '';
+}
 
 /* Ссылка «назад» тоже должна нести выбранное число колонок: на широком
    экране незачем терять раскладку из-за перехода на соседнюю панель. */
@@ -761,6 +808,14 @@ function toggle(node){
 }
 
 function bind(){
+  // Заголовки разделов работают и без interactive: сворачивание ничего
+  // не включает и не выключает, это способ смотреть.
+  var folds = host.querySelectorAll('[data-section]');
+  for (var f = 0; f < folds.length; f++) {
+    folds[f].onclick = function(){ toggleSection(this); };
+  }
+  ACCORDION = host.querySelector('[data-accordion="1"]') !== null;
+
   if(!INTERACTIVE) return;
   var nodes = host.querySelectorAll('[data-topic],[data-expand],[data-pad],[data-href],[data-chart]');
   for(var i=0;i<nodes.length;i++){

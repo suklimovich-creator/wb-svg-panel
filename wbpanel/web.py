@@ -72,6 +72,8 @@ def render_panel(name, cols=None):
         headers=headers,
         top_chips=top_chips,
         accordion=bool(panel_conf.get("accordion")),
+        plate_sections=bool(panel_conf.get("section_plate",
+                                           config.get("section_plate", True))),
         width=width,
         height=height,
         rx=RX,

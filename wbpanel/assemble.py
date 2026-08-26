@@ -382,7 +382,12 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
                   # полужирный - отсюда поправка 1.08. Плюс просвет, иначе
                   # стрелка липнет к последней букве.
                   "arrow_x": PAD + text_width(title, 18) * 1.08 + 16,
-                  "arrow_y": y_cursor + 16}
+                  "arrow_y": y_cursor + 16,
+                  # Нажимать хочется по всей строке, а не по стрелке.
+                  # Ширину дотягиваем до первого чипа: у них свои нажатия,
+                  # заезжать на них нельзя. Ставится ниже, когда чипы
+                  # уже разложены.
+                  "tap_x": PAD - 8, "tap_y": y_cursor - 2, "tap_w": 0}
             # Чипы прижаты к правому краю заголовка раздела: там пусто,
             # и не приходится гадать, какой ширины получился текст.
             # Высота полосы раздела 44, чип 36 - помещается без сдвига плиток.
@@ -391,6 +396,9 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             # половину роста прописных, отсюда -2 вместо +4.
             hd["chips"] = place_chips(
                 build_status(status_src, state), right_edge, y_cursor - 2)
+            # До первого чипа минус просвет, иначе до края строки
+            first = min([c["x"] for c in hd["chips"]] or [right_edge + 8])
+            hd["tap_w"] = max(60, first - 12 - hd["tap_x"])
             headers.append(hd)
             y_cursor += SECTION
 

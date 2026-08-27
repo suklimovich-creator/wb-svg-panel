@@ -37,7 +37,7 @@ class Switch(Tile):
             "short": ctx.opt("badge", ""),
         }
 
-    def zones(self, ctx):
+    def zones(self, ctx, data):
         on = str(ctx.opt("command_on", "1"))
         off = str(ctx.opt("command_off", "0"))
         # При инверсии переворачивается и команда: чтобы включить нагрузку,
@@ -136,3 +136,8 @@ class Link(Tile):
             "icon": ctx.opt("icon", "door"),
             "status": ctx.opt("subtitle", ""),
         }
+
+    def pad(self, ctx, data):
+        # Ссылка ничего не пишет, но нажатие у неё есть: адрес перехода
+        # уезжает в тот же data-атрибут, что и команды.
+        return {"href": data.get("href")} if data.get("href") else {}

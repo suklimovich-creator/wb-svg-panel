@@ -318,28 +318,13 @@ def from_registry(conf, state, history=None):
     if result["problem"]:
         log.warning("плитка %r: %s", conf.get("title") or conf.get("type"),
                     result["problem"])
-    # Зоны и разрешения понадобятся, когда на роли переедет слой команд;
-    # пока кладём рядом, чтобы не потерять.
+    # Всё, что нужно слою команд. Приставка с подчёркиванием - метка «не
+    # для шаблона»: assemble это забирает и до отрисовки убирает.
     data["_zones"] = result["zones"]
+    data["_bound"] = result["bound"]
+    data["_pad"] = result["pad"]
     data["_writable"] = result["writable"]
     return data
-
-
-# Таблица оставлена ради совместимости: снаружи её всё ещё читают, но
-# теперь все типы идут одним путём через реестр, и особых случаев нет.
-BUILDERS = {
-    "chart": from_registry,
-    "switch": from_registry,
-    "curtain": from_registry,
-    "light": from_registry,
-    "dimmer": from_registry,
-    "thermostat": from_registry,
-    "forecast": from_registry,
-    "ac": from_registry,
-    "link": from_registry,
-    "value": from_registry,
-    "header": from_registry,
-}
 
 
 # Регистрация типов на новом контракте. Импорт в самом низу намеренно:

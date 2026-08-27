@@ -13,7 +13,7 @@
 
 from .geometry import _fmt, field_color, text_width
 from .registry import Tile, Zone, tile
-from .tiles import HEAT_MODE, HEAT_NOW, build_dial
+from .tiles import DIAL_START, DIAL_SWEEP, HEAT_MODE, HEAT_NOW, build_dial
 from .state import to_float
 
 
@@ -96,12 +96,31 @@ class Light(Tile):
                       else "Нет данных",
         }
 
-    def zones(self, ctx):
+    def zones(self, ctx, data):
         role = "switch" if ctx.has("switch") else "bright"
         return [Zone("toggle", "all", role,
                      {"on": str(ctx.opt("command_on", "1")),
                       "off": str(ctx.opt("command_off", "0"))}),
-                Zone("pad", "long", pad="xy")]
+                Zone("pad", "long", pad="xy"),
+                # Яркость и цвет крутятся только на пульте: на плитке для
+                # них нет места, а промахнуться пальцем по полю легко.
+                Zone("bright", "pad", "bright"),
+                Zone("temp", "pad", "temp")]
+
+    def pad(self, ctx, data):
+        out = {"bright_max": str(to_float(ctx.meta("bright", "max"), 100.0) or 100.0)}
+        if ctx.has("temp"):
+            out.update({
+                "temp_max": str(to_float(ctx.meta("temp", "max"), 100.0) or 100.0),
+                "temp_unit": str(ctx.opt("temp_unit", "kelvin")),
+                "temp_lo": str(ctx.opt("temp_min", 2700)),
+                "temp_hi": str(ctx.opt("temp_max", 6500)),
+                "cold": data.get("cold", "#56AAFF"),
+                "warm": data.get("warm", "#FF9337"),
+                "dot_x": "%.3f" % (data.get("dot_x") or 0.5),
+                "dot_y": "%.3f" % (data.get("dot_y") or 0.5),
+            })
+        return out
 
 
 @tile("dimmer")
@@ -134,12 +153,17 @@ class Dimmer(Tile):
                       else "Нет данных",
         }
 
-    def zones(self, ctx):
+    def zones(self, ctx, data):
         role = "switch" if ctx.has("switch") else "bright"
         return [Zone("toggle", "all", role,
                      {"on": str(ctx.opt("command_on", "1")),
                       "off": str(ctx.opt("command_off", "0"))}),
-                Zone("pad", "long", pad="level")]
+                Zone("pad", "long", pad="level"),
+                Zone("bright", "pad", "bright")]
+
+    def pad(self, ctx, data):
+        return {"bright_max": str(to_float(ctx.meta("bright", "max"), 100.0) or 100.0),
+                "level": "%.3f" % (data.get("fill") or 0.0)}
 
 
 @tile("curtain")
@@ -189,15 +213,26 @@ class Curtain(Tile):
             "short": ("%d %%" % round(avg)) if avg is not None else "",
         }
 
-    def zones(self, ctx):
+    def zones(self, ctx, data):
         target = "left" if ctx.has("left") else "target"
+        # Наполовину раздвинутая штора при нажатии закрывается: считаем её
+        # открытой с середины хода, а не с первого процента. Иначе стоящая
+        # на 5% штора «выключена», и нажатие едет её открывать - хотя
+        # человек только что её оттуда и убрал.
         out = [Zone("open", "all", target,
                     {"on": str(ctx.opt("command_open", "100")),
-                     "off": str(ctx.opt("command_close", "0"))}),
+                     "off": str(ctx.opt("command_close", "0"))},
+                    state=(data.get("left_open") or 0.0) > 0.5),
                Zone("pad", "long", pad="curtain")]
         if ctx.has("stop"):
             out.append(Zone("stop", "button", "stop",
                             str(ctx.opt("command_stop", "2"))))
+        return out
+
+    def pad(self, ctx, data):
+        out = {"pos": "%.3f" % (data.get("left_open") or 0.0)}
+        if data.get("moving"):
+            out["moving"] = data["moving"]
         return out
 
 
@@ -270,23 +305,58 @@ class Thermostat(Tile):
             "always_status": True,
         }
 
-    def zones(self, ctx):
-        target = ctx.number("target")
-        if target is None:
-            return []
+    def _scale(self, ctx, data):
+        """Шаг, пределы и разрядность - одни и те же для зон и для пульта."""
         step = ctx.step("target", 0.5)
         lo, hi = ctx.limits("target", 5, 35)
+        digits = 0 if float(step).is_integer() else 1
+        return step, lo, hi, digits
 
+    def zones(self, ctx, data):
+        target = data.get("target_value")
+        if target is None:
+            return []
+        step, lo, hi, digits = self._scale(ctx, data)
+
+        # Плюс и минус считаются здесь: в браузере не должно быть знаний ни
+        # о шаге привода, ни о его пределах.
         def clamp(value):
             return max(lo, min(hi, round(value / step) * step))
 
-        digits = 0 if float(step).is_integer() else 1
-        fmt = ("%." + str(digits) + "f")
-        out = [Zone("down", "left", "target", fmt % clamp(target - step)),
-               Zone("up", "right", "target", fmt % clamp(target + step)),
+        out = [Zone("down", "left", "target", _fmt(clamp(target - step), digits)),
+               Zone("up", "right", "target", _fmt(clamp(target + step), digits)),
                Zone("pad", "center", pad="thermostat")]
         if ctx.has("mode"):
+            # Включён ли термостат - не то же самое, что «греет сейчас»:
+            # рамка горит по факту работы, а кнопка режима по режиму.
             out.append(Zone("mode", "button", "mode",
                             {"on": str(ctx.opt("command_mode_on", "1")),
-                             "off": str(ctx.opt("command_mode_off", "0"))}))
+                             "off": str(ctx.opt("command_mode_off", "0"))},
+                            state=bool(data.get("enabled"))))
+        return out
+
+    def pad(self, ctx, data):
+        target = data.get("target_value")
+        if target is None:
+            return {}
+        step, lo, hi, digits = self._scale(ctx, data)
+        out = {
+            "target": _fmt(target, digits),
+            "step": _fmt(step, digits),
+            "min": _fmt(lo, digits),
+            "max": _fmt(hi, digits),
+            # Геометрия дуги нужна пульту: перетаскивание вдоль неё
+            # переводится в градусы теми же числами, что рисуют шкалу.
+            "dial_start": "%.1f" % DIAL_START,
+            "dial_sweep": "%.1f" % DIAL_SWEEP,
+            "scale_min": _fmt(float(ctx.opt("scale_min", 14)), 1),
+            "scale_max": _fmt(float(ctx.opt("scale_max", 30)), 1),
+            "status": data.get("status", ""),
+            "live": "1" if data.get("on") else "0",
+            "cooling": "1" if data.get("cooling") else "0",
+        }
+        # Фактическая температура - для тонкой засечки на пульте: видно,
+        # куда прибору идти от текущего значения.
+        if data.get("current_value") is not None:
+            out["current"] = _fmt(data["current_value"], 1)
         return out

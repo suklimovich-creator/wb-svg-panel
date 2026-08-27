@@ -434,6 +434,10 @@ class Chart(Tile):
         data["on"] = False
         return data
 
+    def zones(self, ctx, data):
+        # Управлять нечем, но раскрыться на весь экран график должен.
+        return [Zone("expand", "all")]
+
 
 @tile("forecast")
 class Forecast(Tile):
@@ -450,6 +454,9 @@ class Forecast(Tile):
         ctx.snaps.extend(data.pop("snaps", []) or [])
         return data
 
+    def zones(self, ctx, data):
+        return [Zone("expand", "all")]
+
 
 @tile("ac")
 class Ac(Tile):
@@ -461,7 +468,56 @@ class Ac(Tile):
     def channels(conf):
         return set(ac_channels(conf))
 
+    #: Каналы, в которые пульт кондиционера пишет. Ролей у них нет -
+    #: прибор описан одним полем device, а не десятком каналов, - поэтому
+    #: список объявлен здесь, рядом с плиткой, а не в белом списке веб-слоя.
+    WRITES = ("power", "mode", "target_temp", "fan_mode", "quiet", "turbo",
+              "preset", "swing_mode", "swing_h_mode")
+
+    @staticmethod
+    def writes(conf):
+        dev = conf.get("device")
+        if not dev:
+            return set()
+        return set("/devices/%s/controls/%s/on" % (dev, name)
+                   for name in Ac.WRITES)
+
     def prepare(self, ctx):
         data = build_ac(ctx.conf, ctx.state)
         ctx.snaps.extend(data.pop("snaps", []) or [])
         return data
+
+    @staticmethod
+    def _top(dev, name):
+        return "/devices/%s/controls/%s/on" % (dev, name) if dev else None
+
+    def zones(self, ctx, data):
+        dev = ctx.opt("device")
+        if not dev:
+            return []
+        return [Zone("toggle", "all", topic=self._top(dev, "power"),
+                     write={"on": "1", "off": "0"}),
+                Zone("pad", "long", pad="ac")]
+
+    def pad(self, ctx, data):
+        dev = ctx.opt("device")
+        if not dev:
+            return {}
+        return {
+            "ac_target": self._top(dev, "target_temp"),
+            "ac_mode": self._top(dev, "mode"),
+            "ac_fan": self._top(dev, "fan_mode"),
+            "ac_quiet": self._top(dev, "quiet"),
+            "ac_swing": self._top(dev, "swing_mode"),
+            "ac_swing_h": self._top(dev, "swing_h_mode"),
+            "ac_swing_now": (ctx.dev("swing_mode") or "").strip(),
+            "ac_swing_h_now": (ctx.dev("swing_h_mode") or "").strip(),
+            "ac_lo": str(data.get("lo", 16)),
+            "ac_hi": str(data.get("hi", 30)),
+            "ac_step": str(ctx.opt("step", 1)),
+            "ac_now": data.get("target_num", "--"),
+            "ac_cur": data.get("current", ""),
+            "ac_mode_now": data.get("mode", ""),
+            "ac_fan_now": (ctx.dev("fan_mode") or "").strip(),
+            "ac_quiet_now": "1" if "тихий" in (data.get("status") or "") else "0",
+        }

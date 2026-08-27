@@ -18,8 +18,8 @@ import re
 import time
 
 from .const import BAND, log
-from .geometry import (CHAR_W, _fmt, cct_color, darken, edge_anchor, field_color,
-                       grid_bounds, hour_ticks, label_digits, nice_step,
+from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
+                       grid_bounds, hour_ticks, label_color, label_digits, nice_step,
                        parse_duration, smooth_path, text_width)
 from .registry import Tile, Zone, tile
 from .state import to_float
@@ -29,6 +29,9 @@ from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
                     parse_series, wmo_icon)
 
 def build_chart(tile, state, history):
+    # Подписи значений красятся под подложку, а она зависит от темы:
+    # на светлой цвет линии темнеет, на тёмной светлеет.
+    theme = tile.get("theme", "light")
     span = parse_duration(tile.get("range", "24h"))
     points = int(tile.get("points", 90))
     specs = [s for s in (tile.get("series", []) or []) if s.get("channel")]
@@ -81,7 +84,7 @@ def build_chart(tile, state, history):
                 continue
         series_out.append({
             "color": color,
-            "text_color": spec.get("text_color") or darken(color),
+            "text_color": spec.get("text_color") or label_color(color, theme),
             "unit": spec.get("unit", snap["units"]),
             "label": spec.get("label", ""),
             "value": _fmt(raw, int(spec.get("digits", 1))),
@@ -119,11 +122,34 @@ def build_chart(tile, state, history):
                                 "text": _fmt(lo + hl["f"] * (hi - lo), digits)})
         s["span"] = "%s–%s %s" % (_fmt(lo, digits), _fmt(hi, digits), s["unit"])
 
-    # Часы. Крайние подписи прижимаются к самым краям плитки - туда же, где
-    # стоят подписи шкал слева и справа. Пока шкал нет, это нормально; когда
-    # есть, крайние часы накрывают границы шкалы, и понять её невозможно.
-    # Часов на графике много, потеря двух крайних ничего не стоит.
+    # Часы. Нижняя подпись шкалы стоит на той же строке, что и часы: обе
+    # на y = высота * 0.82 - 3. Слева и справа они налезают друг на друга,
+    # и проигрывает шкала - а она важнее. Без нижней границы непонятно, от
+    # чего вообще отсчитываются значения, тогда как часов на графике десяток
+    # и потеря пары крайних не стоит ничего.
+    #
+    # Поэтому шкала занимает своё место первой, а часы, попавшие под неё,
+    # выбрасываются. Считается здесь: в шаблоне ширину текста не измерить.
     with_grid = bool(tile.get("grid_labels", False))
+    axis_fs = 9.5 * float(tile.get("fs", 1) or 1)
+    reserved = []
+    if with_grid:
+        for idx, s in enumerate(series_out):
+            if not s["labels"]:
+                continue
+            # Нижняя подпись - последняя в списке: сетка идёт снизу вверх.
+            text = s["labels"][0]["text"]
+            width = text_width(text, axis_fs)
+            if idx == 0:                       # первая серия слева
+                reserved.append((7.0, 7.0 + width))
+            else:                              # остальные справа
+                right = tile["inner_w"] - 7.0
+                reserved.append((right - width, right))
+
+    def collides(left, right):
+        # Просвет в 4 px: подписи, стоящие впритык, читаются как одно число.
+        return any(left < box[1] + 4 and right > box[0] - 4 for box in reserved)
+
     times = []
     for tk in ticks:
         if not tk["major"]:
@@ -131,15 +157,24 @@ def build_chart(tile, state, history):
         lx, anchor = edge_anchor(tk["x"], tile["inner_w"])
         if with_grid and anchor != "middle":
             continue
-        times.append({"x": round(lx, 1), "anchor": anchor,
-                      "text": "%02d:00" % tk["hour"]})
+        text = "%02d:00" % tk["hour"]
+        half = text_width(text, axis_fs) / 2.0
+        if collides(lx - half, lx + half):
+            continue
+        times.append({"x": round(lx, 1), "anchor": anchor, "text": text})
 
     note = ""
     if series_out and series_out[0].get("span"):
         note = series_out[0]["span"]
 
+    # Толщина линии растёт медленнее кегля. На полном экране fs доходит до
+    # 2.4, и линия в 5.8 px выглядит маркером: показатель 0.45 даёт на
+    # плитке прежние 2.4, а во весь экран - 3.5.
+    fs = float(tile.get("fs", 1) or 1)
+    line_w = round(2.4 * max(fs, 1.0) ** 0.45, 2)
+
     return {"series": series_out, "ticks": ticks, "hlines": hlines,
-            "times": times, "scale_note": note,
+            "times": times, "scale_note": note, "line_w": line_w,
             "title_dx": round(20 + text_width(tile.get("title", ""), 15) + 9, 1),
             "grid_labels": bool(tile.get("grid_labels", False)),
             "time_labels": bool(tile.get("time_labels", False)),

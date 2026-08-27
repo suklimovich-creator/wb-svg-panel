@@ -625,7 +625,7 @@
       </linearGradient>
       <path d="{{ s.geom.area }}" fill="url(#{{ uid }}fade{{ t.i }}-{{ loop.index }})"/>
       <path d="{{ s.geom.line }}" fill="none" stroke="{{ s.color }}"
-            stroke-width="{{ 2.4 * (fs | default(1)) }}"
+            stroke-width="{{ t.line_w | default(2.4) }}"
             stroke-linecap="round" stroke-linejoin="round"/>
       {% endif %}
     {% endfor %}

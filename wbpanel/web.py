@@ -52,9 +52,16 @@ def render_panel(name, cols=None):
     panel_conf = config.panels.get(name)
     if panel_conf is None:
         abort(404, "панель %r не найдена в конфиге" % name)
+    # Свёрнутые разделы приходят в адресе: панель - цельная картинка с
+    # посчитанной геометрией, спрятать плитки на стороне браузера нельзя,
+    # останутся дыры. Список свой на каждом устройстве, страница хранит
+    # его рядом с числом колонок.
+    closed = [p for p in (request.args.get("closed") or "").split(",") if p]
+    opened = request.args.get("open") or None
+
     tiles, width, height, headers, top_chips = prepare(
         panel_conf, state, history, cols=cols, all_panels=config.panels,
-        name=name)
+        name=name, closed=closed, opened=opened)
     template = jinja.get_template(panel_conf.get("template", "panel.svg.j2"))
     return template.render(
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
@@ -64,6 +71,9 @@ def render_panel(name, cols=None):
         tiles=tiles,
         headers=headers,
         top_chips=top_chips,
+        accordion=bool(panel_conf.get("accordion")),
+        plate_sections=bool(panel_conf.get("section_plate",
+                                           config.get("section_plate", True))),
         width=width,
         height=height,
         rx=RX,
@@ -107,7 +117,7 @@ def index():
     for name in panel_order(config.panels):
         panel_conf = config.panels[name] or {}
         tiles = []
-        for _title, chunk, _status in resolve_sections(panel_conf, config.panels):
+        for _title, chunk, _status, _key in resolve_sections(panel_conf, config.panels):
             tiles.extend(chunk)
         kinds = {}
         for tile in tiles:
@@ -264,7 +274,8 @@ def allowed_topics():
                            config.get("interactive", False)))
         if not interactive:
             continue
-        for _title, tiles, _status in resolve_sections(panel_conf, config.panels):
+        for _title, tiles, _status, _key in resolve_sections(panel_conf,
+                                                             config.panels):
             for tile in tiles:
                 allowed.update(writable_of(tile, state))
     return allowed
@@ -377,7 +388,7 @@ def panel_svg(name):
 def panel_tiles(panel_conf):
     """Плоский список плиток панели в том же порядке, что и на картинке."""
     out = []
-    for _title, tiles, _status in resolve_sections(panel_conf, config.panels):
+    for _title, tiles, _status, _key in resolve_sections(panel_conf, config.panels):
         out.extend(tiles)
     return out
 

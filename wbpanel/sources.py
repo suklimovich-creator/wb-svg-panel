@@ -27,6 +27,9 @@ class Bound(object):
         # key - то, чем канал зовётся в состоянии и в конфиге:
         # «устройство/канал» у Wiren Board, готовый топик у мостов.
         # Полный MQTT-адрес нужен только для записи и лежит в command.
+        # Пустой key - роль только пишется, читать нечего: у «стоп» нет
+        # состояния, привод либо едет, либо нет, и об этом говорит другая
+        # роль.
         self.key = key
         self.command = command
         self.meta = meta or {}
@@ -115,6 +118,12 @@ class WbSource(Source):
             field, command_field = self.names(role, tile)
             key = conf.get(field)
             if not key or "/" not in key:
+                # Канала нет, но адрес команды задан явно - роль только
+                # пишется. Раньше такая роль терялась целиком, и кнопка
+                # «стоп» у шторы молча пропадала вместе с ней.
+                explicit = conf.get(command_field)
+                if role.writable and explicit:
+                    out[role.name] = Bound(role, "", explicit)
                 continue
             meta = state.meta.get(key, {}) if state else {}
             readonly = str(meta.get("readonly", "")).lower() in ("1", "true")
@@ -142,6 +151,9 @@ class RawSource(Source):
             field, command_field = self.names(role, tile)
             topic = conf.get(field)
             if not topic:
+                explicit = conf.get(command_field)
+                if role.writable and explicit:
+                    out[role.name] = Bound(role, "", explicit)
                 continue
             command = None
             if role.writable:

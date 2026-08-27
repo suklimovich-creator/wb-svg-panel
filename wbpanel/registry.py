@@ -7,6 +7,7 @@
 целиком она не видит - только узкую калитку ctx.
 """
 
+from .const import log
 from .roles import schema
 from .sources import bind
 
@@ -31,15 +32,28 @@ class Zone(object):
     по схеме, что роль записываемая. Те же зоны потом можно отдать
     дисплею, у которого свой обработчик касаний и никакого JavaScript.
 
-    area: all | left | right | top | bottom | center | button
+    area   all | left | right | top | bottom | center | button | long | pad
+           left и right занимают часть плитки, и по ним ядро само рисует
+           прозрачные прямоугольники; long - долгое нажатие по всей плитке;
+           pad - зона, доступная только с пульта.
+    name   как зона зовётся в data-атрибутах, см. ZONE_KEYS в commands.py
+    topic  запасной ход для приборов, описанных устройством целиком, а не
+           набором ролей: у кондиционера полтора десятка каналов, и роль у
+           всех одна - «часть этого прибора».
+    state  включено ли сейчас то, что переключает зона. По умолчанию берётся
+           поле on из данных плитки; термостату этого мало - у него «греет»
+           и «включён» разные вещи.
     """
 
-    def __init__(self, name, area, role=None, write=None, pad=None):
+    def __init__(self, name, area, role=None, write=None, pad=None,
+                 topic=None, state=None):
         self.name = name
         self.area = area
         self.role = role
         self.write = write      # значение либо {"on": …, "off": …}
         self.pad = pad          # открыть пульт вместо записи
+        self.topic = topic
+        self.state = state
 
     def __repr__(self):
         return "<Zone %s %s -> %s=%s>" % (self.name, self.area,
@@ -63,7 +77,7 @@ class Ctx(object):
         плитку, которая выглядит живой при мёртвом канале.
         """
         b = self.bound.get(name)
-        if not b:
+        if not b or not b.key:
             return None
         snap = self.state.snapshot(b.key)
         self.snaps.append(snap)
@@ -185,11 +199,36 @@ class Tile(object):
                                                         self.field_of(role))
         return None
 
+    @staticmethod
+    def channels(conf):
+        """
+        Каналы, не выводимые из ролей: ряды графика, каналы устройства
+        целиком, чипы заголовка. Отсюда же берётся подписка на MQTT.
+        """
+        return set()
+
+    @staticmethod
+    def writes(conf):
+        """То же самое для записи: командные топики мимо ролей."""
+        return set()
+
     def prepare(self, ctx):
         return {}
 
-    def zones(self, ctx):
+    def zones(self, ctx, data):
+        """
+        Описание нажатий. data - то, что вернул prepare: считать одно и то
+        же дважды не нужно, а лишний ctx.number ещё и добавляет снимок,
+        отчего плитка ошибочно числится живой.
+        """
         return []
+
+    def pad(self, ctx, data):
+        """
+        Чем пульт отличается от плитки: пределы шкалы, геометрия дуги,
+        цвета поля. Не зоны - тут нечего записывать, это параметры.
+        """
+        return {}
 
 
 def build(conf, state, history=None):
@@ -210,32 +249,71 @@ def build(conf, state, history=None):
 
     ctx = Ctx(conf, bound, state, history)
     data = obj.prepare(ctx) if not problem else {}
-    zones = obj.zones(ctx) if not problem else []
+    zones = obj.zones(ctx, data) if not problem else []
+    pad = obj.pad(ctx, data) if not problem else {}
 
     # Белый список - следствие ролей, а не отдельный перебор по типам,
     # который забывают дополнить при добавлении новой команды.
     writable = set(b.command for b in bound.values() if b.command)
+    writable.update(cls.writes(conf) or ())
 
     return {"kind": kind, "template": obj.template, "data": data,
-            "zones": zones, "bound": bound, "writable": writable,
+            "zones": zones, "pad": pad, "bound": bound, "writable": writable,
             "snaps": ctx.snaps, "problem": problem,
             "source": conf.get("source") or type(bind).__name__}
 
 
 def channels_of(conf):
-    """Топики всех ролей плитки - для подписки. Без состояния, до старта."""
+    """
+    Что плитка читает - для подписки. Без состояния, до старта.
+
+    Только чтение: командные топики отдельно, в writable_of. Смешивать их
+    нельзя - по этому же списку страница проверяет, можно ли показать
+    график канала, и топик вида .../on там означал бы график команды.
+    """
     cls = REGISTRY.get(conf.get("type", "value"))
     if cls is None:
         return set()
-    out = set()
     obj = cls()
+    out = set(cls.channels(conf) or ())
+    known = set()
     for role in obj.schema():
-        value = conf.get(obj.field_of(role))
+        field = obj.field_of(role)
+        known.add(field)
+        value = conf.get(field)
         if value:
             out.add(value)
-        cmd = conf.get(obj.command_of(role))
-        if cmd:
-            out.add(cmd)
-    if conf.get("service"):
-        out.add(conf["service"])       # префикс: подписка возьмёт всю службу
+
+    # Поле channel_*, не отвечающее ни одной роли этой плитки. Раньше его
+    # подхватывал общий перебор по именам полей, и опечатка вроде
+    # channel_bright вместо channel_brightness молча слушала канал, ничего
+    # им не показывая. Слушаем по-прежнему, но говорим вслух.
+    for key, value in conf.items():
+        if key != "channel" and not key.startswith("channel_"):
+            continue
+        if key in known or not isinstance(value, str) or not value:
+            continue
+        log.warning("плитка %r: поле %s не отвечает ни одной роли типа %r",
+                    conf.get("title") or "без названия", key,
+                    conf.get("type", "value"))
+        out.add(value)
+    return out
+
+
+def writable_of(conf, state=None):
+    """
+    Куда плитке позволено писать. Тот же разбор ролей, что и при сборке,
+    поэтому список не может отстать от нарисованных кнопок.
+
+    Канал с readonly в /meta команды не получает: источник просто не
+    выведет для него адрес, и в белый список попадать нечему.
+    """
+    cls = REGISTRY.get(conf.get("type", "value"))
+    if cls is None:
+        return set()
+    obj = cls()
+    out = set(cls.writes(conf) or ())
+    for b in bind(conf, obj.schema(), state, obj).values():
+        if b.command:
+            out.add(b.command)
     return out

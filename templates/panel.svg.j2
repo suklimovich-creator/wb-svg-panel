@@ -70,12 +70,6 @@
   .h1     { font-size: calc(26px * var(--fs)); font-weight: 700; letter-spacing: -.6px; fill: var(--ink); }
   .h1-sub { font-size: calc(13px * var(--fs)); font-weight: 500; fill: var(--ink-faint); }
   .h2     { font-size: calc(18px * var(--fs)); font-weight: 650; letter-spacing: -.3px; fill: var(--ink); }
-  /* подложка заголовка раздела: подсказывает, что по строке можно нажать */
-  .section-plate { fill: var(--tile); opacity: .35; }
-  /* стрелка у заголовка раздела: вниз - раскрыт, вправо - свёрнут */
-  .fold-arrow { fill: none; stroke: var(--ink-dim);
-                stroke-width: calc(2px * var(--fs));
-                stroke-linecap: round; stroke-linejoin: round; }
   .name   { font-size: calc(15px * var(--fs));   font-weight: 500; fill: var(--ink); }
   .name-s { font-size: calc(11px * var(--fs));   font-weight: 500; fill: var(--ink); }
   .mid    { font-size: calc(19px * var(--fs)); font-weight: 600; fill: var(--ink);
@@ -844,12 +838,20 @@
     {% endif %}
     {{ caption(t, t.status) }}
   {% endif %}
-  {% if t.pad_kind == 'thermostat' %}
-  <rect x="0" y="0" width="{{ t.w * 0.32 }}" height="{{ t.h }}" fill="transparent"
-        data-zone="down"/>
-  <rect x="{{ t.w * 0.68 }}" y="0" width="{{ t.w * 0.32 }}" height="{{ t.h }}"
-        fill="transparent" data-zone="up"/>
-  {% endif %}
+{% endmacro %}
+
+
+{#- ---- области нажатия ----
+    Прозрачные прямоугольники для зон, занимающих часть плитки: плюс и
+    минус у термостата и всё, что появится дальше. Координаты считает
+    сервер - плитка объявила зону, ядро перевело её в доли плитки, а
+    шаблон только раскладывает. Рисуются последними, поверх содержимого,
+    иначе нажатие ловит то, что нарисовано сверху. -#}
+{% macro zone_rects(t) %}
+{% for z in t.zones %}
+  <rect x="{{ z.x }}" y="{{ z.y }}" width="{{ z.w }}" height="{{ z.h }}"
+        fill="transparent" data-zone="{{ z.name }}"/>
+{% endfor %}
 {% endmacro %}
 
 
@@ -1058,26 +1060,7 @@
     Координаты посчитаны в panel.py - ширина чипа зависит от длины числа,
     а в шаблоне её не измерить. -#}
 {% for hd in headers or [] %}
-{#- Заголовок раздела - кнопка: сворачивает и разворачивает. Зона нажатия
-    шире текста, чтобы попадать пальцем, но не на всю ширину: справа живут
-    чипы, у них свои нажатия. -#}
-<g{% if hd.key %} data-section="{{ hd.key }}" data-folded="{{ 1 if hd.folded else 0 }}"{% if accordion %} data-accordion="1"{% endif %}{% endif %}>
-  {% if hd.key %}
-  {#- Подложка заголовка: едва заметная, только чтобы строка читалась как
-      кнопка. Выключается section_plate: false у панели. -#}
-  {% if plate_sections %}
-  <rect x="{{ hd.tap_x }}" y="{{ hd.tap_y }}" width="{{ hd.tap_w }}" height="36"
-        rx="10" class="section-plate"/>
-  {% endif %}
-  <rect x="{{ hd.tap_x }}" y="{{ hd.tap_y }}" width="{{ hd.tap_w }}" height="36"
-        fill="transparent"/>
-  {% endif %}
-  <text x="{{ hd.x }}" y="{{ hd.y }}" class="h2">{{ hd.title }}</text>
-  {% if hd.key %}
-  {#- вниз - раскрыт, вправо - свёрнут -#}
-  <path class="fold-arrow" d="{% if hd.folded %}M{{ hd.arrow_x }} {{ hd.arrow_y - 5 }}l5 5l-5 5{% else %}M{{ hd.arrow_x - 2 }} {{ hd.arrow_y - 2 }}l5 5l5 -5{% endif %}"/>
-  {% endif %}
-</g>
+<text x="{{ hd.x }}" y="{{ hd.y }}" class="h2">{{ hd.title }}</text>
 {% for c in hd.chips or [] %}
 <g transform="translate({{ c.x }},{{ c.y }})">
   {{ chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,
@@ -1110,6 +1093,7 @@
   {#- Точка «нет данных» заголовку не нужна: он ничего не измеряет,
       а чипы про своё состояние говорят сами. -#}
   {% if t.kind != 'header' %}{{ badge_dot(t) }}{% endif %}
+  {% if t.zones %}{{ zone_rects(t) }}{% endif %}
 </g>
 {% endfor %}
 </g>

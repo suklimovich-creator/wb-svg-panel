@@ -19,11 +19,11 @@ from .config import Config
 from .state import MqttRpc, WbState, make_client, state, to_float
 from .history import History
 from .geometry import cells, parse_duration, text_width
-from .tiles import BUILDERS, command_topic
 from .status import status_entries
 from . import assemble
+from .registry import writable_of
 from .assemble import (build_tile, cmd_attrs, prepare,
-                       resolve_sections, tile_command, xml_escape)
+                       resolve_sections, xml_escape)
 from .render import resolve_css_vars
 import html
 import threading
@@ -52,16 +52,9 @@ def render_panel(name, cols=None):
     panel_conf = config.panels.get(name)
     if panel_conf is None:
         abort(404, "панель %r не найдена в конфиге" % name)
-    # Свёрнутые разделы приходят в адресе: панель - цельная картинка с
-    # посчитанной геометрией, спрятать плитки на стороне браузера нельзя,
-    # останутся дыры. Список свой на каждом устройстве, страница хранит
-    # его рядом с числом колонок.
-    closed = [p for p in (request.args.get("closed") or "").split(",") if p]
-    opened = request.args.get("open") or None
-
     tiles, width, height, headers, top_chips = prepare(
         panel_conf, state, history, cols=cols, all_panels=config.panels,
-        name=name, closed=closed, opened=opened)
+        name=name)
     template = jinja.get_template(panel_conf.get("template", "panel.svg.j2"))
     return template.render(
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
@@ -71,9 +64,6 @@ def render_panel(name, cols=None):
         tiles=tiles,
         headers=headers,
         top_chips=top_chips,
-        accordion=bool(panel_conf.get("accordion")),
-        plate_sections=bool(panel_conf.get("section_plate",
-                                           config.get("section_plate", True))),
         width=width,
         height=height,
         rx=RX,
@@ -117,7 +107,7 @@ def index():
     for name in panel_order(config.panels):
         panel_conf = config.panels[name] or {}
         tiles = []
-        for _title, chunk, _status, _key in resolve_sections(panel_conf, config.panels):
+        for _title, chunk, _status in resolve_sections(panel_conf, config.panels):
             tiles.extend(chunk)
         kinds = {}
         for tile in tiles:
@@ -258,10 +248,15 @@ def allowed_topics():
     """
     Куда демону вообще позволено писать.
 
-    Список строится из конфига: только те командные топики, которые
-    соответствуют нарисованным плиткам. Иначе панель превратилась бы в
-    открытый шлюз в MQTT - а брокер на Wiren Board по умолчанию без пароля,
-    и писать в него можно что угодно, включая реле котла.
+    Список выводится из тех же ролей, по которым собираются плитки, а не
+    отдельным перебором по типам. Раньше перебора было два, и второй
+    отставал: за одну неделю трижды забыли дописать топик - «стоп» у шторы,
+    канал require у чипа, команды термостата, - и каждый раз это выглядело
+    как «кнопка не работает».
+
+    Открытым шлюзом в MQTT панель быть не должна: брокер на Wiren Board по
+    умолчанию без пароля, и писать в него можно что угодно, включая реле
+    котла.
     """
     allowed = set()
     for panel_conf in config.panels.values():
@@ -269,42 +264,9 @@ def allowed_topics():
                            config.get("interactive", False)))
         if not interactive:
             continue
-        for _title, tiles, _status, _key in resolve_sections(panel_conf, config.panels):
+        for _title, tiles, _status in resolve_sections(panel_conf, config.panels):
             for tile in tiles:
-                kind = tile.get("type")
-                pairs = []
-                if kind in ("switch", "dimmer", "curtain"):
-                    pairs.append((tile.get("channel"), tile.get("command_topic")))
-                elif kind == "light":
-                    pairs.append((tile.get("channel_switch"), tile.get("command_topic")))
-                if kind == "ac" and tile.get("device"):
-                    for name in ("power", "mode", "target_temp", "fan_mode",
-                                 "quiet", "turbo", "preset",
-                                 "swing_mode", "swing_h_mode"):
-                        allowed.add("/devices/%s/controls/%s/on"
-                                    % (tile["device"], name))
-                if kind == "thermostat":
-                    # Уставка и, если задан, переключатель режима. Оба
-                    # топика для сырых каналов моста задаются явно -
-                    # вывести их из имени канала нельзя.
-                    pairs.append((tile.get("channel_target"),
-                                  tile.get("command_topic")))
-                    if tile.get("command_topic_mode"):
-                        allowed.add(tile["command_topic_mode"])
-                if kind in ("light", "dimmer"):
-                    pairs.append((tile.get("channel_brightness"),
-                                  tile.get("command_topic_brightness")))
-                if kind == "light":
-                    pairs.append((tile.get("channel_temp"),
-                                  tile.get("command_topic_temp")))
-                # «Стоп» у шторы - отдельный топик, не выводимый из канала
-                # положения. Без него пульт получал бы 403 на кнопку остановки.
-                if kind == "curtain" and tile.get("command_topic_stop"):
-                    allowed.add(tile["command_topic_stop"])
-                for ch, explicit in pairs:
-                    topic = command_topic(ch, explicit)
-                    if topic:
-                        allowed.add(topic)
+                allowed.update(writable_of(tile, state))
     return allowed
 
 
@@ -415,7 +377,7 @@ def panel_svg(name):
 def panel_tiles(panel_conf):
     """Плоский список плиток панели в том же порядке, что и на картинке."""
     out = []
-    for _title, tiles, _status, _key in resolve_sections(panel_conf, config.panels):
+    for _title, tiles, _status in resolve_sections(panel_conf, config.panels):
         out.extend(tiles)
     return out
 

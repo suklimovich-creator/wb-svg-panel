@@ -10,8 +10,9 @@ import yaml
 from .const import CONFIG_PATH, log
 from .geometry import parse_duration
 import threading
+from .registry import channels_of
 from .status import status_entries
-from .tiles import ac_channels, forecast_channels
+from . import tiles          # noqa: F401  наполняет реестр типами плиток
 
 
 # ==========================================================================
@@ -59,22 +60,16 @@ class Config:
                         yield tile
 
     def used_channels(self):
-        """Каналы, которые реально нарисованы хоть на одной панели."""
+        """
+        Каналы, которые реально нарисованы хоть на одной панели.
+
+        Список выводится из реестра: плитка сама знает, что читает - роли
+        плюс то, что ролями не описывается (ряды графика, каналы прибора
+        целиком). Новый тип плитки дописывать сюда не нужно.
+        """
         out = set()
-        if True:
-            for tile in self.all_tiles():
-                if tile.get("type") == "forecast":
-                    out.update(forecast_channels(tile))
-                if tile.get("type") == "ac":
-                    out.update(ac_channels(tile))
-                for key, value in tile.items():
-                    # любое поле channel / channel_* - это канал; так новые
-                    # типы плиток не приходится дописывать в этот список
-                    if value and (key == "channel" or key.startswith("channel_")):
-                        out.add(value)
-                for s in tile.get("series", []) or []:
-                    if s.get("channel"):
-                        out.add(s["channel"])
+        for tile in self.all_tiles():
+            out.update(channels_of(tile))
         # Строка состояния - не плитка, её каналы надо собрать отдельно.
         # Плитка header несёт такой же блок status, поэтому обходим и панели,
         # и плитки одним списком.

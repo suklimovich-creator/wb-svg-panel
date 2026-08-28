@@ -422,7 +422,7 @@
 
 {#- Значок устройства с бейджем режима в правом нижнем углу.
     Просвет под бейджем красится в цвет подложки чипа, поэтому значки
-    устройств всегда живут внутри base.chip() - иначе цвет угадать нельзя. -#}
+    устройств всегда живут внутри chip() - иначе цвет угадать нельзя. -#}
 {% macro icon_badge(name, badge, size=26, knock='var(--tile)', badge_color=None) %}
   {% set s = size / 24.0 %}
   <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
@@ -465,7 +465,7 @@
     <rect class="chip {{ 'on' if active }}" x="0.75" y="0.75"
           width="{{ width - 1.5 }}" height="34.5" rx="10"/>
     <g transform="translate({{ pad_l }},5)">
-      {{ base.icon_badge(name, badge, icon_size, knock, badge_color) }}
+      {{ icon_badge(name, badge, icon_size, knock, badge_color) }}
     </g>
     {% if value %}
     <text class="chip-val" x="{{ width - 12 }}" y="23" text-anchor="end">{{ value }}</text>
@@ -520,10 +520,10 @@
   {% if t.compact %}
   <text x="{{ t.w / 2 }}" y="{{ t.h - 13 }}" class="name-s" text-anchor="middle">{{ t.title_s or t.title }}</text>
   {% elif status and (t.show_status or t.always_status) %}
-  {{ base.title_text(t, 20, t.h - 40, 'name') }}
+  {{ title_text(t, 20, t.h - 40, 'name') }}
   <text x="20" y="{{ t.h - 18 }}" class="status">{{ status }}</text>
   {% else %}
-  {{ base.title_text(t, 20, t.h - 20, 'name') }}
+  {{ title_text(t, 20, t.h - 20, 'name') }}
   {% endif %}
 {% endmacro %}
 

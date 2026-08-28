@@ -66,7 +66,9 @@ for f in _base basic devices chart forecast ac; do
         echo "    НЕТ: templates/tiles/$f.j2"
     fi
 done
-[ -z "$MISSING" ] && echo "    ok:  templates/tiles/ (шесть файлов)"
+if [ -z "$MISSING" ]; then
+    echo "    ok:  templates/tiles/ (шесть файлов)"
+fi
 if [ -n "$MISSING" ]; then
     cat <<MSG
 

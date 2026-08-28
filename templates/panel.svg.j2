@@ -124,6 +124,11 @@
                 stroke-linecap: round; stroke-linejoin: round; }
   .sicon-fill { fill: currentColor; stroke: none; }
   .sicon-figure { stroke-width: calc(2px * var(--fs)); }
+  /* Класс on ставится только на <rect> - plate, rim, chip, - а у
+     прямоугольника нет потомков, так что эти два правила внутри панели
+     не срабатывают. Живой механизм подсветки - .onlight на <g> ниже.
+     Оставлены на случай, если значок когда-нибудь окажется внутри
+     группы с этим классом; тогда же и пригодятся. */
   .on .icon      { stroke: var(--active); }
   .on .icon-fill { fill: var(--active); }
   /* подписи и иконка поверх цветного поля ленты - всегда светлые */

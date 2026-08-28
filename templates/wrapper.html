@@ -58,14 +58,18 @@
  /* inset и min() - свежий синтаксис, старые десктопные браузеры его не знают
     и оверлей получался нулевого размера: на телефоне работало, на ноутбуке нет.
     Пишем по-старому. */
+ /* Класс видимости зовётся open, а не on. С on оверлей становился
+    предком вставленного SVG и подхватывал правило .on .icon, написанное
+    для значка включённого прибора: значок плитки, раскрытой на весь
+    экран, окрашивался в оранжевый цвет активного устройства. */
  #ov{position:fixed;top:0;left:0;right:0;bottom:0;
      background:rgba(10,10,12,.86);display:none;z-index:2147483000;
      align-items:center;justify-content:center;flex-direction:column;
      padding:18px;box-sizing:border-box;overflow:auto}
  /* именно auto по бокам: раньше тут было "7px 0", и это правило перебивало
     margin:0 auto у самих пультов - они прижимались к левому краю */
- #ov.on > *{margin:7px auto}
- #ov.on{display:block;text-align:center}
+ #ov.open > *{margin:7px auto}
+ #ov.open{display:block;text-align:center}
  #ov .card{background:#F1F1F3;border-radius:22px;padding:14px;max-width:100%;
            display:inline-block;box-sizing:border-box;position:relative;z-index:1}
  #ov svg{display:block;max-width:100%;height:auto}
@@ -301,7 +305,7 @@ function pub(topic, value){
    уборки: при закрытии окна её надо позвать, иначе таймер продолжит
    тикать в пустоту. */
 var ovCleanup = null;
-function closeOv(){ ov.classList.remove('on'); paused=false;
+function closeOv(){ ov.classList.remove('open'); paused=false;
   if(ovCleanup){ ovCleanup(); ovCleanup = null; }
   var k=ov.querySelector('.card,#pad,#lvl,#crtwrap,.ttl,.hint');
   while(ov.children.length>1) ov.removeChild(ov.lastChild); refresh(); }
@@ -311,7 +315,7 @@ document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeOv()
 function openOv(nodes){ 
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
   nodes.forEach(function(n){ ov.appendChild(n); });
-  ov.classList.add('on'); paused=true;
+  ov.classList.add('open'); paused=true;
 }
 function el(tag, cls, text){ var e=document.createElement(tag);
   if(cls) e.className=cls; if(text) e.textContent=text; return e; }

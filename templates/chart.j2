@@ -1,0 +1,84 @@
+{#-
+  График по истории из wb-mqtt-db.
+
+  Часть templates/panel.svg.j2, вынесенная в отдельный файл при
+  разделении шаблона. Импортируется с контекстом: макросам нужны
+  uid, fs и rx, общие для всего документа.
+-#}
+
+{% import "tiles/_base.j2" as base with context %}
+
+{#- ---- график: от рамки до рамки, заливка до пола ---- -#}
+{% macro tile_chart(t) %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    {#- сетка: часы по вертикали, шкала значений по горизонтали.
+        Шаг шкалы общий для всех рядов плитки, поэтому линии совпадают. -#}
+    {% for tk in t.ticks %}
+    <line x1="{{ tk.x }}" y1="0" x2="{{ tk.x }}" y2="{{ t.h }}"
+          class="tick{{ ' major' if tk.major }}"/>
+    {% endfor %}
+    {% for hl in t.hlines %}
+    <line x1="0" y1="{{ hl.y }}" x2="{{ t.w }}" y2="{{ hl.y }}"
+          class="hline{{ ' edge' if hl.edge }}"/>
+    {% endfor %}
+    {% for s in t.series %}
+      {% if s.geom %}
+      <linearGradient id="{{ uid }}fade{{ t.i }}-{{ loop.index }}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="{{ s.color }}" stop-opacity=".42"/>
+        <stop offset=".55" stop-color="{{ s.color }}" stop-opacity=".16"/>
+        <stop offset="1"   stop-color="{{ s.color }}" stop-opacity=".04"/>
+      </linearGradient>
+      <path d="{{ s.geom.area }}" fill="url(#{{ uid }}fade{{ t.i }}-{{ loop.index }})"/>
+      <path d="{{ s.geom.line }}" fill="none" stroke="{{ s.color }}"
+            stroke-width="{{ t.line_w | default(2.4) }}"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      {% endif %}
+    {% endfor %}
+    {#- Подписи рисуются после кривых: цифра поверх линии читается, линия
+        поверх цифры - нет. Часы раньше подписей шкал: если где-то и
+        наложится, сверху окажется шкала - без неё график не прочитать. -#}
+    {% if t.time_labels %}
+      {% for tm in t.times %}
+      <text x="{{ tm.x }}" y="{{ t.h * 0.82 - 3 }}" class="axis"
+            text-anchor="{{ tm.anchor }}">{{ tm.text }}</text>
+      {% endfor %}
+    {% endif %}
+    {% if t.grid_labels %}
+      {#- первая серия подписана слева, вторая справа, каждая своим цветом -#}
+      {% for s in t.series %}
+        {% set first = loop.first %}
+        {% for lb in s.labels %}
+          {% if first %}
+        <text x="7" y="{{ lb.y - 3 }}" class="axis"
+              style="fill:{{ s.text_color }}">{{ lb.text }}</text>
+          {% else %}
+        <text x="{{ t.w - 7 }}" y="{{ lb.y - 3 }}" text-anchor="end"
+              class="axis" style="fill:{{ s.text_color }}">{{ lb.text }}</text>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    {% endif %}
+  </g>
+  {# рамку рисуем поверх заливки, чтобы она осталась чёткой #}
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
+
+  {{ base.icon_c(t, t.icon or 'thermo', 24) }}
+  {% for s in t.series %}
+  {#- Цвет через style, а не через fill: правило из <style> сильнее
+      презентационного атрибута, и .badge с его fill: var(--ink) молча
+      перекрашивал первую строку в чёрное. У .badge2 объявления fill нет,
+      оттого вторая строка красилась, а первая нет. -#}
+  <text x="{{ t.w - 20 }}" y="{{ 41 + loop.index0 * 23 }}" text-anchor="end"
+        class="{{ 'badge' if loop.first else 'badge2' }}"
+        style="fill:{{ s.text_color }}">{{ s.value }} {{ s.unit }}</text>
+  {% endfor %}
+  {% if not t.series or not t.series[0].geom %}
+  <text x="20" y="{{ t.h / 2 }}" class="status">нет истории</text>
+  {% endif %}
+  {{ base.caption(t, t.subtitle or t.range_label|upper) }}
+  {% if t.show_span and t.scale_note %}
+  <text x="{{ t.title_dx }}" y="{{ t.h - 20 }}" class="span">{{ t.scale_note }}</text>
+  {% endif %}
+{% endmacro %}
+

@@ -1,0 +1,96 @@
+{#-
+  Погода: текущая слева, прогноз кривой справа.
+
+  Часть templates/panel.svg.j2, вынесенная в отдельный файл при
+  разделении шаблона. Импортируется с контекстом: макросам нужны
+  uid, fs и rx, общие для всего документа.
+-#}
+
+{% import "tiles/_base.j2" as base with context %}
+
+{#- ---- погода: текущая слева, прогноз кривой ----
+    Данные не из истории, а из каналов temp_00…temp_NN виртуального
+    устройства: это прогноз вперёд, а не прошлое. Сетка и подписи - те же,
+    что у обычных графиков, чтобы плитки читались одинаково. -#}
+{% macro tile_forecast(t) %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    {#- сетка: часы по вертикали, шкала по горизонтали -#}
+    {% for tk in t.ticks %}
+    <line x1="{{ tk.x }}" y1="0" x2="{{ tk.x }}" y2="{{ t.h }}"
+          class="tick{{ ' major' if tk.major }}"/>
+    {% endfor %}
+    {% for hl in t.hlines %}
+    <line x1="0" y1="{{ hl.y }}" x2="{{ t.w }}" y2="{{ hl.y }}"
+          class="hline{{ ' edge' if hl.edge }}"/>
+    {% endfor %}
+    {#- Облачность фоном под верхней границей: чем плотнее облака, тем
+        серее. Это подложка, а не данные для чтения, поэтому без шкалы. -#}
+    {% for c in t.sky or [] %}
+    <rect x="{{ c.x }}" y="{{ t.h * 0.40 }}" width="{{ c.w }}"
+          height="{{ t.h * 0.42 }}" fill="#8A9AAE" opacity="{{ c.opacity }}"/>
+    {% endfor %}
+    {#- Дождь столбиками от нижней линии: высота - вероятность,
+        насыщенность - количество. -#}
+    {% for b in t.bars or [] %}
+    <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
+          rx="2" fill="#3B8FD4" opacity="{{ b.opacity }}"/>
+    {% endfor %}
+    {#- Значок погоды на каждый подписанный час. Над графиком места нет -
+        там строка про дождь и текущая температура, значки на них наезжали.
+        Поэтому внутри полосы, у верхнего края, приглушённо: кривая рисуется
+        позже и проходит поверх. -#}
+    {% for ic in t.icons or [] %}
+    <g transform="translate({{ ic.x - 7 }},{{ t.h * 0.40 + 3 }})" opacity=".38">
+      <use href="#{{ uid }}ic-{{ ic.name }}" xlink:href="#{{ uid }}ic-{{ ic.name }}"
+           width="14" height="14"/>
+    </g>
+    {% endfor %}
+    {% if t.geom %}
+    <linearGradient id="{{ uid }}wfade{{ t.i }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#5AA9E6" stop-opacity=".34"/>
+      <stop offset=".55" stop-color="#5AA9E6" stop-opacity=".12"/>
+      <stop offset="1"   stop-color="#5AA9E6" stop-opacity=".02"/>
+    </linearGradient>
+    <path d="{{ t.geom.area }}" fill="url(#{{ uid }}wfade{{ t.i }})"/>
+    <path d="{{ t.geom.line }}" fill="none" stroke="#3B8FD4"
+          stroke-width="{{ 2.4 * (fs | default(1)) }}"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    {% for m in t.marks %}
+    {#- экстремумы: только точки, значения читаются по шкале слева -#}
+    <circle cx="{{ m.x }}" cy="{{ m.y }}" r="{{ 3.4 * (fs | default(1)) }}"
+            fill="{{ '#C4553B' if m.kind == 'max' else '#3B8FD4' }}"
+            stroke="var(--tile)" stroke-width="1.5"/>
+    {% endfor %}
+    {% endif %}
+    {% if t.grid_labels %}
+      {% for hl in t.hlines %}
+        {% if hl.text %}
+      <text x="7" y="{{ hl.y - 3 }}" class="axis" style="fill:#2B6B9E">{{ hl.text }}</text>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {% if t.time_labels %}
+      {% for tm in t.times %}
+      <text x="{{ tm.x }}" y="{{ t.h * 0.82 - 3 }}" class="axis"
+            text-anchor="{{ tm.anchor }}">{{ tm.text }}</text>
+      {% endfor %}
+    {% endif %}
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
+
+  {{ base.icon_c(t, t.icon or t.icon_now or 'sun', 26) }}
+  <text x="{{ t.w - 20 }}" y="42" class="wnow" text-anchor="end">{{ t.now_temp }}</text>
+  {% if t.rain_note or t.desc %}
+  <text x="{{ t.w - 20 }}" y="60" class="status" text-anchor="end">{{ t.rain_note or t.desc }}</text>
+  {% endif %}
+
+  <text x="20" y="{{ t.h - 20 }}" class="name">{{ t.title }}</text>
+  {% if t.extra %}
+  <text x="{{ t.w - 20 }}" y="{{ t.h - 20 }}" class="status" text-anchor="end">{{ t.extra }}</text>
+  {% endif %}
+  {% if t.stale_forecast %}
+  <circle cx="{{ t.w - 12 }}" cy="12" r="3.5" class="dot-warn"/>
+  {% endif %}
+{% endmacro %}
+

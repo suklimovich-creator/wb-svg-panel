@@ -51,23 +51,30 @@ for f in panel.py wbpanel/web.py config.yaml wb-svg-panel.service nginx-wb-svg-p
     fi
 done
 
-# Шаблон годится в любой раскладке: templates/panel.svg.j2 или рядом с panel.py.
+# Шаблон разделён на файлы: каркас плюс templates/tiles/. Плоская раскладка,
+# когда panel.svg.j2 лежал рядом с panel.py, больше не годится - подшаблоны
+# ищутся относительно templates/.
 if [ -f "$SRC/templates/panel.svg.j2" ]; then
     echo "    ok:  templates/panel.svg.j2"
-elif [ -f "$SRC/panel.svg.j2" ]; then
-    echo "    ok:  panel.svg.j2 (плоская раскладка)"
 else
-    MISSING="$MISSING panel.svg.j2"
-    echo "    НЕТ: panel.svg.j2"
+    MISSING="$MISSING templates/panel.svg.j2"
+    echo "    НЕТ: templates/panel.svg.j2"
 fi
+for f in _base basic devices chart forecast ac; do
+    if [ ! -f "$SRC/templates/tiles/$f.j2" ]; then
+        MISSING="$MISSING templates/tiles/$f.j2"
+        echo "    НЕТ: templates/tiles/$f.j2"
+    fi
+done
+[ -z "$MISSING" ] && echo "    ok:  templates/tiles/ (шесть файлов)"
 if [ -n "$MISSING" ]; then
     cat <<MSG
 
 ОШИБКА: не хватает файлов:$MISSING
 
 Положите недостающие файлы в $SRC и запустите скрипт снова.
-Подкаталог templates/ не обязателен: panel.svg.j2 может лежать прямо рядом
-с panel.py — демон найдёт его в обеих раскладках.
+Шаблон разделён на файлы: каркас templates/panel.svg.j2 и шесть файлов
+плиток в templates/tiles/. Нужны все.
 MSG
     exit 1
 fi

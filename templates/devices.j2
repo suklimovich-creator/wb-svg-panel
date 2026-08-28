@@ -1,0 +1,219 @@
+{#-
+  Приборы со своей геометрией: штора, лента, диммер, термостат.
+
+  Часть templates/panel.svg.j2, вынесенная в отдельный файл при
+  разделении шаблона. Импортируется с контекстом: макросам нужны
+  uid, fs и rx, общие для всего документа.
+-#}
+
+{% import "tiles/_base.j2" as base with context %}
+
+{#- Стили этого файла. Элемент <style> в SVG остаётся один:
+    resolve_css_vars разбирает только первый, и в остальных
+    var() уехал бы на контроллер неразвёрнутым, а librsvg и
+    старые WebView такое молча игнорируют. Поэтому каркас
+    склеивает куски, а не выпускает несколько блоков. -#}
+{% macro style() %}
+  /* циферблат термостата */
+  .dial .track { fill: none; stroke: var(--ink); stroke-width: calc(7px * var(--fs));
+                 stroke-linecap: round; opacity: .12; }
+  .dial .fill  { fill: none; stroke: var(--stroke); stroke-width: calc(7px * var(--fs));
+                 stroke-linecap: round; opacity: .55; }
+  .dial.live .fill { stroke: var(--active); opacity: .95; }
+  /* Уставка ниже фактической - прибору предстоит охлаждать. Тёплый цвет
+     тут сбивает: одинаковая дуга не должна означать разные вещи. */
+  .dial.cool .fill { stroke: #3B8FD4; }
+  .dial.cool .mark.target { stroke: #3B8FD4; }
+  .dial .mark  { stroke: var(--ink); stroke-width: calc(2.4px * var(--fs)); stroke-linecap: round;
+                 opacity: .70; }
+  .dial .mark-dot { fill: var(--ink); opacity: .70; }
+  .dial .mark.target { stroke: var(--active); stroke-width: calc(3.4px * var(--fs)); opacity: 1; }
+  .dial.muted  { opacity: .5; }
+  .dial-big    { font-size: calc(30px * var(--fs)); font-weight: 600; letter-spacing: -1px;
+                 fill: var(--ink); }
+  .dial-deg    { font-size: calc(18px * var(--fs)); font-weight: 500; fill: var(--ink); }
+  .dial-sub    { font-size: calc(11.5px * var(--fs)); font-weight: 500; fill: var(--ink-dim); }
+  .dial-mode   { font-size: calc(13px * var(--fs)); font-weight: 600; fill: var(--ink-dim); }
+{% endmacro %}
+
+{#- ---- раздвижные шторы ----
+    Створки занимают всю плитку и едут от краёв к центру. Ширина каждой
+    пропорциональна тому, насколько она НЕ открыта. К низу картинка гаснет
+    до цвета подложки - там лежат подписи. -#}
+{% macro tile_curtain(t) %}
+  {% set half = t.w / 2.0 %}
+  {% set lw = half * (1 - t.left_open) %}
+  {% set rw = half * (1 - t.right_open) %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}sky)"/>
+
+    {#- силуэт окна: раму видно в проёме между створками,
+        поэтому сразу понятно, что это шторы, а не заливка -#}
+    {% set fx = t.w * 0.16 %}
+    {% set fy = t.h * 0.12 %}
+    {% set fw = t.w * 0.68 %}
+    {% set fh = t.h * 0.60 %}
+    <g class="frame">
+      <rect x="{{ '%.1f'|format(fx) }}" y="{{ '%.1f'|format(fy) }}"
+            width="{{ '%.1f'|format(fw) }}" height="{{ '%.1f'|format(fh) }}" rx="2"/>
+      <line x1="{{ '%.1f'|format(fx + fw / 2) }}" y1="{{ '%.1f'|format(fy) }}"
+            x2="{{ '%.1f'|format(fx + fw / 2) }}" y2="{{ '%.1f'|format(fy + fh) }}"/>
+      <line x1="{{ '%.1f'|format(fx) }}" y1="{{ '%.1f'|format(fy + fh * 0.42) }}"
+            x2="{{ '%.1f'|format(fx + fw) }}" y2="{{ '%.1f'|format(fy + fh * 0.42) }}"/>
+      <line x1="{{ '%.1f'|format(fx - t.w * 0.05) }}" y1="{{ '%.1f'|format(fy + fh) }}"
+            x2="{{ '%.1f'|format(fx + fw + t.w * 0.05) }}" y2="{{ '%.1f'|format(fy + fh) }}"
+            class="sill"/>
+    </g>
+
+    {% if lw > 1 %}
+    <rect x="0" y="0" width="{{ '%.1f'|format(lw) }}" height="{{ t.h }}" fill="url(#{{ uid }}weave)"/>
+    <rect x="{{ '%.1f'|format([lw - 12, 0]|max) }}" y="0"
+          width="{{ '%.1f'|format([lw, 12]|min) }}" height="{{ t.h }}" fill="url(#{{ uid }}foldL)"/>
+    {% endif %}
+
+    {% if rw > 1 %}
+    <rect x="{{ '%.1f'|format(t.w - rw) }}" y="0"
+          width="{{ '%.1f'|format(rw) }}" height="{{ t.h }}" fill="url(#{{ uid }}weave)"/>
+    <rect x="{{ '%.1f'|format(t.w - rw) }}" y="0"
+          width="{{ '%.1f'|format([rw, 12]|min) }}" height="{{ t.h }}" fill="url(#{{ uid }}foldR)"/>
+    {% endif %}
+
+    {# гашение к низу под подписи #}
+    <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}scrim)"/>
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="rim {{ 'on' if t.on }}"/>
+  {{ base.icon_c(t, t.icon or 'blind', 22) }}
+  {{ base.value_tr(t) }}
+  {{ base.caption(t, t.status) }}
+{% endmacro %}
+
+{#- ---- светодиодная лента ----
+    Плитка - это поле из двух осей:
+      X: слева холодный свет, справа тёплый
+      Y: сверху ярко, снизу темно
+    Точка показывает фактическое положение, оранжевая рамка - что лента включена. -#}
+{% macro tile_light(t) %}
+  {{ base.plate(t) }}
+  <linearGradient id="{{ uid }}cct{{ t.i }}" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="{{ t.cold }}"/>
+    <stop offset="1" stop-color="{{ t.warm }}"/>
+  </linearGradient>
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    {#- включена - полная насыщенность; выключена - бледное поле,
+        чтобы на общей панели не бросалась в глаза -#}
+    <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}cct{{ t.i }})"
+          opacity="{{ '1' if t.on else '.34' }}"/>
+    <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}dim)"
+          opacity="{{ '1' if t.on else '.55' }}"/>
+    {% if t.has_dot %}
+      {% set dx = 16 + t.dot_x * (t.w - 32) %}
+      {% set dy = 16 + t.dot_y * (t.h - 32) %}
+      {# перекрестье помогает считать положение по осям #}
+      <line x1="{{ '%.1f'|format(dx) }}" y1="0"
+            x2="{{ '%.1f'|format(dx) }}" y2="{{ t.h }}"
+            stroke="#FFF" stroke-width="1" opacity=".26"/>
+      <line x1="0" y1="{{ '%.1f'|format(dy) }}"
+            x2="{{ t.w }}" y2="{{ '%.1f'|format(dy) }}"
+            stroke="#FFF" stroke-width="1" opacity=".26"/>
+      <g opacity="{{ '1' if t.on else '.55' }}">
+        <circle cx="{{ '%.1f'|format(dx) }}" cy="{{ '%.1f'|format(dy) }}" r="9.5"
+                fill="{{ t.color }}" stroke="#FFF" stroke-width="2.6"/>
+        <circle cx="{{ '%.1f'|format(dx) }}" cy="{{ '%.1f'|format(dy) }}" r="9.5"
+                fill="none" stroke="#000" stroke-width="1" opacity=".22"/>
+      </g>
+    {% endif %}
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="rim {{ 'on' if t.on }}"/>
+  <g class="{{ 'onlight' if t.on }}">
+    {{ base.icon_c(t, t.icon or 'strip', 25) }}
+    {#- на мелкой плитке цифру не пишем: поле «холодный-тёплый» и положение
+        точки уже показывают и яркость, и температуру -#}
+    {% if not t.compact %}
+    {% set label = t.short if t.w >= 260 else t.short_min %}
+    {% if label %}
+    <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ label }}</text>
+    {% endif %}
+    {% endif %}
+    {{ base.caption(t, t.status) }}
+  </g>
+{% endmacro %}
+
+{#- ---- диммируемый светильник ----
+    Одна величина, поэтому просто заливка снизу вверх на высоту яркости. -#}
+{% macro tile_dimmer(t) %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    <rect x="0" y="{{ '%.1f'|format(t.h * (1 - t.fill)) }}"
+          width="{{ t.w }}" height="{{ '%.1f'|format(t.h * t.fill) }}"
+          fill="{{ t.color }}" opacity=".55"/>
+    <rect x="0" y="{{ '%.1f'|format(t.h * (1 - t.fill) - 1) }}"
+          width="{{ t.w }}" height="2" fill="{{ t.color }}" opacity=".9"/>
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="rim {{ 'on' if t.on }}"/>
+  {{ base.icon_c(t, t.icon or 'bulb', 24) }}
+  {{ base.value_tr(t) }}
+  {#- на мелкой плитке цифра в углу не помещается - ставим по центру -#}
+  {% if t.compact and t.short %}
+  <text x="{{ t.w / 2 }}" y="{{ '%.0f'|format(t.h * 0.66) }}" class="mid"
+        text-anchor="middle">{{ t.short }}</text>
+  {% endif %}
+  {{ base.caption(t, t.status) }}
+{% endmacro %}
+
+{#- ---- термостат ----
+    Циферблат: незамкнутая дуга со шкалой, закрашен участок МЕЖДУ
+    фактической температурой и уставкой - тот самый разрыв, который
+    прибору предстоит закрыть. Две засечки отмечают обе границы,
+    в разрыве дуги снизу стоит режим работы. -#}
+{% macro tile_thermostat(t) %}
+  {#- Невидимые зоны плюс и минус по краям плитки. Рисовать кнопки не нужно:
+      на плитке и так тесно, а место у краёв всё равно пустует. Долгое
+      нажатие открывает пульт, короткое по центру - ничего не делает,
+      чтобы случайное касание не меняло уставку. -#}
+  {{ base.plate(t) }}
+  {% if t.dial and not t.compact %}
+    <g class="dial {{ 'live' if t.on }} {{ 'cool' if t.cooling }} {{ 'muted' if not t.enabled }}">
+      {% if t.dial.track %}<path d="{{ t.dial.track }}" class="track"/>{% endif %}
+      {% if t.dial.fill %}<path d="{{ t.dial.fill }}" class="fill"/>{% endif %}
+      {% for m in t.dial.marks %}
+      <line x1="{{ m.x1 }}" y1="{{ m.y1 }}" x2="{{ m.x2 }}" y2="{{ m.y2 }}"
+            class="mark {{ m.kind }}"/>
+      {% if m.kind == 'current' %}
+      {#- точка на конце: риска текущей температуры не теряется на заливке -#}
+      <circle cx="{{ m.x2 }}" cy="{{ m.y2 }}" r="2.6" class="mark-dot"/>
+      {% endif %}
+      {% endfor %}
+    </g>
+    {#- центрируем ЧИСЛО, знак градуса приписываем за ним: иначе широкий "°"
+        перетягивает центровку и цифра кажется сдвинутой влево -#}
+    <g {% if not t.enabled %}opacity=".5"{% endif %}>
+      <text x="{{ t.dial.cx }}" y="{{ t.dial.cy + 6 }}" class="dial-big"
+            text-anchor="middle">{{ t.target_num }}</text>
+      {% if t.target_num != '--' %}
+      <text x="{{ t.dial.cx + t.deg_dx }}" y="{{ t.dial.cy - 8 }}" class="dial-deg">°</text>
+      {% endif %}
+    </g>
+    {% if t.current %}
+    <text x="{{ t.dial.cx }}" y="{{ t.dial.cy + 27 }}" class="dial-sub"
+          text-anchor="middle">сейчас {{ t.current }}</text>
+    {% endif %}
+    <text x="{{ t.w / 2 }}" y="20" class="tag" text-anchor="middle">{{ t.title|upper }}</text>
+    <text x="{{ t.w / 2 }}" y="{{ t.h - 16 }}" class="dial-mode"
+          text-anchor="middle">{{ t.status }}</text>
+  {% else %}
+    {{ base.icon_c(t, t.icon or 'heat', 24) }}
+    {% if t.current and not t.compact %}
+    <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.current }}</text>
+    {% endif %}
+    {% if not t.compact %}
+    <text x="20" y="{{ t.h - 62 }}" class="big"
+          {% if not t.enabled %}opacity=".5"{% endif %}>{{ t.target }}</text>
+    {% endif %}
+    {{ base.caption(t, t.status) }}
+  {% endif %}
+{% endmacro %}
+

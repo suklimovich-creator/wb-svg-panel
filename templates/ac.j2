@@ -1,0 +1,95 @@
+{#-
+  Кондиционер: колесо режимов и створки жалюзи.
+
+  Часть templates/panel.svg.j2, вынесенная в отдельный файл при
+  разделении шаблона. Импортируется с контекстом: макросам нужны
+  uid, fs и rx, общие для всего документа.
+-#}
+
+{% import "tiles/_base.j2" as base with context %}
+
+{#- Стили этого файла. Элемент <style> в SVG остаётся один:
+    resolve_css_vars разбирает только первый, и в остальных
+    var() уехал бы на контроллер неразвёрнутым, а librsvg и
+    старые WebView такое молча игнорируют. Поэтому каркас
+    склеивает куски, а не выпускает несколько блоков. -#}
+{% macro style() %}
+  .wheel.off .wlab.near { fill: var(--ink-dim); }
+  /* шкала кондиционера */
+  .warc        { fill: none; stroke: var(--active); stroke-width: calc(2.4px * var(--fs));
+                 opacity: .85; }
+  .wtick       { stroke: var(--ink); stroke-width: calc(1px * var(--fs)); opacity: .28; }
+  .wtick.major { stroke-width: calc(1.6px * var(--fs)); opacity: .5; }
+  .wnotch      { fill: none; stroke: var(--ink-dim); stroke-width: calc(1.5px * var(--fs));
+                 stroke-linecap: round; stroke-linejoin: round; }
+  .wlab        { font-size: calc(11px * var(--fs)); fill: var(--ink-faint); }
+  /* выбранное значение заметно крупнее соседних - взгляд цепляется за него */
+  .wlab.near   { font-size: calc(23px * var(--fs)); font-weight: 700; fill: var(--ink);
+                 letter-spacing: -.5px; }
+  .wheel.off   { opacity: .45; }
+{% endmacro %}
+
+{#- ---- кондиционер ----
+    Уставка читается прямо на шкале - выбранное значение крупное, соседние
+    приглушённые. Отдельной цифры под дугой нет, она дублировала. Внизу
+    фактическая температура и режим работы. -#}
+{% macro tile_ac(t) %}
+  {{ base.plate(t) }}
+  {% if t.wheel and not t.compact %}
+    <g class="wheel {{ 'off' if not t.on }}">
+      {% for lb in t.wheel.labels %}
+      <text x="{{ lb.x }}" y="{{ lb.y }}" text-anchor="middle"
+            class="wlab{{ ' near' if lb.near }}">{{ lb.text }}</text>
+      {% endfor %}
+      {% for tk in t.wheel.ticks %}
+      <line x1="{{ tk.x1 }}" y1="{{ tk.y1 }}" x2="{{ tk.x2 }}" y2="{{ tk.y2 }}"
+            class="wtick{{ ' major' if tk.major }}"/>
+      {% endfor %}
+      <path d="{{ t.wheel.arc }}" class="warc"/>
+      <path class="wnotch"
+            d="M {{ t.wheel.cx - 6 }},{{ t.wheel.cy + 16 }}
+               L {{ t.wheel.cx }},{{ t.wheel.cy + 7 }}
+               L {{ t.wheel.cx + 6 }},{{ t.wheel.cy + 16 }}"/>
+    </g>
+
+    {{ base.icon_c(t, t.icon, 22) }}
+    <text x="{{ t.w - 18 }}" y="30" class="tag" text-anchor="end">{{ t.title|upper }}</text>
+
+    {#- низ плитки: фактическая температура, режим и положение лопастей -#}
+    {% if t.current %}
+    <text x="20" y="{{ t.h - 38 }}" class="dial-sub">сейчас {{ t.current }}</text>
+    {% endif %}
+    <text x="20" y="{{ t.h - 16 }}" class="dial-mode">{{ t.status }}</text>
+    {% if t.louver %}
+    <g class="louver" transform="translate({{ t.w - 68 }},{{ t.h - 40 }})">
+      <line x1="0" y1="1" x2="19" y2="1" class="lvhouse"/>
+      {% for b in t.louver.blades %}
+      <line x1="{{ b.x1 }}" y1="{{ b.y1 }}" x2="{{ b.x2 }}" y2="{{ b.y2 }}"
+            class="lvblade" opacity="{{ b.op }}"/>
+      {% endfor %}
+    </g>
+    {% endif %}
+    {% if t.louver_h %}
+    <g class="louver" transform="translate({{ t.w - 40 }},{{ t.h - 40 }})">
+      <line x1="1" y1="0" x2="1" y2="19" class="lvhouse"/>
+      {% for b in t.louver_h.blades %}
+      <line x1="{{ b.x1 }}" y1="{{ b.y1 }}" x2="{{ b.x2 }}" y2="{{ b.y2 }}"
+            class="lvblade" opacity="{{ b.op }}"/>
+      {% endfor %}
+    </g>
+    {% endif %}
+  {% else %}
+    {{ base.icon_c(t, t.icon, 24) }}
+    {% if t.current and not t.compact %}
+    <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.current }}</text>
+    {% endif %}
+    {% if t.compact %}
+    <text x="{{ t.w / 2 }}" y="{{ '%.0f'|format(t.h * 0.62) }}" class="mid"
+          text-anchor="middle">{{ t.target }}</text>
+    {% else %}
+    <text x="20" y="{{ t.h - 62 }}" class="big">{{ t.target }}</text>
+    {% endif %}
+    {{ base.caption(t, t.status) }}
+  {% endif %}
+{% endmacro %}
+

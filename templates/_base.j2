@@ -1,0 +1,558 @@
+{#-
+  Общее для всех плиток: подложка, значки, чипы, подписи, области
+  нажатия. Здесь же общие стили и библиотека значков - значок задаётся
+  в конфиге по имени, и `icon: sun` может стоять на любой плитке, не
+  только на прогнозе.
+
+  Часть templates/panel.svg.j2, вынесенная в отдельный файл при
+  разделении шаблона. Импортируется с контекстом: макросам нужны
+  uid, fs и rx, общие для всего документа.
+-#}
+
+{#- Стили этого файла. Элемент <style> в SVG остаётся один:
+    resolve_css_vars разбирает только первый, и в остальных
+    var() уехал бы на контроллер неразвёрнутым, а librsvg и
+    старые WebView такое молча игнорируют. Поэтому каркас
+    склеивает куски, а не выпускает несколько блоков. -#}
+{% macro style() %}
+  /* ---- палитра: светлая тема ------------------------------------------ */
+  svg {
+    /* Масштаб типографики. В обычной плитке 1, в раскрытой на весь экран
+       больше: размеры шрифтов зашиты в пикселях, и без этого подписи на
+       крупной картинке выглядят микроскопическими. */
+    --fs: 1;
+    --bg-top:      #F1F1F3;
+    --bg-bottom:   #E6E6E9;
+    --tile:        #D9D9DC;   /* сама плитка */
+    --edge:        rgba(60,60,67,.20);
+    --edge-w:      1.5;
+    --active:      #E09B2D;   /* рамка включённого устройства */
+    --active-w:    3.5;
+    /* Чип строки состояния: мягкая версия .plate.on. У включённой плитки
+       активность показана рамкой 3.5 - для чипа высотой 36 это грубо,
+       поэтому здесь заливка и тонкий контур того же семейства.
+       Чернила значка гуще основного активного цвета: тонкие штрихи на
+       светлом фоне выцветают там, где широкая рамка ещё читается.
+       Двоеточие после имени переменной в комментариях писать нельзя -
+       разбор палитры принимает это за объявление и съедает следующее. */
+    --active-soft:      #EBD9B4;
+    --active-soft-edge: rgba(184,121,26,.35);
+    --active-ink:       #A96A0F;
+    --ink:         #3A3A3E;
+    --ink-dim:     #8A8A90;
+    --ink-faint:   rgba(60,60,67,.34);
+    --stroke:      #6E6E75;   /* иконки */
+    --window:      #B4BCC7;   /* «улица» за шторой */
+    --fabric:      #F0ECE5;   /* ткань */
+  }
+  /* ---- тёмная тема ------------------------------------------------------ */
+  .dark {
+    --bg-top:      #1B1B1F;
+    --bg-bottom:   #101012;
+    --tile:        #2C2C31;
+    --edge:        rgba(255,255,255,.16);
+    --edge-w:      1.5;
+    --active:      #FFAE28;
+    --active-w:    3.5;
+    --active-soft:      #3A2E18;
+    --active-soft-edge: rgba(255,174,40,.32);
+    --active-ink:       #FFAE28;
+    --ink:         #EDEDF0;
+    --ink-dim:     rgba(255,255,255,.52);
+    --ink-faint:   rgba(255,255,255,.28);
+    --stroke:      #C6C6CC;
+    --window:      #39404A;
+    --fabric:      #7B7568;
+  }
+
+  /* ---- типографика ------------------------------------------------------ */
+  .h1     { font-size: calc(26px * var(--fs)); font-weight: 700; letter-spacing: -.6px; fill: var(--ink); }
+  .h1-sub { font-size: calc(13px * var(--fs)); font-weight: 500; fill: var(--ink-faint); }
+  .h2     { font-size: calc(18px * var(--fs)); font-weight: 650; letter-spacing: -.3px; fill: var(--ink); }
+  /* подложка заголовка раздела: подсказывает, что по строке можно нажать */
+  .section-plate { fill: var(--tile); opacity: .35; }
+  /* стрелка у заголовка раздела: вниз - раскрыт, вправо - свёрнут */
+  .fold-arrow { fill: none; stroke: var(--ink-dim);
+                stroke-width: calc(2px * var(--fs));
+                stroke-linecap: round; stroke-linejoin: round; }
+  .name   { font-size: calc(15px * var(--fs));   font-weight: 500; fill: var(--ink); }
+  .name-s { font-size: calc(11px * var(--fs));   font-weight: 500; fill: var(--ink); }
+  .mid    { font-size: calc(19px * var(--fs)); font-weight: 600; fill: var(--ink);
+            letter-spacing: -.4px; }
+  .lvhouse{ stroke: var(--ink-faint); stroke-width: calc(1.6px * var(--fs));
+            stroke-linecap: round; }
+  .lvblade{ stroke: var(--stroke); stroke-width: calc(1.8px * var(--fs));
+            stroke-linecap: round; }
+  .on .lvblade, .wheel:not(.off) ~ * .lvblade { stroke: var(--stroke); }
+  .badge-s{ font-size: calc(12px * var(--fs));   font-weight: 600; fill: var(--ink); }
+  .on .name-s, .inkdark .name-s { fill: var(--ink); }
+  .onlight .name-s { fill: #FFFFFF; }
+  .status { font-size: calc(13.5px * var(--fs)); font-weight: 400; fill: var(--ink-dim); }
+  .badge  { font-size: calc(17px * var(--fs));   font-weight: 500; fill: var(--ink); }
+  .badge2 { font-size: calc(14px * var(--fs));   font-weight: 500; }
+  .tag    { font-size: calc(11px * var(--fs));   font-weight: 600; fill: var(--ink-faint); letter-spacing: .4px; }
+
+  /* ---- плитки ----------------------------------------------------------- */
+  .plate     { fill: var(--tile); stroke: var(--edge); stroke-width: var(--edge-w); }
+  .plate.on  { stroke: var(--active); stroke-width: var(--active-w); }
+  /* только рамка, без заливки - рисуется ПОВЕРХ графика или подсветки */
+  .rim       { fill: none; stroke: var(--edge); stroke-width: var(--edge-w); }
+  .rim.on    { stroke: var(--active); stroke-width: var(--active-w); }
+  .icon      { fill: none; stroke: var(--stroke); stroke-width: calc(1.8px * var(--fs));
+               stroke-linecap: round; stroke-linejoin: round; }
+  .icon-fill { fill: var(--stroke); }
+  /* Фигурки человечков состоят из отдельных конечностей и при общей
+     толщине выглядят жиже предметных значков - им нужна прибавка. */
+  .icon-figure { stroke-width: calc(2px * var(--fs)); }
+  /* Просвет под бейджем режима: без него линии корпуса просвечивают
+     сквозь значок режима и всё сливается. Цвет задаётся атрибутом -
+     он равен заливке чипа, а она зависит от того, активен чип или нет. */
+
+  /* ---- чип строки состояния --------------------------------------------- */
+  .chip      { fill: var(--tile); stroke: var(--edge); stroke-width: var(--edge-w); }
+  .chip.on   { fill: var(--active-soft); stroke: var(--active-soft-edge); }
+  .chip-val  { font-size: calc(14px * var(--fs)); font-weight: 500; fill: var(--ink); }
+  /* Значки состояния красятся через currentColor, а не классом.
+     Содержимое элемента use лежит в теневом дереве, и селекторы документа
+     туда не достают: правило вида «.active .icon» на символ не подействует.
+     Угловые скобки в этом комментарии тоже нельзя - внутри style любой
+     знак «меньше» обрывает разбор XML, и librsvg молча вернёт ошибку.
+     currentColor же наследуется всегда и переживает подстановку
+     переменных перед отдачей SVG. */
+  .sicon      { fill: none; stroke: currentColor; stroke-width: calc(1.8px * var(--fs));
+                stroke-linecap: round; stroke-linejoin: round; }
+  .sicon-fill { fill: currentColor; stroke: none; }
+  .sicon-figure { stroke-width: calc(2px * var(--fs)); }
+  /* Класс on ставится только на <rect> - plate, rim, chip, - а у
+     прямоугольника нет потомков, так что эти два правила внутри панели
+     не срабатывают. Живой механизм подсветки - .onlight на <g> ниже.
+     Оставлены на случай, если значок когда-нибудь окажется внутри
+     группы с этим классом; тогда же и пригодятся. */
+  .on .icon      { stroke: var(--active); }
+  .on .icon-fill { fill: var(--active); }
+  /* подписи и иконка поверх цветного поля ленты - всегда светлые */
+  .onlight .name, .onlight .badge { fill: #FFFFFF; }
+  .onlight .status                { fill: rgba(255,255,255,.72); }
+  .onlight .icon                  { stroke: #FFFFFF; }
+  .onlight .icon-fill             { fill: #FFFFFF; }
+  .axis      { font-size: calc(9.5px * var(--fs)); font-weight: 500; fill: var(--ink);
+               opacity: .55; }
+  .span      { font-size: calc(12px * var(--fs)); font-weight: 500; fill: var(--ink-dim); }
+  .wnow      { font-size: calc(27px * var(--fs)); font-weight: 600; letter-spacing: -.8px;
+               fill: var(--ink); }
+  .tick      { stroke: var(--ink); stroke-width: calc(.5px * var(--fs)); opacity: .13; }
+  .tick.major{ stroke-width: calc(.9px * var(--fs)); opacity: .22; }
+  .frame rect,
+  .frame line{ fill: none; stroke: var(--stroke); stroke-width: calc(1.6px * var(--fs));
+               opacity: .40; stroke-linecap: round; }
+  .frame .sill{ stroke-width: calc(2.6px * var(--fs)); opacity: .5; }
+  .hline     { stroke: var(--ink); stroke-width: calc(.5px * var(--fs)); opacity: .13; }
+  .hline.edge{ opacity: .20; }
+  .off-dim   { opacity: .55; }
+  .offline   { opacity: .40; }
+  .dot-warn  { fill: #E09B2D; }
+  .dot-off   { fill: var(--ink-faint); }
+{% endmacro %}
+
+{#- Библиотека значков. Живёт в <defs> каркаса, адресуется по uid.
+    Выпускается всегда целиком: имя значка приходит из конфига,
+    и заранее неизвестно, какие понадобятся. -#}
+{% macro defs() %}
+  <linearGradient id="{{ uid }}bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="var(--bg-top)"/>
+    <stop offset="1" stop-color="var(--bg-bottom)"/>
+  </linearGradient>
+
+  <linearGradient id="{{ uid }}sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="var(--window)"/>
+    <stop offset="1" stop-color="var(--window)" stop-opacity=".5"/>
+  </linearGradient>
+
+  <!-- подложки под подписи: гасят картинку сверху и снизу цветом плитки,
+       чтобы текст читался поверх полноразмерного полотна в любой теме -->
+  <linearGradient id="{{ uid }}scrim-t" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0"   stop-color="var(--tile)" stop-opacity=".88"/>
+    <stop offset=".30" stop-color="var(--tile)" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}scrim-b" x1="0" y1="0" x2="0" y2="1">
+    <stop offset=".48" stop-color="var(--tile)" stop-opacity="0"/>
+    <stop offset=".80" stop-color="var(--tile)" stop-opacity=".88"/>
+    <stop offset="1"   stop-color="var(--tile)" stop-opacity=".96"/>
+  </linearGradient>
+
+  <!-- к низу плитки гасим картинку до цвета подложки, чтобы подписи читались -->
+  <linearGradient id="{{ uid }}scrim" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0"   stop-color="var(--tile)" stop-opacity="0"/>
+    <stop offset=".45" stop-color="var(--tile)" stop-opacity=".45"/>
+    <stop offset=".74" stop-color="var(--tile)" stop-opacity=".90"/>
+    <stop offset="1"   stop-color="var(--tile)" stop-opacity="1"/>
+  </linearGradient>
+
+  <!-- поле ленты: слева холодный, справа тёплый (заливается per-tile) -->
+  <linearGradient id="{{ uid }}dim" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0"   stop-color="#0A0A0C" stop-opacity="0"/>
+    <stop offset=".50" stop-color="#0A0A0C" stop-opacity=".30"/>
+    <stop offset="1"   stop-color="#0A0A0C" stop-opacity=".78"/>
+  </linearGradient>
+
+  <linearGradient id="{{ uid }}foldL" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000" stop-opacity="0"/>
+    <stop offset="1" stop-color="#000" stop-opacity=".20"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}foldR" x1="1" y1="0" x2="0" y2="0">
+    <stop offset="0" stop-color="#000" stop-opacity="0"/>
+    <stop offset="1" stop-color="#000" stop-opacity=".20"/>
+  </linearGradient>
+
+  <pattern id="{{ uid }}weave" width="7" height="7" patternUnits="userSpaceOnUse">
+    <rect width="7" height="7" fill="var(--fabric)"/>
+    <line x1="0" y1="0" x2="0" y2="7" stroke="rgba(0,0,0,.09)" stroke-width="1.6"/>
+  </pattern>
+
+  <!-- иконки: единый бокс 24x24, только штрихи -->
+  <symbol id="{{ uid }}ic-power" viewBox="0 0 24 24">
+    <path class="icon" d="M12 3.5v8"/>
+    <path class="icon" d="M7.2 6.6a7.2 7.2 0 1 0 9.6 0"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-bulb" viewBox="0 0 24 24">
+    <path class="icon" d="M12 3.2a5.7 5.7 0 0 0-3.3 10.3c.6.4.9 1 .9 1.7v.4h4.8v-.4c0-.7.3-1.3.9-1.7A5.7 5.7 0 0 0 12 3.2z"/>
+    <path class="icon" d="M9.9 18.7h4.2M10.7 21h2.6"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-strip" viewBox="0 0 24 24">
+    <path class="icon" d="M3 8.5h18v3.2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+    <path class="icon" d="M6.5 14v2.6M12 14v3.6M17.5 14v2.6"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-curtain" viewBox="0 0 24 24">
+    <path class="icon" d="M3 4.5h18"/>
+    <path class="icon" d="M6 4.5v15c2.6-.6 3.6-2.9 3.6-6.2V4.5"/>
+    <path class="icon" d="M18 4.5v15c-2.6-.6-3.6-2.9-3.6-6.2V4.5"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-blind" viewBox="0 0 24 24">
+    <path class="icon" d="M3 4.2h18M3 8.2h18M3 12.2h18"/>
+    <path class="icon" d="M12 12.2v7.4"/>
+    <circle class="icon-fill" cx="12" cy="20.4" r="1.7"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-thermo" viewBox="0 0 24 24">
+    <path class="icon" d="M14 14.2V5.4a2 2 0 1 0-4 0v8.8a4.2 4.2 0 1 0 4 0z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-drop" viewBox="0 0 24 24">
+    <path class="icon" d="M12 3.2s5.4 6 5.4 9.5a5.4 5.4 0 1 1-10.8 0C6.6 9.2 12 3.2 12 3.2z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-co2" viewBox="0 0 24 24">
+    <path class="icon" d="M6.6 17.5a3.9 3.9 0 0 1-.5-7.8 5.3 5.3 0 0 1 10.2-1.2 3.6 3.6 0 0 1 1.2 7z"/>
+    <path class="icon" d="M9.4 20.6h6.4"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-leaf" viewBox="0 0 24 24">
+    <path class="icon" d="M20 4c0 8.3-4.2 12.8-9.6 12.8A5.4 5.4 0 0 1 5 11.4C5 6.4 11.6 4.6 20 4z"/>
+    <path class="icon" d="M4.2 20.2C6.6 15.4 10.4 11.6 15.4 9"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-wind" viewBox="0 0 24 24">
+    <path class="icon" d="M3 8.6h10.2a2.9 2.9 0 1 0-2.9-2.9"/>
+    <path class="icon" d="M3 13.4h13.6a2.9 2.9 0 1 1-2.9 2.9"/>
+    <path class="icon" d="M3 18.2h7"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-window" viewBox="0 0 24 24">
+    <rect class="icon" x="3.5" y="3.5" width="17" height="17" rx="2"/>
+    <path class="icon" d="M12 3.5v17M3.5 12h17"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-fan" viewBox="0 0 24 24">
+    <circle class="icon" cx="12" cy="12" r="2.1"/>
+    <path class="icon" d="M12 9.9C12 6.4 9.6 3.5 12 3.5s4.4 2.2 2.2 4.6"/>
+    <path class="icon" d="M14.1 12c3.5 0 6.4-2.4 6.4 0s-2.2 4.4-4.6 2.2"/>
+    <path class="icon" d="M12 14.1c0 3.5 2.4 6.4 0 6.4s-4.4-2.2-2.2-4.6"/>
+    <path class="icon" d="M9.9 12c-3.5 0-6.4 2.4-6.4 0s2.2-4.4 4.6-2.2"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-heat" viewBox="0 0 24 24">
+    <path class="icon" d="M8 3.4c-2 2.4-.6 3.9.4 5.2 1 1.3 1.6 3-.4 5"/>
+    <path class="icon" d="M15.6 3.4c-2 2.4-.6 3.9.4 5.2 1 1.3 1.6 3-.4 5"/>
+    <path class="icon" d="M4.5 20.6h15"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-tap" viewBox="0 0 24 24">
+    <path class="icon" d="M4 12h6.4a3 3 0 0 1 3 3v.8"/>
+    <path class="icon" d="M10.4 12V8.6a3 3 0 0 1 3-3H20"/>
+    <path class="icon" d="M17 5.6v6"/>
+    <path class="icon" d="M13.4 18.2s2 2.1 2 3.1a2 2 0 1 1-4 0c0-1 2-3.1 2-3.1z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-sun" viewBox="0 0 24 24">
+    <circle class="icon" cx="12" cy="12" r="4.2"/>
+    <path class="icon" d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-moon" viewBox="0 0 24 24">
+    <path class="icon" d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6a8.6 8.6 0 1 0 11 11z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-tv" viewBox="0 0 24 24">
+    <rect class="icon" x="2.8" y="4.4" width="18.4" height="12.4" rx="2"/>
+    <path class="icon" d="M8.4 20.4h7.2"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-door" viewBox="0 0 24 24">
+    <path class="icon" d="M5.6 3.6h12.8v16.8H5.6z"/>
+    <circle class="icon-fill" cx="15" cy="12" r="1.1"/>
+  </symbol>
+  {#- Фигурки: позы срисованы с пешеходного светофора и знака «Осторожно,
+      дети» - эти силуэты узнаются без разглядывания. Поправки центровки
+      уже внесены в координаты, чтобы макрос о них не помнил. -#}
+  <symbol id="{{ uid }}ic-motion" viewBox="0 0 24 24">
+    <circle class="sicon-fill" cx="15.2" cy="4.6" r="2.3"/>
+    <path class="sicon sicon-figure" d="M14 7.7 11.5 13.6"/>
+    <path class="sicon sicon-figure" d="M14 8.5 8.9 8.9 9.2 12.3"/>
+    <path class="sicon sicon-figure" d="M14 8.5 15.8 12.9 18.8 10.4"/>
+    <path class="sicon sicon-figure" d="M11.5 13.6 8.7 17.2 5.2 15.8"/>
+    <path class="sicon sicon-figure" d="M11.5 13.6 15.1 15.4 15.2 20.7"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-person" viewBox="0 0 24 24">
+    <circle class="sicon-fill" cx="11.8" cy="4.6" r="2.3"/>
+    <path class="sicon sicon-figure" d="M11.8 6.8 11.8 12.4"/>
+    <path class="sicon sicon-figure" d="M11.8 7.5 7.3 10.4 9.2 13.4"/>
+    <path class="sicon sicon-figure" d="M11.8 7.5 16.7 10.5 14.2 13.6"/>
+    <path class="sicon sicon-figure" d="M11.8 12.4 9.9 16.5 9.7 20.6"/>
+    <path class="sicon sicon-figure" d="M11.8 12.4 13.7 16.8 13.7 20.7"/>
+  </symbol>
+  {#- Распахнутая дверь: широкий проём, створка в перспективе.
+      Закрытую показывать незачем, поэтому второго состояния нет. -#}
+  <symbol id="{{ uid }}ic-door-open" viewBox="0 0 24 24">
+    <path class="sicon" d="M3.2 3.2h10v17.6h-10z"/>
+    <path class="sicon" d="M13.2 5 20.6 2.6v18.8L13.2 19z"/>
+    <circle class="sicon-fill" cx="14.9" cy="12.4" r="0.9"/>
+  </symbol>
+  {#- Протечка: капля заливкой плюс рябь - от простой капли отличается
+      сразу, а простая капля уже занята влажностью. -#}
+  <symbol id="{{ uid }}ic-leak" viewBox="0 0 24 24">
+    <path class="sicon-fill" d="M12 2.6s5.2 5.8 5.2 9.2a5.2 5.2 0 1 1-10.4 0C6.8 8.4 12 2.6 12 2.6z"/>
+    <path class="sicon" d="M4.6 20.6c1.5 1.3 3 1.3 4.5 0s3-1.3 4.5 0 3 1.3 4.5 0"/>
+  </symbol>
+  {#- Устройства: корпус узнаётся по силуэту, режим читается бейджем.
+      Сдвиг вправо оптический - масса корпуса лежит левее середины. -#}
+  <symbol id="{{ uid }}ic-ac-unit" viewBox="0 0 24 24">
+    <g transform="translate(0.5,-0.4)">
+      <rect class="sicon" x="2.6" y="4.2" width="14.6" height="6.4" rx="2"/>
+      <path class="sicon" d="M5.2 8.8h9.4"/>
+      <path class="sicon" d="M4.4 14.2c1.2 1.1 2.4 1.1 3.6 0s2.4-1.1 3.6 0"/>
+    </g>
+  </symbol>
+  <symbol id="{{ uid }}ic-vacuum" viewBox="0 0 24 24">
+    <g transform="translate(0.3,-1)">
+      <circle class="sicon" cx="10.4" cy="12" r="7.3"/>
+      <path class="sicon" d="M3.6 9.2a7.3 7.3 0 0 1 13.6 0"/>
+      <circle class="sicon" cx="10.4" cy="15.4" r="1.5"/>
+    </g>
+  </symbol>
+  <symbol id="{{ uid }}ic-snow" viewBox="0 0 24 24">
+    <path class="icon" d="M12 2.6v18.8M3.8 7.3l16.4 9.4M20.2 7.3L3.8 16.7"/>
+    <path class="icon" d="M12 6.2 9.7 4M12 6.2 14.3 4M12 17.8l-2.3 2.2M12 17.8l2.3 2.2"/>
+    <path class="icon" d="m6.9 9.1-3-.5M6.9 9.1 6 6.3M17.1 14.9l3 .5M17.1 14.9l.9 2.8"/>
+    <path class="icon" d="m17.1 9.1 3-.5M17.1 9.1 18 6.3M6.9 14.9l-3 .5M6.9 14.9 6 17.7"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-swing" viewBox="0 0 24 24">
+    <path class="icon" d="M4 5.5h16M4 10h16"/>
+    <path class="icon" d="M9 14.5c1.6 1.4 4.4 1.4 6 0"/>
+    <path class="icon" d="M7.5 18.5c2.6 2 6.4 2 9 0"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-next" viewBox="0 0 24 24">
+    <path class="icon" d="M9 5.5 16.5 12 9 18.5"/>
+  </symbol>
+  {#- Бейджи режима. Рисуются в своей сетке 12x12 и ставятся в правый
+      нижний угол корпуса: один корпус, сменный бейдж - новые режимы
+      добавляются, не изобретая каждый раз новый значок. -#}
+  <symbol id="{{ uid }}bg-snow" viewBox="0 0 12 12">
+    <path class="sicon" d="M6 1.4v9.2M2.1 3.7l7.8 4.6M9.9 3.7 2.1 8.3"/>
+  </symbol>
+  <symbol id="{{ uid }}bg-heat" viewBox="0 0 12 12">
+    <path class="sicon" d="M6 10.4V3.1M6 3.1 3.6 5.5M6 3.1l2.4 2.4"/>
+    <path class="sicon" d="M3.2 8.6h5.6"/>
+  </symbol>
+  <symbol id="{{ uid }}bg-water" viewBox="0 0 12 12">
+    <path class="sicon-fill" d="M6 1.6s2.8 3.1 2.8 4.9a2.8 2.8 0 1 1-5.6 0C3.2 4.7 6 1.6 6 1.6z"/>
+  </symbol>
+  <symbol id="{{ uid }}bg-fan" viewBox="0 0 12 12">
+    <circle class="sicon" cx="6" cy="6" r="1.1"/>
+    <path class="sicon" d="M6 4.9C6 3.1 4.9 1.6 6 1.6s2.1 1 1 2.3"/>
+    <path class="sicon" d="M7.1 6c1.8 0 3.3-1.1 3.3 0s-1 2.1-2.3 1"/>
+    <path class="sicon" d="M6 7.1c0 1.8 1.1 3.3 0 3.3s-2.1-1-1-2.3"/>
+    <path class="sicon" d="M4.9 6c-1.8 0-3.3 1.1-3.3 0s1-2.1 2.3-1"/>
+  </symbol>
+  {#- Авто: буква, а не картинка. Режим «сам разберётся» рисунком не
+      выразить, а буква А узнаётся мгновенно и на всех языках. -#}
+  {#- Погода по кодам WMO. Облако рисуется одним контуром: составное из
+      кругов на мелком размере превращается в кашу. -#}
+  <symbol id="{{ uid }}ic-cloud" viewBox="0 0 24 24">
+    <path class="icon" d="M7.4 18.4a4.2 4.2 0 0 1-.5-8.4 5.6 5.6 0 0 1 10.8-1.1
+                          3.9 3.9 0 0 1-.9 9.5z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-cloud-sun" viewBox="0 0 24 24">
+    <path class="icon" d="M5.6 8.2a3.4 3.4 0 1 1 6.2 2.4"/>
+    <path class="icon" d="M9 2.6v1.8M4.2 4.6l1.3 1.3M2.4 9.4h1.8M13.8 4.6l-1.3 1.3"/>
+    <path class="icon" d="M9.6 19.4a3.8 3.8 0 0 1-.4-7.6 5 5 0 0 1 9.6-1
+                          3.5 3.5 0 0 1-.8 8.6z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-rain" viewBox="0 0 24 24">
+    <path class="icon" d="M7.6 15.2a3.9 3.9 0 0 1-.5-7.8 5.2 5.2 0 0 1 10-1
+                          3.6 3.6 0 0 1-.8 8.8z"/>
+    <path class="icon" d="M8.6 18.2 7.4 21.4M12.4 18.2l-1.2 3.2M16.2 18.2 15 21.4"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-storm" viewBox="0 0 24 24">
+    <path class="icon" d="M7.6 14.8a3.9 3.9 0 0 1-.5-7.8 5.2 5.2 0 0 1 10-1
+                          3.6 3.6 0 0 1-.8 8.8z"/>
+    <path class="icon" d="M13.2 16.2 9.6 19.6h3.4l-1.4 3"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-fog" viewBox="0 0 24 24">
+    <path class="icon" d="M7.6 12.6a3.9 3.9 0 0 1-.5-7.8 5.2 5.2 0 0 1 10-1
+                          3.6 3.6 0 0 1-.8 8.8z"/>
+    <path class="icon" d="M4.6 16.4h14.8M6.8 19.8h11"/>
+  </symbol>
+  <symbol id="{{ uid }}bg-auto" viewBox="0 0 12 12">
+    <path class="sicon" d="M3.1 9.4 6 2.6l2.9 6.8"/>
+    <path class="sicon" d="M4.3 7.3h3.4"/>
+  </symbol>
+  <symbol id="{{ uid }}bg-home" viewBox="0 0 12 12">
+    <path class="sicon" d="M2.2 6 6 2.8 9.8 6"/>
+    <path class="sicon" d="M3.4 6.4v3.4h5.2V6.4"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-socket" viewBox="0 0 24 24">
+    <rect class="icon" x="3.5" y="3.5" width="17" height="17" rx="5"/>
+    <path class="icon" d="M9.5 9.8v2.4M14.5 9.8v2.4"/>
+  </symbol>
+{% endmacro %}
+
+{#- ==================== макросы ==================== -#}
+
+{% macro plate(t) %}
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="plate {{ 'on' if t.on }}"/>
+{% endmacro %}
+
+{#- Значок устройства с бейджем режима в правом нижнем углу.
+    Просвет под бейджем красится в цвет подложки чипа, поэтому значки
+    устройств всегда живут внутри base.chip() - иначе цвет угадать нельзя. -#}
+{% macro icon_badge(name, badge, size=26, knock='var(--tile)', badge_color=None) %}
+  {% set s = size / 24.0 %}
+  <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
+       width="{{ size }}" height="{{ size }}"/>
+  {% if badge %}
+  <circle fill="{{ knock }}" stroke="none" cx="{{ 18.1 * s }}" cy="{{ 17.4 * s }}"
+          r="{{ 5.4 * s }}"/>
+  {#- Бейдж режима красится отдельно от корпуса: корпус говорит «что это»,
+      цвет бейджа - «что оно делает». Синий холод, красный тепло, зелёный
+      обдув читаются без подписей. -#}
+  <g{% if badge_color %} color="{{ badge_color }}"{% endif %}>
+    <use href="#{{ uid }}bg-{{ badge }}" xlink:href="#{{ uid }}bg-{{ badge }}"
+         x="{{ 12.1 * s }}" y="{{ 11.4 * s }}"
+         width="{{ 12 * s }}" height="{{ 12 * s }}"/>
+  </g>
+  {% endif %}
+{% endmacro %}
+
+{#- Чип строки состояния: маленькая плитка со значком и, если нужно,
+    числом. Высота 36, радиус 10 - те же пропорции, что у больших плашек
+    (RX 24 при высоте 170). Поля: 10 слева, 6 до числа, 12 справа -
+    цифры прямоугольные и липнут к краю сильнее, чем скруглённый значок.
+    active тонирует чип, как .plate.on тонирует плитку. -#}
+{% macro chip(name, value=None, badge=None, active=False, w=None, badge_color=None,
+              chart=None, chart_title=None, unit=None) %}
+  {% set icon_size = 26 %}
+  {#- Поля разные для двух случаев. Со значком и числом: 10 слева, 6 между,
+      12 справа - цифры прямоугольные и липнут к краю сильнее, чем
+      скруглённый значок. Без числа значок просто центрируется: поля 10 и 4
+      выглядят как перекос вправо. -#}
+  {% set pad_l = 10 if value else 7 %}
+  {% set text_w = (value|length * 8.5) if value else 0 %}
+  {% set width = w or (pad_l + icon_size + (6 + text_w + 12 if value else 7)) %}
+  {% set ink = 'var(--active-ink)' if active else 'var(--stroke)' %}
+  {% set knock = 'var(--active-soft)' if active else 'var(--tile)' %}
+  {#- data-chart делает чип кнопкой: по нажатию открывается график канала.
+      Ставится только там, где график осмыслен, - решает build_status. -#}
+  <g color="{{ ink }}"{% if chart %} data-chart="{{ chart }}"
+     data-chart-title="{{ chart_title }}" data-unit="{{ unit or '' }}"{% endif %}>
+    <rect class="chip {{ 'on' if active }}" x="0.75" y="0.75"
+          width="{{ width - 1.5 }}" height="34.5" rx="10"/>
+    <g transform="translate({{ pad_l }},5)">
+      {{ base.icon_badge(name, badge, icon_size, knock, badge_color) }}
+    </g>
+    {% if value %}
+    <text class="chip-val" x="{{ width - 12 }}" y="23" text-anchor="end">{{ value }}</text>
+    {% endif %}
+  </g>
+{% endmacro %}
+
+{% macro icon(name, size=27) %}
+  {% if t is defined %}{% endif %}
+  <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
+       x="18" y="17" width="{{ size }}" height="{{ size }}"/>
+{% endmacro %}
+
+{#- мелкая плитка: иконка по центру сверху, короткая подпись снизу -#}
+{% macro icon_c(t, name, size=24) %}
+  {% if t.compact %}
+  <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
+       x="{{ (t.w - size) / 2 }}" y="14" width="{{ size }}" height="{{ size }}"/>
+  {% else %}
+  <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
+       x="18" y="17" width="{{ size + 3 }}" height="{{ size + 3 }}"/>
+  {% endif %}
+{% endmacro %}
+
+{#- тумблер как на скриншотах: пилюля с бегунком, бегунок уезжает вправо -#}
+{% macro toggle(t) %}
+  <g transform="translate(18,20)">
+    <rect x="0" y="0" width="34" height="20" rx="10" fill="none"
+          stroke="{{ 'var(--active)' if t.on else 'var(--stroke)' }}" stroke-width="2.2"/>
+    <circle cx="{{ 23 if t.on else 11 }}" cy="10" r="6.2"
+            fill="{{ 'var(--active)' if t.on else 'var(--stroke)' }}"/>
+  </g>
+{% endmacro %}
+
+{% macro value_tr(t) %}
+  {% if t.short and not t.compact %}
+  <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.short }}</text>
+  {% endif %}
+{% endmacro %}
+
+{#- Заголовок: одна строка или несколько, если в названии есть перенос.
+    Строки идут снизу вверх, чтобы низ плитки оставался на месте. -#}
+{% macro title_text(t, x, y, cls, anchor='start') %}
+  {% set lines = t.title_lines or [t.title] %}
+  {% for line in lines %}
+  <text x="{{ x }}" y="{{ y - (lines|length - 1 - loop.index0) * 17 }}"
+        class="{{ cls }}" text-anchor="{{ anchor }}">{{ line }}</text>
+  {% endfor %}
+{% endmacro %}
+
+{% macro caption(t, status) %}
+  {% if t.compact %}
+  <text x="{{ t.w / 2 }}" y="{{ t.h - 13 }}" class="name-s" text-anchor="middle">{{ t.title_s or t.title }}</text>
+  {% elif status and (t.show_status or t.always_status) %}
+  {{ base.title_text(t, 20, t.h - 40, 'name') }}
+  <text x="20" y="{{ t.h - 18 }}" class="status">{{ status }}</text>
+  {% else %}
+  {{ base.title_text(t, 20, t.h - 20, 'name') }}
+  {% endif %}
+{% endmacro %}
+
+{#- Индикатор состояния данных:
+      серая точка  - канала нет в MQTT или у него флаг ошибки
+      жёлтая точка - значение не обновлялось дольше 5 минут
+    На обычной плитке живёт над подписью справа, на мелкой - в верхнем
+    углу, иначе налезает на текст, который там по центру. -#}
+{% macro badge_dot(t) %}
+  {% set cx = (t.w - 12) if t.compact else (t.w - 20) %}
+  {% set cy = 12 if t.compact else (t.h - 22) %}
+  {% set r = 3 if t.compact else 3.5 %}
+  {% if t.offline %}
+  <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ r }}" class="dot-off"/>
+  {% elif t.stale %}
+  <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ r }}" class="dot-warn"/>
+  {% endif %}
+{% endmacro %}
+
+{#- ---- области нажатия ----
+    Прозрачные прямоугольники для зон, занимающих часть плитки: плюс и
+    минус у термостата и всё, что появится дальше. Координаты считает
+    сервер - плитка объявила зону, ядро перевело её в доли плитки, а
+    шаблон только раскладывает. Рисуются последними, поверх содержимого,
+    иначе нажатие ловит то, что нарисовано сверху. -#}
+{% macro zone_rects(t) %}
+{% for z in t.zones %}
+  <rect x="{{ z.x }}" y="{{ z.y }}" width="{{ z.w }}" height="{{ z.h }}"
+        fill="transparent" data-zone="{{ z.name }}"/>
+{% endfor %}
+{% endmacro %}
+

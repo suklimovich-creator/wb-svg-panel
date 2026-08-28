@@ -53,6 +53,20 @@ def resolve_css_vars(svg, theme="light", fs=1.0):
         return svg
     style = style_match.group(1)
 
+    # Угловые скобки внутри style ломают разбор XML: строгий парсер видит
+    # в них тег и до закрывающего style доходит с несведённым балансом.
+    # Встроенная в разметку панель при этом работает - HTML-парсер
+    # снисходителен, - а вот как картинка (сводная страница показывает
+    # панели через img) она уже не открывается. Старые движки и вовсе
+    # обрывают таблицу стилей на этом месте, теряя всё, что ниже.
+    # Стоили эти грабли двух вечеров, поэтому теперь они слышны.
+    for bracket in "<>":
+        if bracket in style:
+            line = next((l.strip() for l in style.split("\n") if bracket in l), "")
+            log.warning("угловая скобка внутри <style> сломает разбор XML: %s",
+                        line[:100])
+            break
+
     values = _css_vars(style, "svg")
     if theme == "dark":
         values.update(_css_vars(style, ".dark"))

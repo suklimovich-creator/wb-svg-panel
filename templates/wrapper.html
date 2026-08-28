@@ -101,6 +101,20 @@
  #lvl .fill{position:absolute;left:0;right:0;bottom:0;background:#E0A050;opacity:.75}
  #lvl .val{position:absolute;left:0;right:0;bottom:14px;text-align:center;
            color:#fff;font-size:26px;font-weight:600}
+ /* Шаг числом. Двумя процентами на ночь пальцем по полю не попасть: один
+    процент это пара пикселей. Стрелки закрывают ровно этот случай, а
+    крупное неяркое число отвечает на вопрос «сколько сейчас», не
+    перетягивая внимание с самого поля. */
+ #ov .step{display:flex;align-items:center;justify-content:center;gap:14px;
+           margin:7px auto}
+ #ov .step .lab{color:rgba(255,255,255,.55);font-size:13px;min-width:76px;
+                text-align:right}
+ #ov .step .num{color:rgba(255,255,255,.78);font-size:24px;font-weight:600;
+                min-width:74px;text-align:center;font-variant-numeric:tabular-nums}
+ #ov .step button{width:46px;height:46px;border:0;border-radius:23px;
+                  background:rgba(255,255,255,.13);color:#fff;font-size:24px;
+                  line-height:46px;padding:0;cursor:pointer;touch-action:manipulation}
+ #ov .step button:active{background:rgba(255,255,255,.26)}
  /* пульт шторы: сверху лежит прозрачный слой для жеста, под ним - та же
     картинка плитки, что и на панели, только крупно */
  /* inline-block: обёртка должна быть ровно по картинке, иначе центр жеста
@@ -322,6 +336,72 @@ function el(tag, cls, text){ var e=document.createElement(tag);
 
 /* Переключатель для пульта. Возвращает объект с текущим состоянием, чтобы
    ползунки знали, надо ли сперва включить прибор. */
+/* Ряд «метка − число +».
+   Короткое нажатие меняет на шаг, удержание разгоняется: первые полсекунды
+   по одному, дальше быстрее. Отправка отложена на 300 мс после последнего
+   нажатия - иначе на каждый процент уходила бы своя команда, и прибор
+   дёргался бы за пальцем, как штора при перетаскивании. */
+function stepRow(label, opts){
+  var row = el('div', 'step');
+  var lab = el('span', 'lab', label);
+  var minus = el('button'), num = el('span', 'num'), plus = el('button');
+  minus.textContent = '\u2212'; plus.textContent = '+';
+  row.appendChild(lab); row.appendChild(minus);
+  row.appendChild(num); row.appendChild(plus);
+
+  var lo = opts.min === undefined ? 0 : opts.min;
+  var hi = opts.max === undefined ? 100 : opts.max;
+  var timer = null, hold = null, pending = null;
+
+  function paint(){ num.textContent = opts.read() + (opts.unit || ''); }
+  paint();
+
+  function flush(){
+    pending = null;
+    Promise.resolve(opts.send()).catch(function(e){
+      flash('Не удалось: ' + e.message);
+    });
+  }
+  function bump(d){
+    var v = Math.max(lo, Math.min(hi, opts.read() + d));
+    if(v === opts.read()) return;
+    opts.write(v);
+    paint();
+    if(pending) clearTimeout(pending);
+    pending = setTimeout(flush, 300);
+  }
+  function press(d){
+    return function(ev){
+      ev.preventDefault();
+      bump(d);
+      var fast = 0;
+      hold = setTimeout(function(){
+        timer = setInterval(function(){
+          fast += 1;
+          bump(d * (fast > 8 ? 5 : 1));
+        }, 110);
+      }, 500);
+    };
+  }
+  function release(){
+    if(hold) clearTimeout(hold);
+    if(timer) clearInterval(timer);
+    hold = timer = null;
+  }
+  ['mousedown','touchstart'].forEach(function(e){
+    minus.addEventListener(e, press(-(opts.step || 1)), {passive:false});
+    plus.addEventListener(e, press(opts.step || 1), {passive:false});
+  });
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(e){
+    minus.addEventListener(e, release);
+    plus.addEventListener(e, release);
+  });
+  row.repaint = paint;
+  row.el = row;
+  return row;
+}
+
+
 function powerRow(node){
   var st = {on: node.getAttribute('data-state') === '1'};
   var row = el('div', 'pw');
@@ -436,14 +516,39 @@ function padXY(node){
       node.getAttribute('data-cold') + ',' + node.getAttribute('data-warm') + ')';
   pad.appendChild(grad); pad.appendChild(dim); pad.appendChild(dot);
   var title = el('div','ttl', node.getAttribute('data-title') || 'Подсветка');
-  var hint = el('div','hint','Слева холодный, справа тёплый · вверх ярче');
+  var hint = el('div','hint','Слева холодный, справа тёплый · вверх ярче'
+                             + ' · стрелками по проценту');
   var power = powerRow(node);
   var x = parseFloat(node.getAttribute('data-dot-x')||'0.5');
   var y = parseFloat(node.getAttribute('data-dot-y')||'0.5');
   function place(){ dot.style.left=(x*100)+'%'; dot.style.top=(y*100)+'%';
     dot.style.background = 'transparent'; }
   place();
-  openOv([title, pad, power.el, hint]);
+
+  var rows = [];
+  var bright = stepRow('Яркость', {
+    unit: ' %',
+    read:  function(){ return Math.round((1-y)*100); },
+    write: function(v){ y = 1 - v/100; place(); },
+    send:  function(){ return send(); }
+  });
+  rows.push(bright);
+  // Ось цветовой температуры шагается в процентах, как и яркость: у ленты
+  // это доля от холодного к тёплому, а не кельвины прибора. Считать шаг в
+  // кельвинах пришлось бы по-разному для percent и kelvin, и на плитке всё
+  // равно показана доля.
+  var warm = null;
+  if(node.getAttribute('data-temp')){
+    warm = stepRow('Тёплый', {
+      unit: ' %',
+      read:  function(){ return Math.round(x*100); },
+      write: function(v){ x = v/100; place(); },
+      send:  function(){ return send(); }
+    });
+    rows.push(warm);
+  }
+
+  openOv([title, pad].concat(rows, [power.el, hint]));
 
   function at(ev){
     var r = pad.getBoundingClientRect();
@@ -451,6 +556,8 @@ function padXY(node){
     x = Math.max(0, Math.min(1, (p.clientX-r.left)/r.width));
     y = Math.max(0, Math.min(1, (p.clientY-r.top)/r.height));
     place();
+    bright.repaint();
+    if(warm) warm.repaint();
   }
   function send(){
     var bmax = parseFloat(node.getAttribute('data-bright-max')||'100');
@@ -468,7 +575,7 @@ function padXY(node){
       jobs.push(pub(tTopic, value));
     }
     // если лента выключена, сперва включаем - иначе крутить бесполезно
-    power.ensureOn()
+    return power.ensureOn()
       .then(function(){ return Promise.all(jobs); })
       .catch(function(e){ flash('Не удалось: '+e.message); });
   }
@@ -634,23 +741,32 @@ function padLevel(node){
   var fill = el('div','fill'), val = el('div','val');
   box.appendChild(fill); box.appendChild(val);
   var title = el('div','ttl', node.getAttribute('data-title') || 'Яркость');
-  var hint = el('div','hint','Ведите вверх или вниз');
+  var hint = el('div','hint','Ведите вверх или вниз · стрелками по проценту');
   var power = powerRow(node);
   var lvl = parseFloat(node.getAttribute('data-level')||'0');
   function place(){ fill.style.height=(lvl*100)+'%'; val.textContent=Math.round(lvl*100)+' %'; }
   place();
-  openOv([title, box, power.el, hint]);
+
+  function send(){
+    var bmax = parseFloat(node.getAttribute('data-bright-max')||'100');
+    return power.ensureOn()
+      .then(function(){ return pub(node.getAttribute('data-bright'), Math.round(lvl*bmax)); })
+      .catch(function(e){ flash('Не удалось: '+e.message); });
+  }
+
+  var step = stepRow('Яркость', {
+    unit: ' %',
+    read:  function(){ return Math.round(lvl*100); },
+    write: function(v){ lvl = v/100; place(); },
+    send:  send
+  });
+
+  openOv([title, box, step, power.el, hint]);
   function at(ev){
     var r = box.getBoundingClientRect();
     var p = evPoint(ev);
     lvl = Math.max(0, Math.min(1, 1-(p.clientY-r.top)/r.height));
-    place();
-  }
-  function send(){
-    var bmax = parseFloat(node.getAttribute('data-bright-max')||'100');
-    power.ensureOn()
-      .then(function(){ return pub(node.getAttribute('data-bright'), Math.round(lvl*bmax)); })
-      .catch(function(e){ flash('Не удалось: '+e.message); });
+    place(); step.repaint();
   }
   drag(box, at, send);
 }

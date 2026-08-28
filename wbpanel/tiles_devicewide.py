@@ -182,6 +182,10 @@ def build_chart(tile, state, history):
             "range_label": tile.get("range", "24h")}
 
 
+#: Цвет кривой прогноза. Один на всю плитку - серий тут не бывает.
+FORECAST_LINE = "#3B8FD4"
+
+
 def build_forecast(tile, state):
     """
     Погода: слева текущая, дальше кривая прогноза по часам.
@@ -251,11 +255,13 @@ def build_forecast(tile, state):
         with_time = bool(tile.get("time_labels", True))
         for i in range(divisions + 1):
             f = i / float(divisions)
-            # у нижней линии подпись не ставим: там идёт строка часов
+            # Нижняя подпись шкалы остаётся. Раньше её стирали, чтобы
+            # освободить строку часам, - но без нижней границы непонятно,
+            # от чего отсчитывается кривая, а часов тут десяток. Теперь
+            # уступают часы, как и на обычных графиках.
             hlines.append({"y": round(y_bot - f * (y_bot - y_top), 1),
                            "edge": i in (0, divisions),
-                           "text": "" if (with_time and i == 0)
-                                   else _fmt(lo + f * (hi - lo), digits)})
+                           "text": _fmt(lo + f * (hi - lo), digits)})
 
         span_t = points[-1][0] - points[0][0]
 
@@ -268,6 +274,18 @@ def build_forecast(tile, state):
         step_h = 3 if len(points) >= 9 else 2
         if start_hour is None:
             start_hour = time.localtime(now).tm_hour
+
+        # Место, занятое нижней подписью шкалы: она стоит на той же строке,
+        # что и часы, у левого края. Часы, попавшие под неё, выбрасываются.
+        axis_fs = 9.5 * float(tile.get("fs", 1) or 1)
+        reserved = []
+        if with_time and hlines and hlines[0]["text"]:
+            reserved.append((7.0, 7.0 + text_width(hlines[0]["text"], axis_fs)))
+
+        def collides(left, right):
+            # Просвет в 4 px: подписи впритык читаются как одно число.
+            return any(left < b + 4 and right > a - 4 for a, b in reserved)
+
         for i, (stamp, _v) in enumerate(points):
             x = px(stamp)
             # вертикаль на каждый час, как у обычных графиков; подписанные
@@ -276,8 +294,14 @@ def build_forecast(tile, state):
                 ticks.append({"x": round(x, 1), "major": i % step_h == 0})
             if i % step_h == 0:
                 lx, anchor = edge_anchor(x, inner_w)
+                text = "%02d" % ((start_hour + i) % 24)
+                width = text_width(text, axis_fs)
+                left = lx if anchor == "start" else (
+                    lx - width if anchor == "end" else lx - width / 2.0)
+                if collides(left, left + width):
+                    continue
                 times.append({"x": round(lx, 1), "anchor": anchor,
-                              "text": "%02d" % ((start_hour + i) % 24)})
+                              "text": text})
 
         # Экстремумы отмечаем только точками: значения и так читаются по
         # шкале слева, а подписи у самого края вылезали за плитку.
@@ -371,6 +395,13 @@ def build_forecast(tile, state):
         "hlines": hlines,
         "ticks": ticks,
         "times": times,
+        # Толщина линии растёт медленнее кегля: во весь экран fs доходит до
+        # 2.4, и линия в 5.8 px выглядит маркером. То же правило, что у
+        # обычных графиков.
+        "line_w": round(2.4 * max(float(tile.get("fs", 1) or 1), 1.0) ** 0.45, 2),
+        # Цвет подписи выводится из цвета кривой с оглядкой на тему, а не
+        # зашит числом: на тёмной подложке тёмно-синяя цифра не читалась.
+        "label_color": label_color(FORECAST_LINE, tile.get("theme", "light")),
         "grid_labels": bool(tile.get("grid_labels", True)),
         "time_labels": bool(tile.get("time_labels", True)),
         "hours": len(points),

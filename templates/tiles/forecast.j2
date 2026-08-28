@@ -54,7 +54,7 @@
     </linearGradient>
     <path d="{{ t.geom.area }}" fill="url(#{{ uid }}wfade{{ t.i }})"/>
     <path d="{{ t.geom.line }}" fill="none" stroke="#3B8FD4"
-          stroke-width="{{ 2.4 * (fs | default(1)) }}"
+          stroke-width="{{ t.line_w | default(2.4) }}"
           stroke-linecap="round" stroke-linejoin="round"/>
     {% for m in t.marks %}
     {#- экстремумы: только точки, значения читаются по шкале слева -#}
@@ -66,7 +66,8 @@
     {% if t.grid_labels %}
       {% for hl in t.hlines %}
         {% if hl.text %}
-      <text x="7" y="{{ hl.y - 3 }}" class="axis" style="fill:#2B6B9E">{{ hl.text }}</text>
+      <text x="7" y="{{ hl.y - 3 }}" class="axis"
+            style="fill:{{ t.label_color | default('#2B6B9E') }}">{{ hl.text }}</text>
         {% endif %}
       {% endfor %}
     {% endif %}

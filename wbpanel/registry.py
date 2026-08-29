@@ -10,6 +10,7 @@
 from .const import log
 from .roles import schema
 from .sources import bind
+from .state import is_on
 
 REGISTRY = {}
 
@@ -127,7 +128,7 @@ class Ctx(object):
 
     def flag(self, name):
         """Дискретное значение: пусто и «0» - ложь, остальное - истина."""
-        return str(self.raw(name) or "").strip() not in ("", "0", "false", "False")
+        return is_on(self.raw(name))
 
     def has(self, name):
         return name in self.bound

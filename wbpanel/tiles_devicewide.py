@@ -22,7 +22,7 @@ from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
                        grid_bounds, hour_ticks, label_color, label_digits, nice_step,
                        parse_duration, smooth_path, text_width)
 from .registry import Tile, Zone, tile
-from .state import to_float
+from .state import is_on, to_float
 from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
                     AC_SWING_DEG, AC_SWING_H_DEG, WMO_ICONS, ac_channels,
                     build_wheel, forecast_channels, louver_glyph, parse_iso_hour,
@@ -425,13 +425,13 @@ def build_ac(tile, state):
         return snap
 
     power_raw = (val("power")["raw"] or "").strip()
-    on = power_raw not in ("", "0", "false", "False")
+    on = is_on(power_raw)
     mode = (val("mode")["raw"] or "").strip()
     cur = to_float(val("current_temp")["raw"])
     tgt = to_float(val("target_temp")["raw"])
     fan = (val("fan_mode")["raw"] or "").strip()
     quiet_raw = (val("quiet")["raw"] or "").strip()
-    quiet = quiet_raw not in ("", "0", "false", "False")
+    quiet = is_on(quiet_raw)
 
     lo = float(tile.get("temp_min", 16))
     hi = float(tile.get("temp_max", 30))

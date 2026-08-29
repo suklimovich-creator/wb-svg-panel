@@ -12,6 +12,7 @@ tiles.py: наружу форма данных та же, панель не ме
 
 from .geometry import _fmt
 from .registry import Tile, Zone, tile
+from .state import is_on
 from .state import to_float
 
 
@@ -21,7 +22,7 @@ class Switch(Tile):
 
     def prepare(self, ctx):
         raw = (ctx.raw("value") or "").strip()
-        on = raw not in ("", "0", "false", "False")
+        on = is_on(raw)
 
         # invert - для нормально замкнутых контактов: реле обесточено, а
         # нагрузка включена. Единица в канале означает «выключено».

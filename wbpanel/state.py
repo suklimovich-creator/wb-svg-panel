@@ -87,6 +87,20 @@ class WbState:
         }
 
 
+#: Что считается «выключено». Wiren Board пишет 0, виртуальные устройства
+#: wb-rules и Sprut.hub - false, Zigbee2MQTT - OFF, а недоступный прибор
+#: может отдать unavailable. Раньше проверка знала только про 0 и false, и
+#: OFF от Zigbee2MQTT оказывался истиной: выключенная лампа показывалась
+#: включённой, а нажатие пыталось её выключить ещё раз.
+OFF_WORDS = ("", "0", "false", "off", "no", "none", "null", "unavailable",
+             "offline", "closed")
+
+
+def is_on(raw):
+    """Значение канала -> включено ли. Регистр не важен."""
+    return str(raw if raw is not None else "").strip().lower() not in OFF_WORDS
+
+
 def to_float(raw, default=None):
     try:
         return float(str(raw).strip())

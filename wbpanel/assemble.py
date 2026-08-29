@@ -131,7 +131,15 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
 
     known = [s for s in snaps if s["known"]]
     tile["offline"] = (not known) or any(s["error"] for s in snaps)
-    tile["stale"] = bool(known) and all(now - s["ts"] > STALE_AFTER for s in known)
+    # Через сколько молчания канал считается протухшим. Пять минут годятся
+    # для Modbus, который опрашивается непрерывно, но не для Zigbee: датчик
+    # на батарейке отчитывается раз в полчаса и был бы вечно серым. Задаётся
+    # у плитки, у панели или глобально.
+    stale_after = float(conf.get("stale_after",
+                        panel_conf.get("stale_after",
+                        (config.get("stale_after", STALE_AFTER)
+                         if config else STALE_AFTER))))
+    tile["stale"] = bool(known) and all(now - s["ts"] > stale_after for s in known)
     return tile
 
 

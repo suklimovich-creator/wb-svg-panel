@@ -170,3 +170,114 @@ python3 tools/probe-curtain.py --from-config config.yaml
 Пункт 3 проверяется так: запустите движение, через несколько секунд отправьте
 противоположную команду и посмотрите, развернётся привод сразу или доедет до
 конца.
+
+---
+
+## Zigbee2MQTT
+
+Приборы Zigbee попадают на панель как обычные сырые топики — тем же
+способом, что и Sprut.hub. Специального типа плитки для них не нужно, но
+две вещи надо настроить.
+
+### Включить поатрибутный вывод
+
+По умолчанию Zigbee2MQTT публикует всё одним объектом JSON:
+
+```
+zigbee2mqtt/kitchen_sensor  {"battery":100,"humidity":45.2,"temperature":21.3}
+```
+
+Панель читает значение канала как число или слово, разбирать JSON она не
+умеет. Нужен режим, где каждый атрибут получает свой топик. В
+`configuration.yaml` Zigbee2MQTT:
+
+```yaml
+advanced:
+  output: ['attribute_and_json']
+```
+
+После перезапуска рядом с общим объектом появятся отдельные топики:
+
+```
+zigbee2mqtt/kitchen_sensor/temperature  21.3
+zigbee2mqtt/kitchen_sensor/humidity     45.2
+zigbee2mqtt/kitchen_sensor/battery      100
+```
+
+Их и указывают в конфиге. Больше одного слэша в имени — панель сама
+понимает, что это сырой топик, а не пара «устройство/канал».
+
+```yaml
+- type: value
+  title: "Кухня"
+  channel: "zigbee2mqtt/kitchen_sensor/temperature"
+  unit: "°C"
+  stale_after: 3600
+```
+
+### Задать свой порог протухания
+
+`stale_after` здесь не украшение. Обычный порог — пять минут: он рассчитан
+на Modbus, который опрашивается непрерывно. Датчик Zigbee на батарейке
+отчитывается раз в пятнадцать-тридцать минут, и с обычным порогом плитка
+будет серой почти всегда.
+
+Ставить с запасом: если датчик присылает раз в полчаса, порог — час.
+Задаётся у плитки, у панели целиком или глобально в корне `config.yaml`.
+
+### Выключатели и лампы
+
+Значения `ON` и `OFF`, команды уходят в `.../set/<атрибут>` обычным
+словом, без JSON:
+
+```yaml
+- type: switch
+  title: "Торшер"
+  channel: "zigbee2mqtt/floor_lamp/state"
+  command_topic: "zigbee2mqtt/floor_lamp/set/state"
+  command_on: "ON"
+  command_off: "OFF"
+```
+
+Диммируемая лампа — то же самое плюс яркость. Учтите, что Zigbee2MQTT
+считает её от 0 до 254, а не до 100:
+
+```yaml
+- type: dimmer
+  title: "Торшер"
+  channel: "zigbee2mqtt/floor_lamp/state"
+  command_topic: "zigbee2mqtt/floor_lamp/set/state"
+  command_on: "ON"
+  command_off: "OFF"
+  channel_brightness: "zigbee2mqtt/floor_lamp/brightness"
+  command_topic_brightness: "zigbee2mqtt/floor_lamp/set/brightness"
+  bright_max: 254
+```
+
+### Чего не будет
+
+**Графиков.** История пишется `wb-mqtt-db`, а он ведёт только топики
+`/devices/+/controls/+`. Каналы Zigbee2MQTT туда не попадают, и построить
+график по ним неоткуда. Если график нужен, значение придётся продублировать
+в виртуальное устройство `wb-rules` — тогда оно и в историю попадёт, и в
+Sprut.hub уедет заодно.
+
+**Кнопок.** Кнопка Zigbee публикует `action` на мгновение и тут же
+очищает его. Панель перечитывает состояние раз в десять секунд и такое
+нажатие попросту не увидит. Кнопки — дело `wb-rules`: правило ловит
+`action` и дёргает сцену, а панель показывает уже результат.
+
+### Доступность
+
+Zigbee2MQTT публикует `zigbee2mqtt/<имя>/availability` со значением
+`online` или `offline`. Это удобный признак для чипа в строке состояния:
+
+```yaml
+status:
+  - channel: "zigbee2mqtt/floor_lamp/availability"
+    title: "Торшер"
+    icon: bulb
+```
+
+Слово `offline` панель понимает как «выключено» — как и `OFF`, `false`,
+`unavailable` и ноль.

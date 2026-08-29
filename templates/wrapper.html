@@ -107,10 +107,11 @@
     перетягивая внимание с самого поля. */
  #ov .step{display:flex;align-items:center;justify-content:center;gap:14px;
            margin:7px auto}
- #ov .step .lab{color:rgba(255,255,255,.55);font-size:13px;min-width:76px;
+ #ov .step .lab{color:rgba(255,255,255,.55);font-size:13px;min-width:64px;
                 text-align:right}
  #ov .step .num{color:rgba(255,255,255,.78);font-size:24px;font-weight:600;
                 min-width:74px;text-align:center;font-variant-numeric:tabular-nums}
+ #ov .step .keys{display:flex;gap:8px}
  #ov .step button{width:46px;height:46px;border:0;border-radius:23px;
                   background:rgba(255,255,255,.13);color:#fff;font-size:24px;
                   line-height:46px;padding:0;cursor:pointer;touch-action:manipulation}
@@ -346,8 +347,11 @@ function stepRow(label, opts){
   var lab = el('span', 'lab', label);
   var minus = el('button'), num = el('span', 'num'), plus = el('button');
   minus.textContent = '\u2212'; plus.textContent = '+';
-  row.appendChild(lab); row.appendChild(minus);
-  row.appendChild(num); row.appendChild(plus);
+  // Кнопки рядом, а не по краям числа: большой палец дотягивается до обеих
+  // не переставляя руку, и подкрутить на пару процентов можно одной рукой.
+  var keys = el('div', 'keys');
+  keys.appendChild(minus); keys.appendChild(plus);
+  row.appendChild(lab); row.appendChild(num); row.appendChild(keys);
 
   var lo = opts.min === undefined ? 0 : opts.min;
   var hi = opts.max === undefined ? 100 : opts.max;
@@ -921,8 +925,17 @@ function drag(node, move, done, begin){
 function toggle(node){
   var value = node.getAttribute('data-state')==='1'
             ? node.getAttribute('data-off') : node.getAttribute('data-on');
+  // У сцены состояния нет: правило сбрасывает канал раньше, чем панель
+  // перерисуется, и подтвердить нажатие обновлением не получится. Поэтому
+  // подсвечиваем сами - иначе кнопка кажется мёртвой и её жмут дважды.
+  var scene = node.getAttribute('data-kind') === 'scene';
   node.classList.add('busy');
   pub(node.getAttribute('data-topic'), value).then(function(){
+    if(scene){
+      node.classList.remove('busy');
+      node.classList.add('fired');
+      setTimeout(function(){ node.classList.remove('fired'); }, 700);
+    }
     setTimeout(refresh, 400); setTimeout(refresh, 1200);
   }).catch(function(e){ flash('Не удалось: '+e.message); node.classList.remove('busy'); });
 }

@@ -150,6 +150,10 @@
   .frame .sill{ stroke-width: calc(2.6px * var(--fs)); opacity: .5; }
   .hline     { stroke: var(--ink); stroke-width: calc(.5px * var(--fs)); opacity: .13; }
   .hline.edge{ opacity: .20; }
+  /* Сцена сработала: короткая вспышка подложки. Держится 0.7 с - ровно
+     чтобы палец успел заметить, и не дольше: сцена уже отработала. */
+  .fired .plate { fill: var(--active-soft); }
+  .fired .icon  { stroke: var(--active-ink); }
   .off-dim   { opacity: .55; }
   .offline   { opacity: .40; }
   .dot-warn  { fill: #E09B2D; }
@@ -408,6 +412,27 @@
   <symbol id="{{ uid }}bg-home" viewBox="0 0 12 12">
     <path class="sicon" d="M2.2 6 6 2.8 9.8 6"/>
     <path class="sicon" d="M3.4 6.4v3.4h5.2V6.4"/>
+  </symbol>
+  {#- значки сцен: чтение, ужин, гости, релакс -#}
+  <symbol id="{{ uid }}ic-book" viewBox="0 0 24 24">
+    <path class="icon" d="M4 5.2h6.2a1.8 1.8 0 0 1 1.8 1.8v11.8a1.4 1.4 0 0 0-1.4-1.4H4z"/>
+    <path class="icon" d="M20 5.2h-6.2A1.8 1.8 0 0 0 12 7v11.8a1.4 1.4 0 0 1 1.4-1.4H20z"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-dish" viewBox="0 0 24 24">
+    <path class="icon" d="M3.4 14.6h17.2a8.6 8.6 0 0 0-17.2 0z"/>
+    <path class="icon" d="M2.2 17.6h19.6"/>
+    <path class="icon" d="M12 6V3.4"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-people" viewBox="0 0 24 24">
+    <circle class="icon" cx="9" cy="8.2" r="3.1"/>
+    <path class="icon" d="M3.4 19.4a5.6 5.6 0 0 1 11.2 0"/>
+    <path class="icon" d="M16 5.6a3.1 3.1 0 0 1 0 5.6"/>
+    <path class="icon" d="M17.2 14.4a5.6 5.6 0 0 1 3.4 5"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-sofa" viewBox="0 0 24 24">
+    <path class="icon" d="M4.6 12.4V8.6a2 2 0 0 1 2-2h10.8a2 2 0 0 1 2 2v3.8"/>
+    <path class="icon" d="M3 15a2.2 2.2 0 0 1 4.4 0v2.4h9.2V15a2.2 2.2 0 0 1 4.4 0v4.2H3z"/>
+    <path class="icon" d="M7.4 12.4h9.2"/>
   </symbol>
   <symbol id="{{ uid }}ic-socket" viewBox="0 0 24 24">
     <rect class="icon" x="3.5" y="3.5" width="17" height="17" rx="5"/>

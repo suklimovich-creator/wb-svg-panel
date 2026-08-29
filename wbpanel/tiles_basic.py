@@ -47,6 +47,53 @@ class Switch(Tile):
         return [Zone("toggle", "all", "value", {"on": on, "off": off})]
 
 
+@tile("scene")
+class Scene(Tile):
+    """
+    Сцена: нажал - сработало. Не выключатель.
+
+    В wb-rules сцена заведена как канал типа switch, но правило,
+    отработав, само возвращает его в ноль. Состояния у неё поэтому нет:
+    к следующему опросу панели канал уже сброшен, и подсвечивать нечего.
+    Отсюда два отличия от `switch`: плитка никогда не считается
+    включённой, а нажатие всегда пишет одно и то же значение, а не
+    переключает.
+    """
+
+    roles = ("value",)
+
+    #: Каким словом канал говорит «включено». Виртуальные устройства
+    #: wb-rules отдают true/false, модули Wiren Board - 1/0. Гадать не
+    #: нужно: канал retained, его текущее значение уже прочитано, и форма
+    #: записи видна прямо в нём.
+    FORMS = {"true": ("true", "false"), "false": ("true", "false"),
+             "1": ("1", "0"), "0": ("1", "0")}
+
+    def _form(self, ctx):
+        explicit = ctx.opt("command_on")
+        if explicit is not None:
+            return str(explicit)
+        raw = (ctx.raw("value") or "").strip().lower()
+        return self.FORMS.get(raw, ("1", "0"))[0]
+
+    def prepare(self, ctx):
+        return {
+            # Сцена не горит: правило сбрасывает канал быстрее, чем панель
+            # успевает перерисоваться, и оранжевая рамка только сбивала бы
+            # с толку - она означает «прибор включён», а сцена не прибор.
+            "on": False,
+            "icon": ctx.opt("icon", "power"),
+            "status": ctx.opt("subtitle", ""),
+        }
+
+    def zones(self, ctx, data):
+        # Оба значения одинаковые: страница шлёт off при state=1 и on при
+        # state=0, а нам нужно всегда одно и то же. state всегда 0, так
+        # что сюда попадёт on - но пусть и второй путь ведёт туда же.
+        value = self._form(ctx)
+        return [Zone("toggle", "all", "value", {"on": value, "off": value})]
+
+
 @tile("value")
 class Value(Tile):
     roles = ("value",)

@@ -595,8 +595,9 @@ def channels():
     esc = html.escape
     rows = []
     for device in sorted(groups):
-        rows.append('<tr class="dev"><td colspan="5">%s <span class="n">%d</span></td></tr>'
-                    % (esc(device), len(groups[device])))
+        rows.append('<tr class="dev" data-dev="%s"><td colspan="5">%s '
+                    '<span class="n">%d</span></td></tr>'
+                    % (esc(device.lower()), esc(device), len(groups[device])))
         for key in groups[device]:
             meta = metas.get(key, {})
             ctype = str(meta.get("type", ""))
@@ -605,14 +606,18 @@ def channels():
             age = now - stamps.get(key, 0)
             hist = logged.get(key)
             rows.append(
-                '<tr data-k="%s">'
+                '<tr data-dev="%s" data-k="%s">'
                 '<td class="k"><button onclick="cp(this)" data-c="%s">⧉</button>'
                 '<code>%s</code>%s</td>'
                 '<td class="v">%s <span class="u">%s</span></td>'
                 '<td class="t">%s</td>'
                 '<td class="h">%s</td>'
                 '<td class="g">%s</td></tr>' % (
-                    esc(key.lower()), esc(key), esc(key.split("/", 1)[1]),
+                    esc(device.lower()),
+                    esc(" ".join((key, ctype, units, value,
+                                  "в панели" if key in used else "",
+                                  "история" if key in logged else "")).lower()),
+                    esc(key), esc(key.split("/", 1)[1]),
                     ' <span class="used">в панели</span>' if key in used else "",
                     esc(value[:20]), esc(units),
                     esc(ctype),
@@ -656,10 +661,20 @@ def channels():
 <table id="t">%(rows)s</table>
 <script>
  var q=document.getElementById('q'), rs=document.querySelectorAll('#t tr');
- q.oninput=function(){var s=q.value.toLowerCase();
+ /* Ищем по всей строке: имя канала, тип, единицы, значение и пометки
+    «в панели» и «история». Раньше искали только по имени, и запрос вида
+    temperature или °C не находил ничего.
+    Заголовок устройства остаётся видимым, если под ним что-то нашлось:
+    в строке канала имя устройства не повторяется, и без заголовка
+    непонятно, чей это канал. */
+ q.oninput=function(){var s=q.value.toLowerCase(), hit={};
    rs.forEach(function(r){
-     if(r.className==='dev'){r.classList.toggle('hide',s!=='');return;}
-     r.classList.toggle('hide', s && r.dataset.k.indexOf(s)<0);});};
+     if(r.className==='dev') return;
+     var show = !s || r.dataset.k.indexOf(s)>=0;
+     r.classList.toggle('hide', !show);
+     if(show) hit[r.dataset.dev]=1;});
+   rs.forEach(function(r){
+     if(r.className==='dev') r.classList.toggle('hide', !!s && !hit[r.dataset.dev]);});};
  function cp(b){navigator.clipboard.writeText(b.dataset.c);
    var o=b.textContent;b.textContent='✓';setTimeout(function(){b.textContent=o},900);}
 </script></body></html>""" % {"total": len(keys), "rows": "".join(rows)}

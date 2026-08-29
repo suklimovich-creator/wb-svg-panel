@@ -37,6 +37,23 @@
   {% endfor %}
 {% endmacro %}
 
+{#- ---- сцена ----
+    Кнопка, а не выключатель: состояния нет, гореть нечему. Значок
+    крупнее обычного и по центру - на плитке больше ничего и нет, а
+    отличать «Кино» от «Ужина» придётся с одного взгляда. -#}
+{% macro tile_scene(t) %}
+  {{ base.plate(t) }}
+  {% if t.compact %}
+  <use href="#{{ uid }}ic-{{ t.icon }}" xlink:href="#{{ uid }}ic-{{ t.icon }}"
+       x="{{ t.w / 2 - 15 }}" y="{{ t.h / 2 - 22 }}" width="30" height="30"/>
+  {% else %}
+  <use href="#{{ uid }}ic-{{ t.icon }}" xlink:href="#{{ uid }}ic-{{ t.icon }}"
+       x="{{ t.w / 2 - 23 }}" y="{{ t.h / 2 - 32 }}" width="46" height="46"/>
+  {% endif %}
+  {{ base.caption(t, t.status) }}
+{% endmacro %}
+
+
 {% macro tile_link(t) %}
   {{ base.plate(t) }}
   {{ base.icon_c(t, t.icon or 'door', 26) }}

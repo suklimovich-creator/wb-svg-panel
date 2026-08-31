@@ -21,6 +21,7 @@ from .history import History
 from .geometry import cells, parse_duration, text_width
 from .status import status_entries
 from . import assemble
+from .checkup import ERROR, as_text, check_config, summary
 from .registry import writable_of
 from .assemble import (build_tile, cmd_attrs, prepare,
                        resolve_sections, xml_escape)
@@ -550,6 +551,72 @@ TILE_HINT = {
     "concentration": "chart", "lux": "chart", "sound_level": "chart",
     "text": "value",
 }
+
+
+@app.route("/check")
+def check_page():
+    """
+    Что панель поняла в конфиге, а что нет.
+
+    Раньше «не задана роль target» уходило в журнал, где его никто не
+    видит: плитка молча рисовалась пустой. Здесь то же самое списком, с
+    именем панели и подсказкой, что делать.
+
+    curl -s localhost:8088/check?format=text - то же для консоли.
+    """
+    problems = check_config(config, state, history)
+    total = summary(problems)
+
+    if request.args.get("format") == "text":
+        return Response(as_text(problems), mimetype="text/plain; charset=utf-8")
+
+    rows = []
+    for p in problems:
+        rows.append(
+            '<tr class="%s"><td class="lvl">%s</td>'
+            '<td class="pan">%s</td><td class="tl">%s<span class="k">%s</span></td>'
+            '<td>%s%s</td></tr>' % (
+                "err" if p["level"] == ERROR else "warn",
+                xml_escape(p["level"]), xml_escape(p["panel"]),
+                xml_escape(p["tile"]), xml_escape(p["kind"]),
+                xml_escape(p["text"]),
+                '<div class="hint">%s</div>' % xml_escape(p["hint"])
+                if p["hint"] else ""))
+
+    if problems:
+        sub = "ошибок %d · предупреждений %d" % (total["errors"], total["warnings"])
+        body = '<table>%s</table>' % "".join(rows)
+    else:
+        sub = "проблем не найдено"
+        body = ('<p class="fine">Все плитки собрались, каналы найдены, '
+                'управляемым есть куда писать.</p>')
+
+    page = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка конфига</title><style>
+ body{font:14px/1.45 -apple-system,'Segoe UI',Inter,system-ui,sans-serif;
+      margin:0;padding:16px;background:#F1F1F3;color:#3A3A3E}
+ h1{font-size:19px;margin:0 0 4px}
+ .sub{color:#8A8A90;margin-bottom:14px}
+ table{border-collapse:collapse;width:100%%;background:#fff;
+       border-radius:12px;overflow:hidden}
+ td{padding:9px 12px;border-bottom:1px solid #EDEDF0;vertical-align:top}
+ .lvl{white-space:nowrap;font-size:12.5px;font-weight:600}
+ tr.err  .lvl{color:#C0392B}
+ tr.warn .lvl{color:#B8791A}
+ .pan{color:#8A8A90;white-space:nowrap}
+ .tl{font-weight:500;white-space:nowrap}
+ .tl .k{color:#8A8A90;font-weight:400;font-size:12.5px;margin-left:6px}
+ .hint{color:#8A8A90;font-size:13px;margin-top:2px}
+ .fine{background:#fff;border-radius:12px;padding:14px;margin:0}
+ a{color:#8A8A90}
+</style></head><body>
+<h1>Проверка конфига</h1>
+<div class="sub">%(sub)s · <a href="/panels">панели</a>
+ · <a href="/channels">каналы</a> · <a href="?format=text">текстом</a></div>
+%(body)s
+</body></html>"""
+    return Response(page % {"sub": sub, "body": body}, mimetype="text/html")
 
 
 @app.route("/channels")

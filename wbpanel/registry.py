@@ -232,13 +232,39 @@ class Tile(object):
         return {}
 
 
+def resolve_type(conf, state):
+    """
+    Тип плитки: заданный человеком либо опознанный по службе.
+
+    Явный `type:` всегда сильнее. Опознавание ошибается молча, и должен
+    остаться способ его перебить - записать в конфиг то, что получилось,
+    и больше к этому не возвращаться.
+    """
+    explicit = conf.get("type")
+    if explicit:
+        return str(explicit)
+    if conf.get("service"):
+        kind, _found = guess_type(conf, state)
+        if kind:
+            return kind
+        return "unknown"       # честно, а не тихо подставленный value
+    return "value"
+
+
 def build(conf, state, history=None):
     """
     Собрать плитку целиком: привязать роли, проверить, посчитать данные,
     описать нажатия и вывести список разрешённых для записи топиков.
     """
-    kind = conf.get("type", "value")
+    kind = resolve_type(conf, state)
     cls = REGISTRY.get(kind)
+    if kind == "unknown":
+        found = guess_type(conf, state)[1]
+        return {"kind": "value", "template": "value", "data": {},
+                "zones": [], "pad": {}, "bound": {}, "writable": set(),
+                "snaps": [], "source": "spruthub",
+                "problem": "тип не опознан по службе; характеристики: %s"
+                           % (", ".join(sorted(found)) or "не найдены")}
     if cls is None:
         return {"kind": kind, "problem": "неизвестный тип плитки: %r" % kind,
                 "data": {}, "zones": [], "bound": {}, "writable": set()}
@@ -264,7 +290,7 @@ def build(conf, state, history=None):
             "source": conf.get("source") or type(bind).__name__}
 
 
-def channels_of(conf):
+def channels_of(conf, state=None):
     """
     Что плитка читает - для подписки. Без состояния, до старта.
 
@@ -272,7 +298,7 @@ def channels_of(conf):
     нельзя - по этому же списку страница проверяет, можно ли показать
     график канала, и топик вида .../on там означал бы график команды.
     """
-    cls = REGISTRY.get(conf.get("type", "value"))
+    cls = REGISTRY.get(resolve_type(conf, state))
     if cls is None:
         return set()
     obj = cls()
@@ -296,7 +322,7 @@ def channels_of(conf):
             continue
         log.warning("плитка %r: поле %s не отвечает ни одной роли типа %r",
                     conf.get("title") or "без названия", key,
-                    conf.get("type", "value"))
+                    resolve_type(conf, state))
         out.add(value)
     return out
 
@@ -309,7 +335,7 @@ def writable_of(conf, state=None):
     Канал с readonly в /meta команды не получает: источник просто не
     выведет для него адрес, и в белый список попадать нечему.
     """
-    cls = REGISTRY.get(conf.get("type", "value"))
+    cls = REGISTRY.get(resolve_type(conf, state))
     if cls is None:
         return set()
     obj = cls()
@@ -318,3 +344,49 @@ def writable_of(conf, state=None):
         if b.command:
             out.add(b.command)
     return out
+
+
+# ==========================================================================
+#  Опознавание типа плитки по службе
+# ==========================================================================
+
+# Набор характеристик -> тип плитки. Порядок важен: проверяем от более
+# определённого к менее. У термостата есть CurrentTemperature, как у
+# датчика; у ленты есть On, как у выключателя. Кто ищет менее строгий
+# признак первым, тот всё подряд объявит выключателем.
+#
+# need - что обязано быть, чтобы признать тип. any_of - хотя бы одно из,
+# если такого условия нет, поле опущено.
+AUTO_TYPES = (
+    ("thermostat", {"need": ("TargetTemperature",)}),
+    ("curtain",    {"need": ("TargetPosition",)}),
+    ("light",      {"need": ("On", "Brightness"),
+                    "any_of": ("ColorTemperature", "Hue", "Saturation")}),
+    ("dimmer",     {"need": ("On", "Brightness")}),
+    ("switch",     {"need": ("On",)}),
+    ("value",      {"need": ("CurrentTemperature",)}),
+    ("value",      {"need": ("CurrentRelativeHumidity",)}),
+)
+
+
+def guess_type(conf, state):
+    """
+    Тип плитки по набору характеристик службы.
+
+    Возвращает (тип, пояснение) либо (None, что нашлось). Молча подставлять
+    `value` нельзя: человек решит, что панель сломалась, вместо того чтобы
+    дописать одну строку. Поэтому неопознанное честно возвращает None, а
+    страница проверки покажет, чего не хватило.
+    """
+    from .sources import SprutSource
+
+    found = SprutSource.types_of(conf, state)
+    if not found:
+        return None, found
+    for kind, rule in AUTO_TYPES:
+        if not set(rule["need"]).issubset(found):
+            continue
+        if "any_of" in rule and not (set(rule["any_of"]) & found):
+            continue
+        return kind, found
+    return None, found

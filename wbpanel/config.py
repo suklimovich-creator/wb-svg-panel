@@ -98,7 +98,23 @@ class Config:
         Всё, где слэшей больше, считаем сырым топиком: так на панель попадают
         устройства чужих интеграций - Sprut.hub, Zigbee2MQTT и прочие.
         """
-        return set(ch for ch in self.used_channels() if ch.count("/") != 1)
+        out = set(ch for ch in self.used_channels() if ch.count("/") != 1)
+        # Служба, заданная одной строкой `service:`, отдельных каналов в
+        # конфиге не имеет - их имена станут известны только из метаданных,
+        # которые ещё надо получить. Подписываемся на всю службу маской:
+        # иначе плитка не увидит вообще ничего и будет пустой.
+        for prefix in self.service_prefixes():
+            out.add(prefix + "/#")
+        return out
+
+    def service_prefixes(self):
+        """Префиксы служб Sprut.hub, упомянутых в конфиге."""
+        out = set()
+        for tile in self.all_tiles():
+            prefix = (tile.get("service") or "").rstrip("/")
+            if prefix:
+                out.add(prefix)
+        return out
 
     def chart_series(self):
         """(channel, range_seconds, points) для всех графиков - для префетча."""

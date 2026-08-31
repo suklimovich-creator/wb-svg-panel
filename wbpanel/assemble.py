@@ -11,6 +11,7 @@ from .const import BAND, CELL, GAP, HEADER, PAD, RX, SECTION, TILE, font_scale, 
 from .const import STALE_AFTER
 from .geometry import _fmt, cells, layout, text_width
 from .status import build_status, place_chips
+from .registry import resolve_type
 from .tiles import from_registry
 
 # Текущий конфиг. Заполняется в web.main() при старте: сюда сборка плиток
@@ -69,7 +70,9 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     now = time.time()
     tile = {
         "i": index,
-        "kind": conf.get("type", "value"),
+        # Тип может быть не задан: у службы Sprut.hub он выводится из
+        # набора характеристик. Явный type: всегда сильнее.
+        "kind": resolve_type(conf, state),
         "title": conf.get("title", ""),
         "subtitle": conf.get("subtitle", ""),
         "icon": conf.get("icon"),

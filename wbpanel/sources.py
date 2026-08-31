@@ -176,7 +176,10 @@ class SprutSource(Source):
     name = "spruthub"
 
     BY_TYPE = {
-        "CurrentTemperature": "current",
+        # Датчик показывает одно число, и роль у него value; у термостата
+        # та же характеристика - фактическая температура, роль current.
+        # Кто из них перед нами, решает набор характеристик службы.
+        "CurrentTemperature": ("current", "value"),
         "TargetTemperature": "target",
         "CurrentHeatingCoolingState": "state",
         "TargetHeatingCoolingState": "mode",
@@ -185,12 +188,24 @@ class SprutSource(Source):
         "PositionState": "state",
         "C_TargetPositionState": "stop",
         "HoldPosition": "stop",
-        "On": "switch",
+        # Одна характеристика может отвечать разным ролям: у ленты
+        # выключатель зовётся switch, у простой плитки - value. Берётся
+        # первая, которую плитка вообще просит.
+        "On": ("switch", "value"),
         "Brightness": "bright",
         "ColorTemperature": "temp",
-        "CurrentRelativeHumidity": "current",
+        "CurrentRelativeHumidity": ("current", "value"),
         "BatteryLevel": "progress",
     }
+
+    @staticmethod
+    def types_of(conf, state):
+        """Какие характеристики служба публикует. Для опознавания типа."""
+        prefix = (conf.get("service") or "").rstrip("/")
+        if not prefix or not state:
+            return set()
+        return set(state.meta[t].get("type") for t in state.meta
+                   if t.startswith(prefix + "/") and state.meta[t].get("type"))
 
     def resolve(self, conf, roles, state, tile=None):
         wanted = set(r.name for r in roles)
@@ -201,8 +216,12 @@ class SprutSource(Source):
                 if not topic.startswith(prefix + "/"):
                     continue
                 meta = state.meta[topic]
-                name = self.BY_TYPE.get(meta.get("type"))
-                if not name or name not in wanted or name in out:
+                names = self.BY_TYPE.get(meta.get("type"))
+                if isinstance(names, str):
+                    names = (names,)
+                name = next((n for n in (names or ())
+                             if n in wanted and n not in out), None)
+                if not name:
                     continue
                 writable = str(meta.get("write", "")).lower() == "true"
                 out[name] = Bound(ROLES[name], topic,

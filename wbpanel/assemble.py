@@ -219,21 +219,30 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             headers.append(hd)
             y_cursor += SECTION
 
-        # Свёрнутый раздел не занимает места и не собирает плиток: их не
-        # надо ни считать, ни подписывать. Это и есть главная выгода -
-        # сводная панель из шести комнат перестаёт быть простынёй.
+        # Свёрнутый раздел не рисуется, но номера его плиток остаются за
+        # ним. Номер - это ключ, по которому полноэкранный вид находит
+        # плитку в полном списке панели; если пропустить свёрнутое, всё
+        # ниже сдвинется, и по нажатию откроется чужая плитка. Раскрытый
+        # первым раздел совпадал случайно, а дальше по панели съезжало.
         if folded:
+            index += len(tiles_conf)
             continue
 
         placed, rows = layout(tiles_conf, cols)
 
+        # layout переставляет плитки: закреплённые по col/row встают первыми.
+        # Номер должен считаться по конфигу, а не по порядку размещения -
+        # полноэкранный вид ищет в неразложенном списке.
+        order = {id(conf): n for n, conf in enumerate(tiles_conf)}
+
         for conf, row, col, w, h in placed:
             out.append(build_tile(
-                conf, index,
+                conf, index + order.get(id(conf), 0),
                 PAD + col * (CELL + GAP), y_cursor + row * (CELL + GAP),
                 w * CELL + (w - 1) * GAP, h * CELL + (h - 1) * GAP,
                 panel_conf, state, history, interactive))
-            index += 1
+
+        index += len(tiles_conf)
 
         if rows:
             y_cursor += rows * CELL + (rows - 1) * GAP + GAP

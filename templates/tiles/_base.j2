@@ -154,6 +154,10 @@
      чтобы палец успел заметить, и не дольше: сцена уже отработала. */
   .fired .plate { fill: var(--active-soft); }
   .fired .icon  { stroke: var(--active-ink); }
+  /* Подложка под кадром камеры: видна, пока снимок не пришёл, и остаётся
+     навсегда, если камера молчит. Без неё в плитке зияет дыра цвета фона
+     панели, и непонятно, плитка это вообще или пустое место. */
+  .cam-hole  { fill: var(--window); }
   .off-dim   { opacity: .55; }
   .offline   { opacity: .40; }
   .dot-warn  { fill: #E09B2D; }
@@ -289,6 +293,13 @@
   <symbol id="{{ uid }}ic-tv" viewBox="0 0 24 24">
     <rect class="icon" x="2.8" y="4.4" width="18.4" height="12.4" rx="2"/>
     <path class="icon" d="M8.4 20.4h7.2"/>
+  </symbol>
+  {#- Камера: корпус кубиком и объектив. Именно кубик, а не купол -
+      он у нас на столе и такой формы, значок должен узнаваться. -#}
+  <symbol id="{{ uid }}ic-camera" viewBox="0 0 24 24">
+    <rect class="icon" x="3.2" y="5.4" width="17.6" height="13.2" rx="3.2"/>
+    <circle class="icon" cx="12" cy="12" r="3.9"/>
+    <circle class="icon-fill" cx="17.4" cy="8.6" r="1"/>
   </symbol>
   <symbol id="{{ uid }}ic-door" viewBox="0 0 24 24">
     <path class="icon" d="M5.6 3.6h12.8v16.8H5.6z"/>

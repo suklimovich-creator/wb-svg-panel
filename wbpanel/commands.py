@@ -53,7 +53,8 @@ AREA_BOX = {
 # Есть ли в команде хоть что-то действующее. Один только пульт без единого
 # записываемого топика - это плитка, которая открывается и ничего не умеет:
 # для человека она выглядит сломанной кнопкой.
-LIVE_KEYS = ("topic", "bright", "temp", "stop", "mode_topic", "expand", "href")
+LIVE_KEYS = ("topic", "bright", "temp", "stop", "mode_topic", "expand", "href",
+             "cam")
 
 
 def build(zones, bound, data, extra=None, width=0, height=0):
@@ -156,6 +157,8 @@ CMD_ATTRS = [
     ("ac_swing", "data-ac-swing"), ("ac_swing_h", "data-ac-swing-h"),
     ("ac_swing_now", "data-ac-swing-now"), ("ac_swing_h_now", "data-ac-swing-h-now"),
     ("href", "data-href"),
+    ("cam", "data-cam"), ("cam_poll", "data-cam-poll"),
+    ("cam_live", "data-cam-live"), ("cam_life", "data-cam-life"),
 ]
 
 

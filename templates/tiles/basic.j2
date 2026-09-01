@@ -64,6 +64,39 @@
   {{ base.caption(t, t.status) }}
 {% endmacro %}
 
+{#- ---- камера ----
+    Кадр во всю плитку, подпись поверх него на затемнении. Подложка под
+    кадром обязательна: пока снимок не пришёл, там иначе пусто.
+
+    preserveAspectRatio="xMidYMid slice" - кадрирование по центру, как
+    background-size: cover. Камера 16:9, плитка квадратная, и без slice
+    картинка вписывалась бы с полями.
+
+    Про <image> важно знать одно: внутри <img src="panel.svg"> внешняя
+    ссылка не загрузится, браузер такое блокирует. На самой панели SVG
+    вставлен разметкой, и там всё работает; на сводной странице со
+    списком панелей плитка камеры останется пустой подложкой. Это не
+    поломка, а цена превью картинкой. -#}
+{% macro tile_camera(t) %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" class="cam-hole"/>
+    {% if t.src %}
+    <image href="{{ t.src }}" xlink:href="{{ t.src }}"
+           x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}"
+           preserveAspectRatio="xMidYMid slice"/>
+    {% endif %}
+    {#- Гашение к низу до цвета подложки: подпись должна читаться и на
+        светлом кадре, и на тёмном. Градиент scrim для того и заведён. -#}
+    <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}"
+          fill="url(#{{ uid }}scrim)"/>
+  </g>
+  {% if not t.src %}
+  {{ base.icon_c(t, t.icon or 'camera', 24) }}
+  {% endif %}
+  {{ base.caption(t, t.status) }}
+{% endmacro %}
+
 {#- ---- простое значение ---- -#}
 {% macro tile_value(t) %}
   {{ base.plate(t) }}

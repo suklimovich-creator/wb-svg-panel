@@ -122,6 +122,7 @@
   {% elif t.kind == 'header' %}{{ basic.tile_header(t) }}
   {% elif t.kind == 'link' %}{{ basic.tile_link(t) }}
   {% elif t.kind == 'scene' %}{{ basic.tile_scene(t) }}
+  {% elif t.kind == 'camera' %}{{ basic.tile_camera(t) }}
   {% else %}{{ basic.tile_value(t) }}
   {% endif %}
   {#- Точка «нет данных» заголовку не нужна: он ничего не измеряет,

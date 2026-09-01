@@ -110,6 +110,33 @@ def _check_tile(tile, panel_title, panel_name, config, state,
             out.append(_problem(ERROR, panel_title, tile,
                                 "ведёт на панель %r, которой нет" % target))
 
+    # --- камера ------------------------------------------------------------
+    # Плитка ничего не читает из MQTT, поэтому обычные проверки её не
+    # касаются вовсе: ошибиться можно только в конфиге камер, и молча это
+    # выглядит как чёрный прямоугольник.
+    if kind == "camera":
+        from . import cameras
+        name = tile.get("camera") or tile.get("name")
+        if not name:
+            out.append(_problem(ERROR, panel_title, tile,
+                                "не задано поле camera",
+                                "имя раздела из cameras: верхнего уровня"))
+        elif not isinstance((cameras.all_confs() or {}).get(name), dict):
+            out.append(_problem(
+                ERROR, panel_title, tile,
+                "камера %s не описана" % name,
+                "известные: %s" % (", ".join(cameras.names()) or "ни одной")))
+        else:
+            cam = cameras.get(name)
+            if cam and not cam.host:
+                out.append(_problem(ERROR, panel_title, tile,
+                                    "у камеры %s не задан host" % name))
+            if cam and not cam.user:
+                out.append(_problem(
+                    WARNING, panel_title, tile,
+                    "у камеры %s не задан user" % name,
+                    "Hikvision без аутентификации не отдаёт ни кадр, ни поток"))
+
     # --- каналы, про которые брокер молчит ---------------------------------
     # Самая частая поломка: опечатка в имени. Плитка рисуется, но пустая.
     for channel in sorted(channels_of(tile, state)):

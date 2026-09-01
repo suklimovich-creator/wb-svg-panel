@@ -118,6 +118,8 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     bound = tile.pop("_bound", None) or {}
     pad = tile.pop("_pad", None) or {}
     tile.pop("_writable", None)
+    # Плитка, ничего не читающая из MQTT, не бывает «без данных».
+    reads = tile.pop("_reads", True)
 
     # Ссылка ведёт на другую панель и никуда не пишет, поэтому работает и
     # на панели, где управление выключено.
@@ -133,7 +135,7 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     tile["attrs"] = cmd_attrs(tile)
 
     known = [s for s in snaps if s["known"]]
-    tile["offline"] = (not known) or any(s["error"] for s in snaps)
+    tile["offline"] = reads and ((not known) or any(s["error"] for s in snaps))
     # Через сколько молчания канал считается протухшим. Пять минут годятся
     # для Modbus, который опрашивается непрерывно, но не для Zigbee: датчик
     # на батарейке отчитывается раз в полчаса и был бы вечно серым. Задаётся
@@ -142,7 +144,8 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
                         panel_conf.get("stale_after",
                         (config.get("stale_after", STALE_AFTER)
                          if config else STALE_AFTER))))
-    tile["stale"] = bool(known) and all(now - s["ts"] > stale_after for s in known)
+    tile["stale"] = reads and bool(known) and all(
+        now - s["ts"] > stale_after for s in known)
     return tile
 
 
@@ -219,30 +222,21 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             headers.append(hd)
             y_cursor += SECTION
 
-        # Свёрнутый раздел не рисуется, но номера его плиток остаются за
-        # ним. Номер - это ключ, по которому полноэкранный вид находит
-        # плитку в полном списке панели; если пропустить свёрнутое, всё
-        # ниже сдвинется, и по нажатию откроется чужая плитка. Раскрытый
-        # первым раздел совпадал случайно, а дальше по панели съезжало.
+        # Свёрнутый раздел не занимает места и не собирает плиток: их не
+        # надо ни считать, ни подписывать. Это и есть главная выгода -
+        # сводная панель из шести комнат перестаёт быть простынёй.
         if folded:
-            index += len(tiles_conf)
             continue
 
         placed, rows = layout(tiles_conf, cols)
 
-        # layout переставляет плитки: закреплённые по col/row встают первыми.
-        # Номер должен считаться по конфигу, а не по порядку размещения -
-        # полноэкранный вид ищет в неразложенном списке.
-        order = {id(conf): n for n, conf in enumerate(tiles_conf)}
-
         for conf, row, col, w, h in placed:
             out.append(build_tile(
-                conf, index + order.get(id(conf), 0),
+                conf, index,
                 PAD + col * (CELL + GAP), y_cursor + row * (CELL + GAP),
                 w * CELL + (w - 1) * GAP, h * CELL + (h - 1) * GAP,
                 panel_conf, state, history, interactive))
-
-        index += len(tiles_conf)
+            index += 1
 
         if rows:
             y_cursor += rows * CELL + (rows - 1) * GAP + GAP

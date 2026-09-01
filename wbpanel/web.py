@@ -21,11 +21,11 @@ from .history import History
 from .geometry import cells, parse_duration, text_width
 from .status import status_entries
 from . import assemble
-from .checkup import ERROR, as_text, check_config, summary
 from .registry import writable_of
 from .assemble import (build_tile, cmd_attrs, prepare,
                        resolve_sections, xml_escape)
 from .render import resolve_css_vars
+from . import cameras
 import html
 import threading
 
@@ -309,6 +309,70 @@ def api_publish():
     return Response('{"ok":true}', mimetype="application/json")
 
 
+@app.route("/cam/<name>.jpg")
+def cam_jpg(name):
+    """
+    Один кадр с камеры.
+
+    Кеш браузера здесь работает на нас: адрес плитки меняется раз в
+    `refresh` секунд, и в промежутке картинка не перекачивается. Поэтому
+    max-age равен как раз этому промежутку - панель перечитывается чаще,
+    и без кеша кадр моргал бы при каждой перерисовке.
+    """
+    config.reload()
+    cam = cameras.get(name)
+    if cam is None:
+        abort(404, "камера %r не описана в разделе cameras" % name)
+    try:
+        data, ctype = cam.snapshot()
+    except cameras.CameraError as exc:
+        log.warning("%s", exc)
+        # 502, а не 500: не мы сломались, а прибор за нами. Страница по
+        # этому коду показывает заглушку и продолжает пробовать.
+        return Response(str(exc), status=502, mimetype="text/plain")
+    # ?live=1 - полноэкранный просмотр снимками, там кеш только мешает.
+    if request.args.get("live") in ("1", "true", "yes"):
+        cache = "no-store"
+    else:
+        cache = "max-age=%d" % int(cam.refresh)
+    return Response(data, mimetype=ctype, headers={"Cache-Control": cache})
+
+
+@app.route("/cam/<name>.mjpeg")
+def cam_stream(name):
+    """
+    Поток MJPEG, проксируемый как есть.
+
+    Соединение живёт, пока открыто окно, и всё это время занимает поток
+    waitress - отсюда и ограничение на число одновременных просмотров, и
+    срок жизни одного соединения. Страница переподключается сама.
+    """
+    config.reload()
+    cam = cameras.get(name)
+    if cam is None:
+        abort(404, "камера %r не описана в разделе cameras" % name)
+    if not cameras.acquire_slot():
+        return Response("сейчас смотрят слишком много камер",
+                        status=503, mimetype="text/plain")
+    try:
+        gen, ctype = cam.stream()
+    except cameras.CameraError as exc:
+        cameras.release_slot()
+        log.warning("%s", exc)
+        return Response(str(exc), status=502, mimetype="text/plain")
+
+    def body():
+        try:
+            for chunk in gen:
+                yield chunk
+        finally:
+            cameras.release_slot()
+
+    return Response(body(), mimetype=ctype, direct_passthrough=True,
+                    headers={"Cache-Control": "no-store",
+                             "X-Accel-Buffering": "no"})
+
+
 @app.route("/manifest.webmanifest")
 def manifest():
     """
@@ -553,72 +617,6 @@ TILE_HINT = {
 }
 
 
-@app.route("/check")
-def check_page():
-    """
-    Что панель поняла в конфиге, а что нет.
-
-    Раньше «не задана роль target» уходило в журнал, где его никто не
-    видит: плитка молча рисовалась пустой. Здесь то же самое списком, с
-    именем панели и подсказкой, что делать.
-
-    curl -s localhost:8088/check?format=text - то же для консоли.
-    """
-    problems = check_config(config, state, history)
-    total = summary(problems)
-
-    if request.args.get("format") == "text":
-        return Response(as_text(problems), mimetype="text/plain; charset=utf-8")
-
-    rows = []
-    for p in problems:
-        rows.append(
-            '<tr class="%s"><td class="lvl">%s</td>'
-            '<td class="pan">%s</td><td class="tl">%s<span class="k">%s</span></td>'
-            '<td>%s%s</td></tr>' % (
-                "err" if p["level"] == ERROR else "warn",
-                xml_escape(p["level"]), xml_escape(p["panel"]),
-                xml_escape(p["tile"]), xml_escape(p["kind"]),
-                xml_escape(p["text"]),
-                '<div class="hint">%s</div>' % xml_escape(p["hint"])
-                if p["hint"] else ""))
-
-    if problems:
-        sub = "ошибок %d · предупреждений %d" % (total["errors"], total["warnings"])
-        body = '<table>%s</table>' % "".join(rows)
-    else:
-        sub = "проблем не найдено"
-        body = ('<p class="fine">Все плитки собрались, каналы найдены, '
-                'управляемым есть куда писать.</p>')
-
-    page = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Проверка конфига</title><style>
- body{font:14px/1.45 -apple-system,'Segoe UI',Inter,system-ui,sans-serif;
-      margin:0;padding:16px;background:#F1F1F3;color:#3A3A3E}
- h1{font-size:19px;margin:0 0 4px}
- .sub{color:#8A8A90;margin-bottom:14px}
- table{border-collapse:collapse;width:100%%;background:#fff;
-       border-radius:12px;overflow:hidden}
- td{padding:9px 12px;border-bottom:1px solid #EDEDF0;vertical-align:top}
- .lvl{white-space:nowrap;font-size:12.5px;font-weight:600}
- tr.err  .lvl{color:#C0392B}
- tr.warn .lvl{color:#B8791A}
- .pan{color:#8A8A90;white-space:nowrap}
- .tl{font-weight:500;white-space:nowrap}
- .tl .k{color:#8A8A90;font-weight:400;font-size:12.5px;margin-left:6px}
- .hint{color:#8A8A90;font-size:13px;margin-top:2px}
- .fine{background:#fff;border-radius:12px;padding:14px;margin:0}
- a{color:#8A8A90}
-</style></head><body>
-<h1>Проверка конфига</h1>
-<div class="sub">%(sub)s · <a href="/panels">панели</a>
- · <a href="/channels">каналы</a> · <a href="?format=text">текстом</a></div>
-%(body)s
-</body></html>"""
-    return Response(page % {"sub": sub, "body": body}, mimetype="text/html")
-
-
 @app.route("/channels")
 def channels():
     """
@@ -662,9 +660,8 @@ def channels():
     esc = html.escape
     rows = []
     for device in sorted(groups):
-        rows.append('<tr class="dev" data-dev="%s"><td colspan="5">%s '
-                    '<span class="n">%d</span></td></tr>'
-                    % (esc(device.lower()), esc(device), len(groups[device])))
+        rows.append('<tr class="dev"><td colspan="5">%s <span class="n">%d</span></td></tr>'
+                    % (esc(device), len(groups[device])))
         for key in groups[device]:
             meta = metas.get(key, {})
             ctype = str(meta.get("type", ""))
@@ -673,18 +670,14 @@ def channels():
             age = now - stamps.get(key, 0)
             hist = logged.get(key)
             rows.append(
-                '<tr data-dev="%s" data-k="%s">'
+                '<tr data-k="%s">'
                 '<td class="k"><button onclick="cp(this)" data-c="%s">⧉</button>'
                 '<code>%s</code>%s</td>'
                 '<td class="v">%s <span class="u">%s</span></td>'
                 '<td class="t">%s</td>'
                 '<td class="h">%s</td>'
                 '<td class="g">%s</td></tr>' % (
-                    esc(device.lower()),
-                    esc(" ".join((key, ctype, units, value,
-                                  "в панели" if key in used else "",
-                                  "история" if key in logged else "")).lower()),
-                    esc(key), esc(key.split("/", 1)[1]),
+                    esc(key.lower()), esc(key), esc(key.split("/", 1)[1]),
                     ' <span class="used">в панели</span>' if key in used else "",
                     esc(value[:20]), esc(units),
                     esc(ctype),
@@ -728,20 +721,10 @@ def channels():
 <table id="t">%(rows)s</table>
 <script>
  var q=document.getElementById('q'), rs=document.querySelectorAll('#t tr');
- /* Ищем по всей строке: имя канала, тип, единицы, значение и пометки
-    «в панели» и «история». Раньше искали только по имени, и запрос вида
-    temperature или °C не находил ничего.
-    Заголовок устройства остаётся видимым, если под ним что-то нашлось:
-    в строке канала имя устройства не повторяется, и без заголовка
-    непонятно, чей это канал. */
- q.oninput=function(){var s=q.value.toLowerCase(), hit={};
+ q.oninput=function(){var s=q.value.toLowerCase();
    rs.forEach(function(r){
-     if(r.className==='dev') return;
-     var show = !s || r.dataset.k.indexOf(s)>=0;
-     r.classList.toggle('hide', !show);
-     if(show) hit[r.dataset.dev]=1;});
-   rs.forEach(function(r){
-     if(r.className==='dev') r.classList.toggle('hide', !!s && !hit[r.dataset.dev]);});};
+     if(r.className==='dev'){r.classList.toggle('hide',s!=='');return;}
+     r.classList.toggle('hide', s && r.dataset.k.indexOf(s)<0);});};
  function cp(b){navigator.clipboard.writeText(b.dataset.c);
    var o=b.textContent;b.textContent='✓';setTimeout(function(){b.textContent=o},900);}
 </script></body></html>""" % {"total": len(keys), "rows": "".join(rows)}
@@ -772,6 +755,9 @@ def main():
     # Сборка плиток заглядывает в общие настройки панели, но получить их
     # параметром неоткуда: build_tile зовётся из десятка мест.
     assemble.config = config
+    # Камеры читают адреса и пароли из того же конфига, и тоже
+    # вызываются оттуда, куда параметр не передать.
+    cameras.config = config
     state.set_watched(config.used_channels())
 
     jinja = Environment(
@@ -868,6 +854,7 @@ def main():
              host, port, ", ".join(sorted(config.panels)) or "нет")
     try:
         from waitress import serve
-        serve(app, host=host, port=port, threads=8, _quiet=True)
+        serve(app, host=host, port=port,
+              threads=int(http.get("threads", 12)), _quiet=True)
     except ImportError:
         app.run(host=host, port=port, threaded=True)

@@ -10,6 +10,9 @@
 tiles.py: наружу форма данных та же, панель не меняется ни на пиксель.
 """
 
+import time
+from urllib.parse import quote
+
 from .geometry import _fmt
 from .registry import Tile, Zone, tile
 from .state import is_on
@@ -122,6 +125,7 @@ class Header(Tile):
     """
 
     roles = ()
+    reads = False
 
     @staticmethod
     def channels(conf):
@@ -161,6 +165,79 @@ class Header(Tile):
         }
 
 
+@tile("camera")
+class Camera(Tile):
+    """
+    Кадр с камеры. Ролей нет: MQTT здесь ни при чём.
+
+    Плитка показывает снимок, обновляющийся раз в несколько секунд, по
+    нажатию открывается поток на весь экран. И то и другое идёт через
+    демон - пароль от камеры в разметку попадать не должен, а браузер
+    всё равно не открывает http://user:pass@... внутри <img>.
+
+    В конфиге:
+
+        - type: camera
+          camera: nursery        # имя из раздела cameras: верхнего уровня
+          title: Детская
+
+    Адрес снимка нарочно меняется не каждую перерисовку, а раз в
+    `refresh` секунд: панель перечитывается каждые десять секунд целиком,
+    и картинка с уникальным адресом моргала бы при каждой. С адресом,
+    постоянным внутри промежутка, браузер берёт кадр из кеша, и плитка
+    стоит неподвижно ровно столько, сколько задумано.
+    """
+
+    roles = ()
+    reads = False
+
+    def prepare(self, ctx):
+        from . import cameras
+
+        name = str(ctx.opt("camera") or ctx.opt("name") or "")
+        cam = cameras.get(name)
+        if cam is None:
+            # Показываем прямо на плитке, а не только в журнале: пустой
+            # прямоугольник человек примет за неработающую камеру и пойдёт
+            # проверять сеть вместо одной строки в конфиге.
+            return {"on": False, "camera": name, "src": "",
+                    "icon": ctx.opt("icon", "camera"),
+                    "always_status": True,
+                    "status": ("нет камеры %s" % name) if name
+                              else "не задано поле camera"}
+
+        bucket = int(time.time() // cam.refresh)
+        base = "cam/" + quote(name, safe="")
+        return {
+            "on": False,
+            "camera": name,
+            "src": "%s.jpg?t=%d" % (base, bucket),
+            "stream": ("%s.mjpeg" % base) if cam.stream_path else "",
+            "poll": "%s.jpg" % base,
+            # Сколько миллисекунд браузеру держать поток открытым, прежде
+            # чем переподключиться: сервер закрывает соединение сам, и без
+            # переподключения картинка тихо застывает.
+            "life": int(cam.stream_limit * 1000) if cam.stream_limit else 0,
+            "icon": ctx.opt("icon", "camera"),
+            "status": ctx.opt("subtitle", ""),
+            # Подпись поверх кадра, а не под ним: плитка занята картинкой.
+            "over": True,
+        }
+
+    def zones(self, ctx, data):
+        # Нажатие ничего не пишет - оно открывает окно. Роли и топика у
+        # зоны нет, поэтому слой команд видит чистый пульт.
+        return [Zone("open", "all", pad="camera")] if data.get("src") else []
+
+    def pad(self, ctx, data):
+        if not data.get("src"):
+            return {}
+        return {"cam": data.get("stream") or data.get("poll"),
+                "cam_poll": data.get("poll"),
+                "cam_live": "1" if data.get("stream") else "0",
+                "cam_life": str(data.get("life") or 0)}
+
+
 @tile("link")
 class Link(Tile):
     """
@@ -170,6 +247,7 @@ class Link(Tile):
     там, где их нет.
     """
     roles = ()
+    reads = False
 
     def prepare(self, ctx):
         target = ctx.opt("panel") or ""

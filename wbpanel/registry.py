@@ -178,6 +178,12 @@ class Tile(object):
     roles = ()
     template = None
 
+    #: Читает ли плитка что-нибудь из MQTT. Заголовок, ссылка и камера -
+    #: нет, и отметка «нет данных» к ним неприменима: у них нет данных
+    #: по устройству, а не по неисправности. Без этого флага такая плитка
+    #: вечно висела бы полупрозрачной с серой точкой.
+    reads = True
+
     # Имена полей, если они отличаются от принятых у роли. В конфигах уже
     # сложились свои: у диммера выключатель зовётся channel, а не
     # channel_switch. Ломать чужие конфиги ради стройности не стоит.
@@ -286,7 +292,7 @@ def build(conf, state, history=None):
 
     return {"kind": kind, "template": obj.template, "data": data,
             "zones": zones, "pad": pad, "bound": bound, "writable": writable,
-            "snaps": ctx.snaps, "problem": problem,
+            "snaps": ctx.snaps, "problem": problem, "reads": bool(cls.reads),
             "source": conf.get("source") or type(bind).__name__}
 
 

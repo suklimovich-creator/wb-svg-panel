@@ -74,6 +74,11 @@
            display:inline-block;box-sizing:border-box;position:relative;z-index:1}
  #ov svg{display:block;max-width:100%;height:auto}
  #ov .ttl{color:#fff;font-size:17px;font-weight:600}
+ /* Камера во весь экран. Ширину задаём в процентах окна, высоту отдаём
+    пропорции: кадр 16:9, и фиксированная высота его бы обрезала. */
+ #ov .cam{display:block;width:100%;height:auto;border-radius:12px;
+          background:#17171A;min-height:120px}
+ #ov .camwrap{padding:8px}
  #ov .hint{color:rgba(255,255,255,.55);font-size:13px;text-align:center}
  /* переключатель в пульте: без него подвинуть яркость у выключенной лампы
     можно, а увидеть результат - нет */
@@ -993,6 +998,10 @@ function bind(){
         // Режим короткое нажатие не трогает: случайно выключить отопление
         // касанием экрана нельзя, для этого есть кнопка на пульте.
         else if(this.getAttribute('data-pad') === 'thermostat') openPad(this);
+        // Камера: короткое нажатие открывает поток. Долгое ждать незачем -
+        // переключать у неё нечего, и держать палец шесть десятых секунды
+        // ради единственного действия было бы издевательством.
+        else if(this.getAttribute('data-pad') === 'camera') openPad(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -1255,6 +1264,86 @@ function padThermostat(node){
   drag(wrap, at, done, begin);
 }
 
+/* ---------- камера ----------
+   Поток MJPEG живёт в обычном <img>: браузер сам разбирает multipart и
+   перерисовывает кадр за кадром. Никакого проигрывателя не нужно.
+
+   Две тонкости, из-за которых тут больше кода, чем ожидаешь.
+
+   Первая: сервер закрывает соединение через data-cam-life миллисекунд -
+   иначе забытое окно держит поток waitress до тайм-аута TCP. Когда
+   соединение закрылось, <img> не сообщает об этом ничем: он просто
+   застывает на последнем кадре. Поэтому переподключаемся по таймеру
+   сами, чуть раньше срока.
+
+   Вторая: поток может не пойти вовсе - MJPEG выключен на камере,
+   слотов не осталось, прошивка отвечает иначе. Тогда переходим на
+   снимки: то же окно, та же картинка, просто дёргается. Показать
+   человеку живой кадр важнее, чем настоять на способе. */
+function padCamera(node){
+  var stream = node.getAttribute('data-cam-live') === '1'
+             ? node.getAttribute('data-cam') : '';
+  var poll   = node.getAttribute('data-cam-poll');
+  var life   = parseInt(node.getAttribute('data-cam-life') || '0', 10);
+  var title  = (node.getAttribute('data-title') || '').replace(/\n/g, ' ');
+
+  var card = el('div','card camwrap');
+  var img  = document.createElement('img');
+  img.className = 'cam';
+  img.alt = '';
+  card.appendChild(img);
+  var ttl  = el('div','ttl', title);
+  var hint = el('div','hint','Нажмите вне карточки, чтобы закрыть');
+
+  var alive = true, polling = false, timer = null, revive = null;
+
+  function shot(){
+    if(!alive) return;
+    /* live=1 просит сервер не кешировать: на плитке кадр держится
+       десять секунд намеренно, а здесь нужен свежий. */
+    img.src = poll + '?live=1&t=' + Date.now();
+  }
+  function toPolling(){
+    if(polling || !alive) return;
+    polling = true;
+    if(revive){ clearTimeout(revive); revive = null; }
+    shot();
+    timer = setInterval(shot, 700);
+  }
+  function connect(){
+    if(!alive) return;
+    img.src = stream + '?t=' + Date.now();
+    if(life > 2000){
+      revive = setTimeout(connect, life - 1500);
+    }
+  }
+
+  /* Ошибка загрузки означает разное: у потока - что он не пошёл, у
+     снимка - что камера прямо сейчас не ответила. В первом случае
+     переключаемся, во втором просто ждём следующего кадра. */
+  img.onerror = function(){
+    if(!polling) toPolling();
+  };
+
+  openOv([ttl, card, hint]);
+  if(!ov.offsetHeight){ closeOv(); window.open(poll, '_blank'); return; }
+
+  /* Пока панель обновляется в фоне, кадр камеры тянуть незачем: он и
+     так перед глазами. Останавливаем на время просмотра. */
+  ovCleanup = function(){
+    alive = false;
+    if(timer) clearInterval(timer);
+    if(revive) clearTimeout(revive);
+    /* Пустой src обрывает соединение с сервером немедленно. Без этого
+       браузер держит его открытым ещё какое-то время, а на той стороне
+       занят поток. */
+    img.onerror = null;
+    img.src = '';
+  };
+
+  if(stream) connect(); else toPolling();
+}
+
 function openPad(node){
   var pad = node.getAttribute('data-pad');
   if(pad==='xy') padXY(node);
@@ -1262,6 +1351,7 @@ function openPad(node){
   else if(pad==='level') padLevel(node);
   else if(pad==='curtain') padCurtain(node);
   else if(pad==='ac') padAC(node);
+  else if(pad==='camera') padCamera(node);
 }
 
 /* ---------- обновление ---------- */

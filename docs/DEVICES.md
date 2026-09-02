@@ -99,7 +99,7 @@ python3 tools/probe-roles.py --service 'Sprut.hub-XXXXXXXX_1/accessories/108/13'
 ```yaml
 cameras:
   nursery:
-    host: 192.168.1.101
+    host: 192.168.###.###
     user: panel               # отдельная учётка, не admin
     password: "..."
     channel: "102"            # 101 главный поток, 102 суб-поток
@@ -150,7 +150,7 @@ src="main.svg">`, а внешние ссылки внутри такой кар�
 
 ```yaml
   gate:
-    host: 192.168.1.110
+    host: 192.168.###.###
     user: viewer
     password: "..."
     snapshot: /cgi-bin/snapshot.cgi?channel=1

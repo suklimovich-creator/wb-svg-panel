@@ -133,7 +133,7 @@ panels:
 
 ```bash
 curl -s --digest -u panel:ПАРОЛЬ \
-  "http://192.168.1.101/ISAPI/Streaming/channels" \
+  "http://192.168.###.###/ISAPI/Streaming/channels" \
   | grep -E "<id>|videoCodecType"
 ```
 

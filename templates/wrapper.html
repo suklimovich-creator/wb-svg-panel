@@ -153,20 +153,40 @@
  #ov .wbig .wdeg{font-size:22px;font-weight:500;vertical-align:super;
                  margin-left:4px;letter-spacing:0}
  #ov .acrow{display:block;margin:8px auto;max-width:460px}
- /* Пульт телевизора. Кнопки крупные: пультом пользуются пальцем на
-    планшете, а не мышью, и мелкие цели тут дороже места на экране. */
- #ov .tvgrid{display:grid;grid-template-columns:repeat(3,84px);gap:10px;
-       justify-content:center;margin:8px 0}
- #ov .tvk{height:64px;border-radius:18px;background:#F2F2F7;border:1px solid #DCDCE1;
-       display:flex;align-items:center;justify-content:center;font-size:15px;
-       color:#1C1C1E;cursor:pointer;user-select:none;touch-action:manipulation}
- #ov .tvk:active{background:#E4E4EA}
- #ov .tvk.ok{background:#E08A2D;border-color:#E08A2D;color:#fff;font-weight:600}
- #ov .tvk.wide{grid-column:span 3}
- #ov .tvk.app{height:52px;font-size:14px}
- #ov .tvk.app.now{background:#FDF3E6;border-color:#E08A2D;border-width:2px}
- #ov .tvk.pw{background:#D9433C;border-color:#D9433C;color:#fff;font-weight:600}
- #ov .tvgrid.tvdead .tvk{opacity:.35;pointer-events:none}
+ /* Пульт телевизора. Кнопки круглые и крупные: пультом пользуются
+    пальцем, и промах дороже места на экране. Цвета и размеры заданы
+    здесь явно - классы оверлея рассчитаны на тёмный фон, и заголовок
+    на белой карточке получался белым по белому. */
+ #ov .tvhead{display:flex;align-items:center;gap:10px;margin:2px 0 14px}
+ #ov .tvname{flex:1;min-width:0}
+ #ov .tvttl{color:#1C1C1E;font-size:20px;font-weight:600;line-height:1.2}
+ #ov .tvsub{color:#8E8E93;font-size:13px;margin-top:2px}
+ #ov .tvrow{display:flex;justify-content:center;align-items:center;gap:12px;margin:10px 0}
+ #ov .tvc{width:66px;height:66px;border-radius:50%;background:#F2F2F7;
+       border:1px solid #DCDCE1;display:flex;align-items:center;justify-content:center;
+       font-size:14px;color:#1C1C1E;cursor:pointer;user-select:none;
+       touch-action:manipulation;flex:0 0 auto}
+ #ov .tvc.big{width:88px;height:88px}
+ #ov .tvc:active{background:#E4E4EA}
+ #ov .tvc.ok{background:#E08A2D;border-color:#E08A2D;color:#fff;
+       font-size:18px;font-weight:600}
+ #ov .tvc.pw{background:#D9433C;border-color:#D9433C}
+ #ov .tvc.hole{background:none;border:none;pointer-events:none}
+ #ov .tvc svg{width:26px;height:26px;fill:none;stroke:#1C1C1E;stroke-width:2.4;
+       stroke-linecap:round;stroke-linejoin:round}
+ #ov .tvc.pw svg{stroke:#fff}
+ #ov .tvc.fill svg{fill:#1C1C1E;stroke:none}
+ #ov .tvapps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+ #ov .tvapp{height:52px;border-radius:16px;background:#F2F2F7;border:1px solid #DCDCE1;
+       display:flex;align-items:center;justify-content:center;font-size:14px;
+       color:#1C1C1E;cursor:pointer;text-align:center;padding:0 6px;
+       user-select:none;touch-action:manipulation}
+ #ov .tvapp.now{background:#FDF3E6;border-color:#E08A2D;border-width:2px}
+ #ov .tvvol{flex:1;height:66px;border-radius:22px;background:#F2F2F7;
+       border:1px solid #DCDCE1;display:flex;align-items:center;justify-content:center;
+       font-size:17px;font-weight:600;color:#1C1C1E;cursor:pointer;
+       user-select:none;touch-action:manipulation}
+ #ov .tvdead{opacity:.35;pointer-events:none}
  #ov .acbtn{display:inline-block;margin:4px;padding:9px 14px;border-radius:12px;
             border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);
             font-size:14px;font-weight:600;cursor:pointer}
@@ -1367,82 +1387,105 @@ function padCamera(node){
    мосте wb-tv. Пульт публикует единицу в контрол и на этом заканчивает
    свою работу - потому же он одинаково подойдёт телевизору другой марки.
 
-   Раскладка повторяет удачные пульты-приложения: питание красное сверху
-   справа, источник рядом, приложения чипами, крестовина с крупным OK,
-   «Назад» и «Меню» у нижних углов крестовины, ряд медиа с перемоткой,
-   громкость широкой парой. */
+   Значки рисуются встроенным SVG, а не символами юникода: «⏻» и эмодзи
+   приглушения есть не во всех шрифтах, и на ноутбуке кнопка оказывалась
+   пустой. */
+var TVI = {
+  power: '<path d="M12 3v9"/><path d="M6.5 6.5a8 8 0 1 0 11 0"/>',
+  up:    '<path d="M6 15l6-6 6 6"/>',
+  down:  '<path d="M6 9l6 6 6-6"/>',
+  left:  '<path d="M15 6l-6 6 6 6"/>',
+  right: '<path d="M9 6l6 6-6 6"/>',
+  play:  '<path d="M8 5l11 7-11 7z"/>',
+  pause: '<path d="M9 5v14M15 5v14"/>',
+  rew:   '<path d="M11 6l-7 6 7 6z"/><path d="M20 6l-7 6 7 6z"/>',
+  fwd:   '<path d="M13 6l7 6-7 6z"/><path d="M4 6l7 6-7 6z"/>',
+  mute:  '<path d="M11 5L7 9H4v6h3l4 4z"/><path d="M16 9l5 6M21 9l-5 6"/>',
+  input: '<path d="M4 6h16v10H4z"/><path d="M9 20h6"/>'
+};
+
 function padTV(node){
   var base = node.getAttribute('data-tv-base');
   if(!base) return;
+  var link = node.getAttribute('data-tv-link') === '1';
 
   function press(control){
     pub(base + control + '/on', 1)
       .catch(function(e){ flash('Не удалось: ' + e.message); });
   }
-  function key(cls, label, control){
-    var b = el('div', 'tvk' + (cls ? ' ' + cls : ''), label);
-    b.onclick = function(){ press(control); };
+  /* Кнопка. icon - ключ из TVI, иначе показывается текст.
+     needs === false у питания: включение идёт через Wake-on-LAN, канал
+     управления ему не нужен, и на выключенном телевизоре это
+     единственная кнопка, ради которой пульт открывают. */
+  function btn(cls, label, control, icon, needs){
+    var b = el('div', cls);
+    if(icon) b.innerHTML = '<svg viewBox="0 0 24 24">' + TVI[icon] + '</svg>';
+    else b.textContent = label;
+    if(needs === false || link) b.onclick = function(){ press(control); };
+    else b.classList.add('tvdead');
     return b;
   }
-  var link = node.getAttribute('data-tv-link') === '1';
-  /* Ряды, которым нужен живой канал управления, гасим при обрыве. Но
-     питание не из их числа: включение идёт через Wake-on-LAN, websocket
-     ему не нужен, и на выключенном телевизоре это единственная кнопка,
-     ради которой пульт вообще открывают. */
-  function grid(items){
-    var g = el('div','tvgrid' + (link ? '' : ' tvdead'));
-    items.forEach(function(n){ g.appendChild(n); });
-    return g;
+  function row(items){
+    var r = el('div','tvrow');
+    items.forEach(function(n){ r.appendChild(n); });
+    return r;
   }
+  function hole(){ return el('div','tvc hole'); }
 
   var card = el('div','card');
-  var head = el('div','tvgrid');          // без tvdead: питание живо всегда
-  var src = key('', 'Вход', 'source');
-  if(!link){ src.style.opacity = '.35'; src.onclick = null; }
-  head.appendChild(src);
-  head.appendChild(el('div','tvk',' '));            // пустая ячейка-распорка
-  head.appendChild(key('pw', '⏻', 'power'));
-  head.children[1].style.visibility = 'hidden';
 
-  card.appendChild(el('div','ttl', node.getAttribute('data-tv-title') || 'Телевизор'));
-  card.appendChild(el('div','hint',
+  /* шапка: название, состояние, вход и питание */
+  var head = el('div','tvhead');
+  var name = el('div','tvname');
+  name.appendChild(el('div','tvttl', node.getAttribute('data-tv-title') || 'Телевизор'));
+  var app = node.getAttribute('data-tv-app') || '';
+  name.appendChild(el('div','tvsub',
       (node.getAttribute('data-tv-state') || '')
-      + (node.getAttribute('data-tv-app') ? ' · ' + node.getAttribute('data-tv-app') : '')
+      + (app ? ' · ' + app : '')
       + (link ? '' : ' · доступно только включение')));
+  head.appendChild(name);
+  head.appendChild(btn('tvc', 'Вход', 'source', 'input'));
+  head.appendChild(btn('tvc pw', '', 'power', 'power', false));
   card.appendChild(head);
 
-  /* Приложения. Активное подсвечено по current_app - его сообщает мост,
-     опрашивая телевизор, а не запоминая последнее нажатие: приложение
-     могли переключить и обычным пультом. */
+  /* приложения: по три в ряд, активное подсвечено по current_app */
   var appsRaw = node.getAttribute('data-tv-apps') || '';
   if(appsRaw){
-    var now = node.getAttribute('data-tv-app') || '';
-    var apps = [];
+    var grid = el('div','tvapps');
     appsRaw.split(';').forEach(function(item){
       var parts = item.split('|');
       if(!parts[0]) return;
       var title = parts[1] || parts[0];
-      apps.push(key('app' + (title === now ? ' now' : ''), title, parts[0]));
+      var b = el('div','tvapp' + (title === app ? ' now' : ''), title);
+      if(link) b.onclick = (function(c){ return function(){ press(c); }; })(parts[0]);
+      else b.classList.add('tvdead');
+      grid.appendChild(b);
     });
-    if(apps.length) card.appendChild(grid(apps));
+    card.appendChild(grid);
   }
 
-  card.appendChild(grid([
-    el('div','tvk'), key('', '▲', 'up'), el('div','tvk'),
-    key('', '◀', 'left'), key('ok', 'OK', 'ok'), key('', '▶', 'right'),
-    key('', 'Назад', 'back'), key('', '▼', 'down'), key('', 'Меню', 'home')
-  ]));
-  // угловые пустышки не нажимаются и не мешают взгляду
-  var pad = card.lastChild;
-  pad.children[0].style.visibility = 'hidden';
-  pad.children[2].style.visibility = 'hidden';
+  /* крестовина: OK крупнее стрелок, «Назад» и «Меню» у нижних углов */
+  card.appendChild(row([hole(), btn('tvc','','up','up'), hole()]));
+  card.appendChild(row([btn('tvc','','left','left'),
+                        btn('tvc big ok','OK','ok'),
+                        btn('tvc','','right','right')]));
+  card.appendChild(row([btn('tvc','Назад','back'),
+                        btn('tvc','','down','down'),
+                        btn('tvc','Меню','home')]));
 
-  card.appendChild(grid([
-    key('', '◀◀', 'rewind'), key('', '▶', 'play'), key('', '❙❙', 'pause')
-  ]));
-  card.appendChild(grid([
-    key('', 'VOL −', 'vol_down'), key('', '🔇', 'mute'), key('', 'VOL +', 'vol_up')
-  ]));
+  /* медиа: перемотка в обе стороны */
+  card.appendChild(row([btn('tvc','','rewind','rew'),
+                        btn('tvc fill','','play','play'),
+                        btn('tvc','','pause','pause'),
+                        btn('tvc','','forward','fwd')]));
+
+  /* громкость: широкая пара, приглушение между */
+  var vd = el('div','tvvol','VOL −'), vu = el('div','tvvol','VOL +');
+  if(link){
+    vd.onclick = function(){ press('vol_down'); };
+    vu.onclick = function(){ press('vol_up'); };
+  } else { vd.classList.add('tvdead'); vu.classList.add('tvdead'); }
+  card.appendChild(row([vd, btn('tvc','','mute','mute'), vu]));
 
   openOv([card]);
 }

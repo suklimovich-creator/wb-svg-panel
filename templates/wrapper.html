@@ -1408,10 +1408,23 @@ function padTV(node){
   var base = node.getAttribute('data-tv-base');
   if(!base) return;
   var link = node.getAttribute('data-tv-link') === '1';
+  var on = node.getAttribute('data-tv-on') === '1';
 
   function press(control){
     pub(base + control + '/on', 1)
       .catch(function(e){ flash('Не удалось: ' + e.message); });
+  }
+  /* Питание - переключатель, а не кнопка: единица означает «включить», и
+     нажатие на включённом телевизоре не выключало его, а подтверждало
+     текущее состояние. Шлём противоположное значение и запоминаем его,
+     чтобы второе нажатие подряд сработало до обновления панели. */
+  function pressPower(){
+    var want = on ? 0 : 1;
+    pub(base + 'power/on', want).then(function(){
+      on = !on;
+      sub.textContent = on ? 'Включается…' : 'Выключается…';
+      setTimeout(refresh, 800); setTimeout(refresh, 3000);
+    }).catch(function(e){ flash('Не удалось: ' + e.message); });
   }
   /* Кнопка. icon - ключ из TVI, иначе показывается текст.
      needs === false у питания: включение идёт через Wake-on-LAN, канал
@@ -1421,8 +1434,11 @@ function padTV(node){
     var b = el('div', cls);
     if(icon) b.innerHTML = '<svg viewBox="0 0 24 24">' + TVI[icon] + '</svg>';
     else b.textContent = label;
-    if(needs === false || link) b.onclick = function(){ press(control); };
-    else b.classList.add('tvdead');
+    if(needs === false || link){
+      b.onclick = control === 'power'
+                ? pressPower
+                : function(){ press(control); };
+    } else b.classList.add('tvdead');
     return b;
   }
   function row(items){
@@ -1439,10 +1455,11 @@ function padTV(node){
   var name = el('div','tvname');
   name.appendChild(el('div','tvttl', node.getAttribute('data-tv-title') || 'Телевизор'));
   var app = node.getAttribute('data-tv-app') || '';
-  name.appendChild(el('div','tvsub',
+  var sub = el('div','tvsub',
       (node.getAttribute('data-tv-state') || '')
       + (app ? ' · ' + app : '')
-      + (link ? '' : ' · доступно только включение')));
+      + (link ? '' : ' · доступно только включение'));
+  name.appendChild(sub);
   head.appendChild(name);
   head.appendChild(btn('tvc', 'Вход', 'source', 'input'));
   head.appendChild(btn('tvc pw', '', 'power', 'power', false));

@@ -166,7 +166,7 @@
  #ov .tvk.app{height:52px;font-size:14px}
  #ov .tvk.app.now{background:#FDF3E6;border-color:#E08A2D;border-width:2px}
  #ov .tvk.pw{background:#D9433C;border-color:#D9433C;color:#fff;font-weight:600}
- #ov .tvdead .tvk{opacity:.35;pointer-events:none}
+ #ov .tvgrid.tvdead .tvk{opacity:.35;pointer-events:none}
  #ov .acbtn{display:inline-block;margin:4px;padding:9px 14px;border-radius:12px;
             border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);
             font-size:14px;font-weight:600;cursor:pointer}
@@ -1384,25 +1384,31 @@ function padTV(node){
     b.onclick = function(){ press(control); };
     return b;
   }
+  var link = node.getAttribute('data-tv-link') === '1';
+  /* Ряды, которым нужен живой канал управления, гасим при обрыве. Но
+     питание не из их числа: включение идёт через Wake-on-LAN, websocket
+     ему не нужен, и на выключенном телевизоре это единственная кнопка,
+     ради которой пульт вообще открывают. */
   function grid(items){
-    var g = el('div','tvgrid');
+    var g = el('div','tvgrid' + (link ? '' : ' tvdead'));
     items.forEach(function(n){ g.appendChild(n); });
     return g;
   }
 
   var card = el('div','card');
-  var head = el('div','tvgrid');
-  head.appendChild(key('', 'Вход', 'source'));
+  var head = el('div','tvgrid');          // без tvdead: питание живо всегда
+  var src = key('', 'Вход', 'source');
+  if(!link){ src.style.opacity = '.35'; src.onclick = null; }
+  head.appendChild(src);
   head.appendChild(el('div','tvk',' '));            // пустая ячейка-распорка
   head.appendChild(key('pw', '⏻', 'power'));
   head.children[1].style.visibility = 'hidden';
 
   card.appendChild(el('div','ttl', node.getAttribute('data-tv-title') || 'Телевизор'));
-  var link = node.getAttribute('data-tv-link') === '1';
   card.appendChild(el('div','hint',
       (node.getAttribute('data-tv-state') || '')
       + (node.getAttribute('data-tv-app') ? ' · ' + node.getAttribute('data-tv-app') : '')
-      + (link ? '' : ' · нет связи')));
+      + (link ? '' : ' · доступно только включение')));
   card.appendChild(head);
 
   /* Приложения. Активное подсвечено по current_app - его сообщает мост,
@@ -1437,10 +1443,6 @@ function padTV(node){
   card.appendChild(grid([
     key('', 'VOL −', 'vol_down'), key('', '🔇', 'mute'), key('', 'VOL +', 'vol_up')
   ]));
-
-  // Связи нет - кнопки гасим и не даём нажимать: понятнее, чем нажатие,
-  // которое молча никуда не уходит.
-  if(!link) card.className = 'card tvdead';
 
   openOv([card]);
 }

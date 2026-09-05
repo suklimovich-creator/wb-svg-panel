@@ -587,3 +587,160 @@ class Ac(Tile):
             "ac_fan_now": (ctx.dev("fan_mode") or "").strip(),
             "ac_quiet_now": "1" if "тихий" in (data.get("status") or "") else "0",
         }
+
+
+# ---------------------------------------------------------------- телевизор
+
+#: Кнопки пульта. Имена совпадают с контролами моста wb-tv: там они тоже
+#: заданы конфигом, и менять их в двух местах пришлось бы одинаково.
+TV_KEYS = ("up", "down", "left", "right", "ok", "back", "home", "source",
+           "vol_up", "vol_down", "mute", "play", "pause", "rewind", "forward")
+
+#: Что публикует мост в контрол state и как это назвать по-русски.
+TV_STATE_RU = {"on": "Включён", "standby": "Ожидание", "offline": "Выключен"}
+
+
+def tv_apps(tile):
+    """
+    Приложения плитки: [(контрол, подпись)].
+
+    В конфиге панели лежат только имена контролов и порядок, а
+    соответствие «контрол → appId» живёт в конфиге моста: appId это
+    свойство телевизора, панели о нём знать незачем.
+
+        apps:
+          - {control: app_kinopoisk, title: Кинопоиск}
+          - app_rutube            # подписью станет имя контрола
+    """
+    out = []
+    for item in (tile.get("apps") or []):
+        if isinstance(item, dict):
+            control = item.get("control") or item.get("app")
+            if control:
+                out.append((str(control), str(item.get("title") or control)))
+        elif item:
+            out.append((str(item), str(item)))
+    return out
+
+
+def build_tv(tile, state):
+    """
+    Телевизор: обводка по питанию, под названием - что сейчас на экране.
+
+    Питание и связь берутся из разных контролов и означают разное.
+    power - включён ли телевизор, online - дойдёт ли команда. Смешивать
+    их нельзя: выключенный телевизор исправен, а включённый без связи
+    выглядит рабочим, пока не нажмёшь кнопку.
+    """
+    dev = tile.get("device", "")
+    snaps = []
+
+    def val(name):
+        snap = state.snapshot("%s/%s" % (dev, name))
+        snaps.append(snap)
+        return snap
+
+    on = is_on((val("power")["raw"] or "").strip())
+    st = (val("state")["raw"] or "").strip()
+    online = is_on((val("online")["raw"] or "").strip())
+    app = (val("current_app")["raw"] or "").strip()
+    # Мост пишет прочерк, когда активное приложение не определено:
+    # пустая строка с retain стирала бы значение в брокере.
+    if app in ("—", "-"):
+        app = ""
+
+    state_ru = TV_STATE_RU.get(st, "Включён" if on else "Выключен")
+
+    bits = []
+    if on and app:
+        bits.append(app)
+    else:
+        bits.append(state_ru)
+    if on and not online:
+        # Телевизор работает, но канал управления лежит: сказать об этом
+        # надо словами, иначе человек решит, что сломалась панель.
+        bits.append("нет связи")
+
+    return {
+        "on": on,
+        "icon": tile.get("icon") or "tv",
+        "status": " · ".join(bits),
+        # Строка состояния нужна всегда: без неё «Выключен» пропадает и
+        # плитка выглядит просто погашенной, без объяснения.
+        "always_status": True,
+        "state_ru": state_ru,
+        "online": online,
+        "app": app,
+        "enabled": on,
+        "snaps": snaps,
+    }
+
+
+@tile("tv")
+class Tv(Tile):
+    """
+    Телевизор через мост wb-tv: одно устройство, десятки контролов.
+
+    В конфиге:
+
+        - type: tv
+          title: Телевизор
+          device: tv_living
+          apps:
+            - {control: app_kinopoisk, title: Кинопоиск}
+            - {control: app_rutube,    title: RUTUBE}
+
+    Нажатие открывает пульт и ничего не переключает. Питание живёт
+    только внутри пульта: случайное касание не должно выключать
+    телевизор посреди фильма.
+    """
+
+    roles = ()
+
+    @staticmethod
+    def channels(conf):
+        dev = conf.get("device")
+        if not dev:
+            return set()
+        return set("%s/%s" % (dev, name)
+                   for name in ("power", "state", "online", "current_app"))
+
+    @staticmethod
+    def writes(conf):
+        """Всё, во что может написать пульт. Ролей нет - список нужен здесь."""
+        dev = conf.get("device")
+        if not dev:
+            return set()
+        names = ["power", "key", "app"]
+        names.extend(TV_KEYS)
+        names.extend(control for control, _ in tv_apps(conf))
+        return set("/devices/%s/controls/%s/on" % (dev, name) for name in names)
+
+    def prepare(self, ctx):
+        data = build_tv(ctx.conf, ctx.state)
+        ctx.snaps.extend(data.pop("snaps", []) or [])
+        return data
+
+    def zones(self, ctx, data):
+        if not ctx.opt("device"):
+            return []
+        # Ни topic, ни write: нажатие открывает пульт, слой команд видит
+        # чистую зону и ничего не публикует.
+        return [Zone("open", "all", pad="tv")]
+
+    def pad(self, ctx, data):
+        dev = ctx.opt("device")
+        if not dev:
+            return {}
+        apps = tv_apps(ctx.conf)
+        return {
+            # Пульт сам собирает топики из основания и имён контролов:
+            # их два десятка, и перечислять каждый атрибутом незачем.
+            "tv_base": "/devices/%s/controls/" % dev,
+            "tv_title": ctx.opt("title", "") or "Телевизор",
+            "tv_on": "1" if data.get("on") else "0",
+            "tv_link": "1" if data.get("online") else "0",
+            "tv_state": data.get("state_ru", ""),
+            "tv_app": data.get("app", ""),
+            "tv_apps": ";".join("%s|%s" % (c, t) for c, t in apps),
+        }

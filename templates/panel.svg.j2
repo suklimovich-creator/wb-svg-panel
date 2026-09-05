@@ -123,6 +123,10 @@
   {% elif t.kind == 'link' %}{{ basic.tile_link(t) }}
   {% elif t.kind == 'scene' %}{{ basic.tile_scene(t) }}
   {% elif t.kind == 'camera' %}{{ basic.tile_camera(t) }}
+  {#- Телевизор рисуется как обычный выключатель: значок, обводка по
+      питанию и строка состояния. Своего макроса ему не нужно -
+      всё нестандартное живёт в пульте, а не на плитке. -#}
+  {% elif t.kind == 'tv' %}{{ basic.tile_switch(t) }}
   {% else %}{{ basic.tile_value(t) }}
   {% endif %}
   {#- Точка «нет данных» заголовку не нужна: он ничего не измеряет,

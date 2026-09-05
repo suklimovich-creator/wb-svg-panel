@@ -153,6 +153,20 @@
  #ov .wbig .wdeg{font-size:22px;font-weight:500;vertical-align:super;
                  margin-left:4px;letter-spacing:0}
  #ov .acrow{display:block;margin:8px auto;max-width:460px}
+ /* Пульт телевизора. Кнопки крупные: пультом пользуются пальцем на
+    планшете, а не мышью, и мелкие цели тут дороже места на экране. */
+ #ov .tvgrid{display:grid;grid-template-columns:repeat(3,84px);gap:10px;
+       justify-content:center;margin:8px 0}
+ #ov .tvk{height:64px;border-radius:18px;background:#F2F2F7;border:1px solid #DCDCE1;
+       display:flex;align-items:center;justify-content:center;font-size:15px;
+       color:#1C1C1E;cursor:pointer;user-select:none;touch-action:manipulation}
+ #ov .tvk:active{background:#E4E4EA}
+ #ov .tvk.ok{background:#E08A2D;border-color:#E08A2D;color:#fff;font-weight:600}
+ #ov .tvk.wide{grid-column:span 3}
+ #ov .tvk.app{height:52px;font-size:14px}
+ #ov .tvk.app.now{background:#FDF3E6;border-color:#E08A2D;border-width:2px}
+ #ov .tvk.pw{background:#D9433C;border-color:#D9433C;color:#fff;font-weight:600}
+ #ov .tvdead .tvk{opacity:.35;pointer-events:none}
  #ov .acbtn{display:inline-block;margin:4px;padding:9px 14px;border-radius:12px;
             border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);
             font-size:14px;font-weight:600;cursor:pointer}
@@ -1002,6 +1016,10 @@ function bind(){
         // переключать у неё нечего, и держать палец шесть десятых секунды
         // ради единственного действия было бы издевательством.
         else if(this.getAttribute('data-pad') === 'camera') openPad(this);
+        // Телевизор: нажатие открывает пульт и ничего не переключает.
+        // Случайное касание не должно выключать телевизор посреди фильма,
+        // поэтому питание живёт только внутри пульта.
+        else if(this.getAttribute('data-pad') === 'tv') openPad(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -1344,6 +1362,89 @@ function padCamera(node){
   if(stream) connect(); else toPolling();
 }
 
+/* ---------- пульт телевизора ---------- */
+/* Кнопки не знают ни про Samsung, ни про коды клавиш: всё это живёт в
+   мосте wb-tv. Пульт публикует единицу в контрол и на этом заканчивает
+   свою работу - потому же он одинаково подойдёт телевизору другой марки.
+
+   Раскладка повторяет удачные пульты-приложения: питание красное сверху
+   справа, источник рядом, приложения чипами, крестовина с крупным OK,
+   «Назад» и «Меню» у нижних углов крестовины, ряд медиа с перемоткой,
+   громкость широкой парой. */
+function padTV(node){
+  var base = node.getAttribute('data-tv-base');
+  if(!base) return;
+
+  function press(control){
+    pub(base + control + '/on', 1)
+      .catch(function(e){ flash('Не удалось: ' + e.message); });
+  }
+  function key(cls, label, control){
+    var b = el('div', 'tvk' + (cls ? ' ' + cls : ''), label);
+    b.onclick = function(){ press(control); };
+    return b;
+  }
+  function grid(items){
+    var g = el('div','tvgrid');
+    items.forEach(function(n){ g.appendChild(n); });
+    return g;
+  }
+
+  var card = el('div','card');
+  var head = el('div','tvgrid');
+  head.appendChild(key('', 'Вход', 'source'));
+  head.appendChild(el('div','tvk',' '));            // пустая ячейка-распорка
+  head.appendChild(key('pw', '⏻', 'power'));
+  head.children[1].style.visibility = 'hidden';
+
+  card.appendChild(el('div','ttl', node.getAttribute('data-tv-title') || 'Телевизор'));
+  var link = node.getAttribute('data-tv-link') === '1';
+  card.appendChild(el('div','hint',
+      (node.getAttribute('data-tv-state') || '')
+      + (node.getAttribute('data-tv-app') ? ' · ' + node.getAttribute('data-tv-app') : '')
+      + (link ? '' : ' · нет связи')));
+  card.appendChild(head);
+
+  /* Приложения. Активное подсвечено по current_app - его сообщает мост,
+     опрашивая телевизор, а не запоминая последнее нажатие: приложение
+     могли переключить и обычным пультом. */
+  var appsRaw = node.getAttribute('data-tv-apps') || '';
+  if(appsRaw){
+    var now = node.getAttribute('data-tv-app') || '';
+    var apps = [];
+    appsRaw.split(';').forEach(function(item){
+      var parts = item.split('|');
+      if(!parts[0]) return;
+      var title = parts[1] || parts[0];
+      apps.push(key('app' + (title === now ? ' now' : ''), title, parts[0]));
+    });
+    if(apps.length) card.appendChild(grid(apps));
+  }
+
+  card.appendChild(grid([
+    el('div','tvk'), key('', '▲', 'up'), el('div','tvk'),
+    key('', '◀', 'left'), key('ok', 'OK', 'ok'), key('', '▶', 'right'),
+    key('', 'Назад', 'back'), key('', '▼', 'down'), key('', 'Меню', 'home')
+  ]));
+  // угловые пустышки не нажимаются и не мешают взгляду
+  var pad = card.lastChild;
+  pad.children[0].style.visibility = 'hidden';
+  pad.children[2].style.visibility = 'hidden';
+
+  card.appendChild(grid([
+    key('', '◀◀', 'rewind'), key('', '▶', 'play'), key('', '❙❙', 'pause')
+  ]));
+  card.appendChild(grid([
+    key('', 'VOL −', 'vol_down'), key('', '🔇', 'mute'), key('', 'VOL +', 'vol_up')
+  ]));
+
+  // Связи нет - кнопки гасим и не даём нажимать: понятнее, чем нажатие,
+  // которое молча никуда не уходит.
+  if(!link) card.className = 'card tvdead';
+
+  openOv([card]);
+}
+
 function openPad(node){
   var pad = node.getAttribute('data-pad');
   if(pad==='xy') padXY(node);
@@ -1352,6 +1453,7 @@ function openPad(node){
   else if(pad==='curtain') padCurtain(node);
   else if(pad==='ac') padAC(node);
   else if(pad==='camera') padCamera(node);
+  else if(pad==='tv') padTV(node);
 }
 
 /* ---------- обновление ---------- */

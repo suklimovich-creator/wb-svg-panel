@@ -167,6 +167,13 @@ CMD_ATTRS = [
     ("href", "data-href"),
     ("cam", "data-cam"), ("cam_poll", "data-cam-poll"),
     ("cam_live", "data-cam-live"), ("cam_life", "data-cam-life"),
+    # Телевизор. Топики кнопок пульт собирает сам из tv_base и имён
+    # контролов: их два десятка, и перечислять каждый отдельным
+    # атрибутом значило бы дописывать этот список при каждой новой кнопке.
+    ("tv_base", "data-tv-base"), ("tv_title", "data-tv-title"),
+    ("tv_on", "data-tv-on"), ("tv_link", "data-tv-link"),
+    ("tv_state", "data-tv-state"), ("tv_app", "data-tv-app"),
+    ("tv_apps", "data-tv-apps"),
 ]
 
 

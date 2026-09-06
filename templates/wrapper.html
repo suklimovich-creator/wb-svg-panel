@@ -157,8 +157,15 @@
     пальцем, и промах дороже места на экране. Цвета и размеры заданы
     здесь явно - классы оверлея рассчитаны на тёмный фон, и заголовок
     на белой карточке получался белым по белому. */
+ /* Ширина задана жёстко: без неё карточка подстраивалась под самый
+    широкий ряд, и на полном экране пульт прыгал при каждом обновлении
+    статуса - строка «Включён · Кинопоиск» шире, чем «Выключен». */
+ #ov .tvcard{width:340px;max-width:92vw;box-sizing:border-box}
  #ov .tvhead{display:flex;align-items:center;gap:10px;margin:2px 0 14px}
+ #ov .tvname{overflow:hidden}
+ #ov .tvttl,#ov .tvsub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  #ov .tvname{flex:1;min-width:0}
+
  #ov .tvttl{color:#1C1C1E;font-size:20px;font-weight:600;line-height:1.2}
  #ov .tvsub{color:#8E8E93;font-size:13px;margin-top:2px}
  #ov .tvrow{display:flex;justify-content:center;align-items:center;gap:12px;margin:10px 0}
@@ -1452,7 +1459,7 @@ function padTV(node){
   }
   function hole(){ return el('div','tvc hole'); }
 
-  var card = el('div','card');
+  var card = el('div','card tvcard');
 
   /* шапка: название, состояние, вход и питание */
   var head = el('div','tvhead');

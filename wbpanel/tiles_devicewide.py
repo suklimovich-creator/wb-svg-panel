@@ -157,7 +157,9 @@ def build_chart(tile, state, history):
         lx, anchor = edge_anchor(tk["x"], tile["inner_w"])
         if with_grid and anchor != "middle":
             continue
-        text = "%02d:00" % tk["hour"]
+        # Без минут: они всегда нулевые, а на узкой плитке каждая
+        # лишняя пара знаков отнимает место у соседней отметки.
+        text = "%02d" % tk["hour"]
         half = text_width(text, axis_fs) / 2.0
         if collides(lx - half, lx + half):
             continue

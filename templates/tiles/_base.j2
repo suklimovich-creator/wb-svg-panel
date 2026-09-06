@@ -346,11 +346,14 @@
       <path class="sicon" d="M4.4 14.2c1.2 1.1 2.4 1.1 3.6 0s2.4-1.1 3.6 0"/>
     </g>
   </symbol>
+  {#- Класс icon, а не sicon: sicon - стиль мелких значков строки
+      состояния, он тоньше и другого цвета, и на плитке сцены пылесос
+      выглядел белёсым рядом с соседями. -#}
   <symbol id="{{ uid }}ic-vacuum" viewBox="0 0 24 24">
     <g transform="translate(0.3,-1)">
-      <circle class="sicon" cx="10.4" cy="12" r="7.3"/>
-      <path class="sicon" d="M3.6 9.2a7.3 7.3 0 0 1 13.6 0"/>
-      <circle class="sicon" cx="10.4" cy="15.4" r="1.5"/>
+      <circle class="icon" cx="10.4" cy="12" r="7.3"/>
+      <path class="icon" d="M3.6 9.2a7.3 7.3 0 0 1 13.6 0"/>
+      <circle class="icon" cx="10.4" cy="15.4" r="1.5"/>
     </g>
   </symbol>
   <symbol id="{{ uid }}ic-snow" viewBox="0 0 24 24">
@@ -518,10 +521,18 @@
 {% endmacro %}
 
 {#- мелкая плитка: иконка по центру сверху, короткая подпись снизу -#}
+{#- LOW - плитка в половину высоты (одна ячейка, 78 px). Там подпись
+    стоит на h-40, то есть ровно на значке: текст ложился поверх него.
+    Значок уезжает влево и центрируется, текст - вправо от значка. -#}
+{% set LOW = 117 %}
 {% macro icon_c(t, name, size=24) %}
   {% if t.compact %}
   <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
        x="{{ (t.w - size) / 2 }}" y="14" width="{{ size }}" height="{{ size }}"/>
+  {% elif t.h < LOW %}
+  <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
+       x="16" y="{{ (t.h - size - 3) / 2 }}"
+       width="{{ size + 3 }}" height="{{ size + 3 }}"/>
   {% else %}
   <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
        x="18" y="17" width="{{ size + 3 }}" height="{{ size + 3 }}"/>
@@ -557,6 +568,14 @@
 {% macro caption(t, status) %}
   {% if t.compact %}
   <text x="{{ t.w / 2 }}" y="{{ t.h - 13 }}" class="name-s" text-anchor="middle">{{ t.title_s or t.title }}</text>
+  {% elif t.h < LOW %}
+  {#- Половинная высота: текст правее значка и по центру строки. -#}
+  {% if status and (t.show_status or t.always_status) %}
+  {{ title_text(t, 56, t.h / 2 - 3, 'name') }}
+  <text x="56" y="{{ t.h / 2 + 15 }}" class="status">{{ status }}</text>
+  {% else %}
+  {{ title_text(t, 56, t.h / 2 + 5, 'name') }}
+  {% endif %}
   {% elif status and (t.show_status or t.always_status) %}
   {{ title_text(t, 20, t.h - 40, 'name') }}
   <text x="20" y="{{ t.h - 18 }}" class="status">{{ status }}</text>

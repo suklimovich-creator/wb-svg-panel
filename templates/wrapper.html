@@ -1500,7 +1500,16 @@ function padTV(node){
       if(!parts[0]) return;
       var title = parts[1] || parts[0];
       var b = el('div','tvapp' + (title === app ? ' now' : ''), title);
-      if(link) b.onclick = (function(c){ return function(){ press(c); }; })(parts[0]);
+      if(link) b.onclick = (function(c, node){ return function(){
+        press(c);
+        /* Подсвечиваем нажатое сразу, не дожидаясь ответа. Мост
+           переспрашивает телевизор на ближайшем круге опроса, и через
+           пару секунд sync() либо подтвердит, либо снимет подсветку -
+           если приложение почему-то не запустилось. */
+        var all = grid.querySelectorAll('.tvapp');
+        for(var k = 0; k < all.length; k++) all[k].classList.remove('now');
+        node.classList.add('now');
+      }; })(parts[0], b);
       else b.classList.add('tvdead');
       grid.appendChild(b);
     });

@@ -283,8 +283,13 @@ def hour_ticks(t0, t1, width, pad_x=0.0, max_lines=13):
             if hour % step_h == 0:
                 x = pad_x + (stamp - t0) / (t1 - t0) * (width - 2 * pad_x)
                 if 2 < x < width - 2:
+                    # Подписываем каждые три часа, как на прогнозе погоды:
+                    # шесть - слишком редко, на суточном графике остаётся
+                    # четыре отметки и время читается с трудом. Если сетка
+                    # реже трёх часов, подписи идут по её шагу.
+                    label_h = max(step_h, 3)
                     out.append({"x": round(x, 1), "hour": hour,
-                                "major": hour % 6 == 0})
+                                "major": hour % label_h == 0})
         stamp += 3600
     return out
 

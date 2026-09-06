@@ -162,11 +162,14 @@
  #ov .tvttl{color:#1C1C1E;font-size:20px;font-weight:600;line-height:1.2}
  #ov .tvsub{color:#8E8E93;font-size:13px;margin-top:2px}
  #ov .tvrow{display:flex;justify-content:center;align-items:center;gap:12px;margin:10px 0}
- #ov .tvc{width:66px;height:66px;border-radius:50%;background:#F2F2F7;
+ /* flex:0 0 66px и box-sizing обязательны: без них кнопка в шапке
+    растягивалась соседом и круг превращался в овал. */
+ #ov .tvc{flex:0 0 66px;width:66px;height:66px;min-width:66px;min-height:66px;
+       box-sizing:border-box;padding:0;border-radius:50%;background:#F2F2F7;
        border:1px solid #DCDCE1;display:flex;align-items:center;justify-content:center;
        font-size:14px;color:#1C1C1E;cursor:pointer;user-select:none;
-       touch-action:manipulation;flex:0 0 auto}
- #ov .tvc.big{width:88px;height:88px}
+       touch-action:manipulation;overflow:hidden}
+ #ov .tvc.big{flex:0 0 88px;width:88px;height:88px;min-width:88px;min-height:88px}
  #ov .tvc:active{background:#E4E4EA}
  #ov .tvc.ok{background:#E08A2D;border-color:#E08A2D;color:#fff;
        font-size:18px;font-weight:600}
@@ -268,10 +271,11 @@ function toggleSection(node){
   var key = node.getAttribute('data-section');
   if (!key) return;
   if (ACCORDION) {
-    // В гармошке раскрыт ровно один раздел: нажатие на свёрнутый
-    // раскрывает его, на раскрытый - ничего не меняет, иначе панель
-    // осталась бы без содержимого вовсе.
-    if (node.getAttribute('data-folded') === '1') OPENED = key;
+    // В гармошке раскрыт ровно один раздел. Нажатие на свёрнутый
+    // раскрывает его, на раскрытый - сворачивает всё: список одних
+    // заголовков это самый быстрый способ дойти до нужной комнаты.
+    // Сервер понимает "-" как «свёрнуты все».
+    OPENED = node.getAttribute('data-folded') === '1' ? key : '-';
   } else {
     var i = FOLDED.indexOf(key);
     if (i < 0) FOLDED.push(key); else FOLDED.splice(i, 1);
@@ -1503,6 +1507,37 @@ function padTV(node){
     vu.onclick = function(){ press('vol_up'); };
   } else { vd.classList.add('tvdead'); vu.classList.add('tvdead'); }
   card.appendChild(row([vd, btn('tvc','','mute','mute'), vu]));
+
+  /* Пока пульт открыт, автообновление панели стоит - иначе разметка
+     менялась бы под пальцем. Но статус нужен именно сейчас, когда пульт
+     перед глазами, поэтому опрашиваем сами, чаще и не трогая страницу.
+     Таймер снимается через ovCleanup: иначе он тикал бы в пустоту. */
+  function sync(){
+    var q = Q();
+    fetch(NAME + '.svg' + q + (q ? '&' : '?') + 't=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.text() : null; })
+      .then(function(text){
+        if(!text) return;
+        var doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+        var g = doc.querySelector('[data-tv-base="' + base + '"]');
+        if(!g) return;
+        on = g.getAttribute('data-tv-on') === '1';
+        var st = g.getAttribute('data-tv-state') || '';
+        var now = g.getAttribute('data-tv-app') || '';
+        var live = g.getAttribute('data-tv-link') === '1';
+        sub.textContent = st + (now ? ' · ' + now : '')
+                        + (live ? '' : ' · доступно только включение');
+        // Подсветка активного приложения: телевизор могли переключить и
+        // обычным пультом, поэтому идём от того, что сообщил мост.
+        var chips = card.querySelectorAll('.tvapp');
+        for(var i = 0; i < chips.length; i++){
+          chips[i].classList.toggle('now', chips[i].textContent === now);
+        }
+      })
+      .catch(function(){});
+  }
+  var timer = setInterval(sync, 2000);
+  ovCleanup = function(){ clearInterval(timer); };
 
   openOv([card]);
 }

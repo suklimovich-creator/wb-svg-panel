@@ -157,11 +157,18 @@ def folded_sections(panel_conf, sections, closed, opened):
     Режим гармошки (accordion): раскрыт ровно один раздел - тот, что
     назван в opened, иначе первый. Так на сводной панели видно одну
     комнату целиком, а не начало каждой.
+
+    Особый случай - opened == "-": свёрнуты все. Нажатие на раскрытый
+    раздел раньше не делало ничего, и свернуть панель целиком было
+    нельзя, хотя список одних заголовков - самый быстрый способ дойти
+    до нужной комнаты.
     """
     keys = [key for _t, _tiles, _src, key in sections if key]
     if not keys:
         return set()
     if panel_conf.get("accordion"):
+        if opened == "-":
+            return set(keys)
         current = opened if opened in keys else keys[0]
         return set(k for k in keys if k != current)
     return set(k for k in keys if k in closed)

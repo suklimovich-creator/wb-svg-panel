@@ -72,6 +72,13 @@
  #ov.open{display:block;text-align:center}
  #ov .card{background:#F1F1F3;border-radius:22px;padding:14px;max-width:100%;
            display:inline-block;box-sizing:border-box;position:relative;z-index:1}
+ /* Развёрнутая плитка рисует собственную подложку со скруглением, и
+    поля карточки давали вторую рамку вокруг первой. Здесь карточка -
+    просто контейнер во всю ширину. */
+ #ov .card.wide{background:none;border-radius:0;padding:0;width:100%;display:block}
+ /* Место под карточкой: закрывают её нажатием мимо, и на телефоне
+    промахнуться мимо узкой полоски слишком легко. */
+ #ov .card.wide + .hint{padding:14px 0 64px}
  #ov svg{display:block;max-width:100%;height:auto}
  #ov .ttl{color:#fff;font-size:17px;font-weight:600}
  /* Камера во весь экран. Ширину задаём в процентах окна, высоту отдаём
@@ -539,10 +546,13 @@ function chartOv(node){
 
 function expand(node){
   var i = node.getAttribute('data-i');
-  var w = Math.min(Math.round(window.innerWidth * 0.90), 1400);
+  // 40 px - поля самого оверлея (18 с каждой стороны) плюс запас на
+  // полосу прокрутки. Раньше просили 90% ширины и получали заметные
+  // пустые поля по бокам вдобавок к рамке карточки.
+  var w = Math.min(Math.max(window.innerWidth - 40, 280), 1400);
   var h = Math.min(Math.round(window.innerHeight * 0.62), 900);
   var url = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h;
-  var card = el('div','card');
+  var card = el('div','card wide');
   card.textContent = '…';
   var hint = el('div','hint','Нажмите вне карточки, чтобы закрыть');
   openOv([card, hint]);

@@ -24,6 +24,20 @@ from .const import log
 #
 # Заодно это готовое решение для ESP32-дисплея: librsvg тоже не понимает var().
 
+#: Шаблоны компилируются один раз: каждый из них ходит по документу в
+#: полтораста килобайт, и разбор шаблона на каждый ответ там лишний.
+_VAR_RE = re.compile(r"var\((--[\w-]+)\)")
+#: Шаблоны уборки начинаются с литерала. Это не косметика: с ведущим
+#: [ \t]* и с просмотром назад движок не может искать подстроку и идёт
+#: по документу посимвольно. На панели в полтораста килобайт разница
+#: десятикратная - 3.7 мс против 0.85 и 2.8 против 0.25.
+#: Ведущие пробелы при этом остаются в разметке; на отображение они не
+#: влияют, а стоят копейки места.
+_CALC_RE = re.compile(r"calc\(\s*([\d.]+)px\s*\*\s*([\d.]+)\s*\)")
+_DECL_RE = re.compile(r"--[\w-]+[ \t]*:[^;\n]*;")
+_FS_ATTR_RE = re.compile(r'style="--fs:[\d.]+"[ \t]*')
+
+
 def _css_vars(style, selector):
     """Объявления --name: value из блока с заданным селектором."""
     match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", style)
@@ -72,28 +86,36 @@ def resolve_css_vars(svg, theme="light", fs=1.0):
         values.update(_css_vars(style, ".dark"))
     values["--fs"] = str(fs)
 
-    def sub_var(text, depth=0):
-        if depth > 4 or "var(" not in text:
-            return text
-        out = re.sub(r"var\((--[\w-]+)\)",
-                     lambda m: values.get(m.group(1), "inherit").strip(), text)
-        return sub_var(out, depth + 1)
+    def replace(match):
+        return values.get(match.group(1), "inherit")
 
-    body = sub_var(svg)
+    # Переменная может ссылаться на переменную. Разворачиваем такие
+    # ссылки в самом словаре - он маленький, - а по документу проходим
+    # ровно один раз. Раньше проход был рекурсивным: полтораста
+    # килобайт сканировались два-три раза подряд, и это стоило около
+    # четверти времени всего ответа.
+    values = dict((k, v.strip()) for k, v in values.items())
+    for _ in range(4):
+        nested = [k for k, v in values.items() if "var(" in v]
+        if not nested:
+            break
+        for key in nested:
+            values[key] = _VAR_RE.sub(replace, values[key])
+
+    body = _VAR_RE.sub(replace, svg)
 
     # calc(9.5px * 2.17) -> 20.6px: старые движки такое умеют, но пусть
-    # не считают лишнего, а заодно уйдут выражения с потерявшимися var
+    # не считают лишнего, а заодно уйдут выражения с потерявшимися var.
+    # Сворачивается после подстановки: до неё множитель ещё var(--fs).
     def calc(m):
         try:
             return "%.2fpx" % (float(m.group(1)) * float(m.group(2)))
         except ValueError:
             return m.group(0)
-    body = re.sub(r"calc\(\s*([\d.]+)px\s*\*\s*([\d.]+)\s*\)", calc, body)
+    body = _CALC_RE.sub(calc, body)
 
-    # Сами объявления больше не нужны.
-    # Осторожно с границами: наивный шаблон style="--fs:…" без \b и без
-    # привязки к пробелу схватывал открывающий тег <style> вместе с куском
-    # CSS - в разметке оставался мусор, а картинка переставала быть XML.
-    body = re.sub(r"[ \t]*--[\w-]+[ \t]*:[^;\n]*;", "", body)
-    body = re.sub(r'(?<=[\s])style="--fs:[\d.]+"[ \t]*', "", body)
-    return body
+    # Сами объявления и служебный атрибут больше не нужны. Шаблон
+    # привязан к литералу style="--fs: - внутрь тега <style> он попасть
+    # не может, там за именем тега идёт закрывающая скобка.
+    body = _DECL_RE.sub("", body)
+    return _FS_ATTR_RE.sub("", body)

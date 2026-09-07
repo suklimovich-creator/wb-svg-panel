@@ -5,7 +5,7 @@
 #     sh tools/make-upload.sh                       папка ../wb-svg-panel-upload
 #     sh tools/make-upload.sh /c/dev/upload         своя папка
 #     sh tools/make-upload.sh --changed             только изменившиеся файлы
-#     sh tools/make-upload.sh --fetch root@192.168.1.10
+#     sh tools/make-upload.sh --fetch root@wirenboard.local
 #
 # Проект не принимает ни каталогов, ни части расширений, поэтому путь
 # складывается в имя файла: разделители становятся дефисами, точки —

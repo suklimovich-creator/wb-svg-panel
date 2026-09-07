@@ -320,7 +320,30 @@ def fixed_spot(tile, cols):
     return (coord(tile.get("row", 0)), coord(tile.get("col", 0)))
 
 
+#: Готовые раскладки. Ключ - размеры и закрепления плиток плюс число
+#: колонок: пока они те же, раскладка та же, сколько бы значений ни
+#: поменялось в MQTT. Перебор свободных мест стоит около трети времени
+#: отрисовки, а между обновлениями панели он всегда даёт один результат.
+_LAYOUTS = {}
+_LAYOUTS_MAX = 64
+
+
 def layout(tiles, cols):
+    key = (cols, tuple((id(t), t.get("w"), t.get("h"),
+                        t.get("col"), t.get("row")) for t in tiles))
+    hit = _LAYOUTS.get(key)
+    if hit is not None:
+        placed, rows = hit
+        # Отдаём копию списка: вызывающий волен его сортировать.
+        return list(placed), rows
+    placed, rows = _layout(tiles, cols)
+    if len(_LAYOUTS) >= _LAYOUTS_MAX:
+        _LAYOUTS.clear()
+    _LAYOUTS[key] = (placed, rows)
+    return list(placed), rows
+
+
+def _layout(tiles, cols):
     """
     Раскладка плиток разного размера. Размеры в конфиге задаются в плитках
     (1 - обычная, 2 - двойная, 0.5 - мелкая), внутри всё считается в мелких

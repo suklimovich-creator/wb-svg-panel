@@ -67,6 +67,13 @@ class Config:
         плюс то, что ролями не описывается (ряды графика, каналы прибора
         целиком). Новый тип плитки дописывать сюда не нужно.
         """
+        # Список выводится из конфига и меняется только вместе с ним.
+        # Пересчёт стоит около десятой части времени отрисовки, а вызывается
+        # он на каждый ответ - при том что конфиг перечитывается по mtime.
+        cached = getattr(self, "_channels_cache", None)
+        if cached is not None and cached[0] == self._mtime:
+            return set(cached[1])
+
         out = set()
         for tile in self.all_tiles():
             out.update(channels_of(tile))
@@ -88,6 +95,7 @@ class Config:
                 for item in (req if isinstance(req, list) else [req]):
                     if isinstance(item, dict) and item.get("channel"):
                         out.add(item["channel"])
+        self._channels_cache = (self._mtime, frozenset(out))
         return out
 
     def raw_topics(self):

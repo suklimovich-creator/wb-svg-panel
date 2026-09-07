@@ -6,6 +6,7 @@
     python3 tools/profile-render.py            # панель main, 5 прогонов
     python3 tools/profile-render.py livingroom 10
     python3 tools/profile-render.py main 5 --lines 40
+    python3 tools/profile-render.py main 5 --route   # весь ответ, а не только отрисовка
 
 Поднимает те же объекты, что и служба: конфиг, jinja, состояние из MQTT,
 историю. Своим client_id, поэтому запускать можно на живом контроллере -
@@ -84,6 +85,16 @@ def setup(warmup=6.0):
     return client
 
 
+def report(profiler, lines):
+    stats = pstats.Stats(profiler)
+    stats.sort_stats("cumulative")
+    print("=== по суммарному времени (кто кого зовёт) ===")
+    stats.print_stats(lines)
+    stats.sort_stats("tottime")
+    print("=== по собственному времени (где реально считает) ===")
+    stats.print_stats(lines)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     name = args[0] if args else "main"
@@ -92,7 +103,30 @@ def main():
     if "--lines" in sys.argv:
         lines = int(sys.argv[sys.argv.index("--lines") + 1])
 
-    client = setup()
+    mqtt = setup()
+
+    # Режим --route меряет весь путь ответа, а не только отрисовку:
+    # подстановку CSS-переменных, сборку Response, заголовки. Замер
+    # показал, что там уходит примерно столько же, сколько на саму
+    # отрисовку, и по профилю render_panel этого не видно вовсе.
+    if "--route" in sys.argv:
+        client = web.app.test_client()
+        url = "/%s.svg" % name
+        print("прогрев…")
+        client.get(url)
+        print("замер маршрута: %d запросов %s" % (runs, url))
+        started = time.time()
+        profiler = cProfile.Profile()
+        profiler.enable()
+        for _ in range(runs):
+            client.get(url)
+        profiler.disable()
+        total = time.time() - started
+        print("итого %.3f с, в среднем %.3f с на ответ\n"
+              % (total, total / runs))
+        report(profiler, lines)
+        mqtt.loop_stop()
+        return
 
     # render_panel читает параметры из request (число колонок, свёрнутые
     # разделы), поэтому нужен контекст запроса. Заводим поддельный: HTTP
@@ -114,15 +148,8 @@ def main():
     print("итого %.3f с, в среднем %.3f с на отрисовку\n"
           % (total, total / runs))
 
-    stats = pstats.Stats(profiler)
-    stats.sort_stats("cumulative")
-    print("=== по суммарному времени (кто кого зовёт) ===")
-    stats.print_stats(lines)
-    stats.sort_stats("tottime")
-    print("=== по собственному времени (где реально считает) ===")
-    stats.print_stats(lines)
-
-    client.loop_stop()
+    report(profiler, lines)
+    mqtt.loop_stop()
 
 
 if __name__ == "__main__":

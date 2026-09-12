@@ -61,7 +61,7 @@ wbpanel/
   sources.py     как роль превращается в топик: wb / raw / spruthub
   registry.py    контракт плитки, контекст, зоны нажатий
   tiles_basic.py       switch, value, link, header
-  tiles_devices.py     light, dimmer, curtain, thermostat
+  tiles_devices.py     light, dimmer, curtain, roller, thermostat
   tiles_devicewide.py  chart, forecast, ac
   tiles.py       общие помощники и таблица сборщиков
   status.py      строка состояния комнаты
@@ -211,7 +211,7 @@ Zone("pad", "long", pad="curtain")
 ## Типы плиток
 
 `chart` · `forecast` · `thermostat` · `ac` · `light` · `dimmer` ·
-`curtain` · `switch` · `value` · `link` · `header`
+`curtain` · `roller` · `switch` · `value` · `link` · `header`
 
 Размеры в половинках: `0.5` мелкая (78 px), `1` обычная (170), `2`
 двойная. Плитку можно закрепить на сетке полями `col` и `row`, тоже в

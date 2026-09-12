@@ -236,6 +236,67 @@ class Curtain(Tile):
         return out
 
 
+@tile("roller")
+class Roller(Tile):
+    """
+    Рулонные и римские шторы. Полотно уходит вверх, а не в стороны.
+    100 - поднято (открыто), 0 - опущено.
+
+    Роли и команды те же, что у раздвижной: у привода это одна и та же
+    служба WindowCovering, разница только в том, куда едет ткань. Поэтому
+    тип отдельный, а не флаг у curtain: створок здесь нет в принципе, и
+    channel_left с channel_right в этой геометрии нечему соответствовать.
+    """
+
+    roles = ("target", "state", "stop")
+    fields = {"target": "channel", "state": "channel_state",
+              "stop": "channel_stop"}
+    commands = {"target": "command_topic", "stop": "command_topic_stop"}
+
+    def prepare(self, ctx):
+        pos = ctx.number("target")
+        if ctx.opt("inverted") and pos is not None:
+            pos = 100 - pos
+
+        # PositionState у HomeKit-совместимых приводов: 0 - к нулю,
+        # 1 - к сотне, 2 - стоит. Для вертикального полотна это
+        # «опускается» и «поднимается», а не «закрывается» и «открывается».
+        moving = None
+        code = ctx.number("state")
+        if code is not None and int(code) in (0, 1):
+            moving = "Опускается" if int(code) == 0 else "Поднимается"
+
+        return {
+            "moving": moving,
+            "open": 0.0 if pos is None else max(0.0, min(100.0, pos)) / 100.0,
+            "known": pos is not None,
+            "on": bool(pos and pos > 1),
+            "status": moving or (("Открыто %d%%" % round(pos))
+                                 if pos is not None else "Нет данных"),
+            "short": ("%d %%" % round(pos)) if pos is not None else "",
+        }
+
+    def zones(self, ctx, data):
+        # Половина хода как граница «открыто», по тем же соображениям,
+        # что и у раздвижной: полотно, спущенное на четверть, человек
+        # считает поднятым, и нажатие должно его опускать.
+        out = [Zone("open", "all", "target",
+                    {"on": str(ctx.opt("command_open", "100")),
+                     "off": str(ctx.opt("command_close", "0"))},
+                    state=(data.get("open") or 0.0) > 0.5),
+               Zone("pad", "long", pad="roller")]
+        if ctx.has("stop"):
+            out.append(Zone("stop", "button", "stop",
+                            str(ctx.opt("command_stop", "2"))))
+        return out
+
+    def pad(self, ctx, data):
+        out = {"pos": "%.3f" % (data.get("open") or 0.0)}
+        if data.get("moving"):
+            out["moving"] = data["moving"]
+        return out
+
+
 @tile("thermostat")
 class Thermostat(Tile):
     """

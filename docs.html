@@ -65,6 +65,7 @@
   <a class="lvl2" href="#t-dimmer">dimmer — диммер</a>
   <a class="lvl2" href="#t-light">light — лента</a>
   <a class="lvl2" href="#t-curtain">curtain — шторы</a>
+  <a class="lvl2" href="#t-roller">roller — рулонные шторы</a>
   <a class="lvl2" href="#t-thermostat">thermostat — термостат</a>
   <a class="lvl2" href="#t-forecast">forecast — погода</a>
   <a class="lvl2" href="#t-ac">ac — кондиционер</a>
@@ -252,7 +253,7 @@ panels:
 <p>Общие поля любой плитки:</p>
 <table>
 <tr><th>Поле</th><th>Смысл</th></tr>
-<tr><td><code>type</code></td><td>chart, switch, dimmer, light, curtain, value</td></tr>
+<tr><td><code>type</code></td><td>chart, switch, dimmer, light, curtain, roller, value</td></tr>
 <tr><td><code>title</code></td><td>Название под плиткой. Можно в две строки —
   вставьте перенос:
   <code>title: "Дим трек\nправый"</code> (в YAML это двойные кавычки)</td></tr>
@@ -395,6 +396,26 @@ panels:
 ширина каждой пропорциональна тому, насколько она <i>не</i> открыта. <code>channel_state</code> — соглашение
 HomeKit (<code>PositionState</code>): 0 закрывается, 1 открывается, 2 стоит.
 Пока привод едет, в подписи вместо процента будет «Открывается».</p>
+
+<h3 id="t-roller">roller — рулонные и римские шторы</h3>
+<pre><code>      - type: roller
+        title: "Римская штора"
+        channel: "Sprut.hub-.../accessories/341/13/16"      # 0…100
+        channel_state: "Sprut.hub-.../accessories/341/13/17" # необязательно
+        command_topic: "Sprut.hub-.../accessories/341/13/15/set"
+        command_topic_stop: "Sprut.hub-.../accessories/341/13/18/set"
+        # inverted: true — если 0 у вас «поднято»</code></pre>
+<p>То же окно с переплётом, но полотно висит сверху и уходит вверх, а не в
+стороны. Высота ткани пропорциональна тому, насколько штора <i>не</i> поднята;
+складки сжимаются вместе с ней, внизу — рейка с тенью. Поднятая до конца
+штора рисуется полосой ткани у карниза, а не пустотой: собранное полотно
+никуда не девается.</p>
+<p><code>type: roller</code> нужно писать <b>явно</b>. По службе Sprut.hub тип не
+выводится: раздвижная и рулонная дают одинаковый набор характеристик
+<code>WindowCovering</code>, и различить их по MQTT нечем — без явного типа
+служба опознается как <code>curtain</code>.</p>
+<p><code>inverted</code> разворачивает только показ. Чтобы развернуть и команду,
+к нему добавляются <code>command_open: 0</code> и <code>command_close: 100</code>.</p>
 
 <h3 id="t-thermostat">thermostat — термостат</h3>
 <pre><code>      - type: thermostat
@@ -630,6 +651,8 @@ HomeKit (<code>PositionState</code>): 0 закрывается, 1 открыва
 <tr><td><code>ac</code></td><td>Включает и выключает</td>
     <td>Пульт: колесо температуры, режимы, вентилятор</td></tr>
 <tr><td><code>curtain</code></td><td>Открывает или закрывает целиком</td><td>—</td></tr>
+<tr><td><code>roller</code></td><td>Поднимает или опускает целиком</td>
+    <td>Пульт: нижний край полотна вверх и вниз</td></tr>
 <tr><td><code>chart</code>, <code>forecast</code></td>
     <td>Раскрывает на весь экран</td><td>—</td></tr>
 <tr><td><code>thermostat</code>, <code>value</code></td><td>—</td><td>—</td></tr>

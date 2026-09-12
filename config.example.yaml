@@ -11,7 +11,7 @@ theme: light           # light | dark
 
 # Нажатия на плитки. По умолчанию выключены — панель только показывает.
 # При interactive: true страница <имя>.html вешает обработчик на плитки
-# switch / dimmer / light / curtain и публикует команду в
+# switch / dimmer / light / curtain / roller и публикует команду в
 # /devices/<устройство>/controls/<канал>/on. Демону разрешено писать ТОЛЬКО
 # в каналы нарисованных плиток.
 interactive: false
@@ -177,6 +177,17 @@ panels:
         title: "Люстра"
         channel: "wb-mr6cu_1/K1"
         icon: bulb
+
+      # --- рулонная или римская штора ----------------------------------------
+      # Полотно уходит вверх, а не в стороны, поэтому тип отдельный.
+      # type: roller обязателен явно: по службе Sprut.hub раздвижная и
+      # рулонная неразличимы - характеристики WindowCovering у них одни.
+      - type: roller
+        title: "Римская штора"
+        channel: "Sprut.hub-XXXXXXXX_1/accessories/341/13/16"
+        channel_state: "Sprut.hub-XXXXXXXX_1/accessories/341/13/17"
+        command_topic: "Sprut.hub-XXXXXXXX_1/accessories/341/13/15/set"
+        command_topic_stop: "Sprut.hub-XXXXXXXX_1/accessories/341/13/18/set"
 
   kitchen:
     title: "Кухня"

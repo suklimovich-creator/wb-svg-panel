@@ -114,6 +114,7 @@
   {% if   t.kind == 'chart'   %}{{ chart.tile_chart(t) }}
   {% elif t.kind == 'switch'  %}{{ basic.tile_switch(t) }}
   {% elif t.kind == 'curtain' %}{{ devices.tile_curtain(t) }}
+  {% elif t.kind == 'roller'  %}{{ devices.tile_roller(t) }}
   {% elif t.kind == 'light'   %}{{ devices.tile_light(t) }}
   {% elif t.kind == 'dimmer'  %}{{ devices.tile_dimmer(t) }}
   {% elif t.kind == 'thermostat' %}{{ devices.tile_thermostat(t) }}

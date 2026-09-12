@@ -100,7 +100,7 @@ panels:
 ```
 
 Типы плиток: `chart` · `forecast` · `thermostat` · `ac` · `light` · `dimmer` ·
-`curtain` · `switch` · `value` · `link`.
+`curtain` · `roller` · `switch` · `value` · `link`.
 
 Размеры задаются в половинках плитки: `0.5` — мелкая (78 px), `1` — обычная
 (170 px), `2` — двойная (354 px). Панели можно собирать из других панелей через
@@ -201,4 +201,3 @@ Issues и pull requests приветствуются. Особенно инте�
 MIT — см. [LICENSE](LICENSE).
 
 Проект не связан с компанией Wiren Board и не поддерживается ею.
-# тест 192.168.1.77

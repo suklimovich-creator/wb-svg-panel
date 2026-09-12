@@ -14,6 +14,11 @@
     старые WebView такое молча игнорируют. Поэтому каркас
     склеивает куски, а не выпускает несколько блоков. -#}
 {% macro style() %}
+  /* карманы под рейки и нижняя рейка рулонной шторы. Цвет literal, а не
+     var(--ink): это тень на ткани, и в тёмной теме она тоже тень, а не
+     светлая линия, какой стала бы, взявшись от цвета текста. */
+  .pleat line{ stroke: #000; stroke-width: calc(1px * var(--fs)); opacity: .13; }
+  .hem{ fill: #000; opacity: .22; }
   /* циферблат термостата */
   .dial .track { fill: none; stroke: var(--ink); stroke-width: calc(7px * var(--fs));
                  stroke-linecap: round; opacity: .12; }
@@ -78,6 +83,71 @@
     <rect x="{{ '%.1f'|format(t.w - rw) }}" y="0"
           width="{{ '%.1f'|format([rw, 12]|min) }}" height="{{ t.h }}" fill="url(#{{ uid }}foldR)"/>
     {% endif %}
+
+    {# гашение к низу под подписи #}
+    <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}scrim)"/>
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="rim {{ 'on' if t.on }}"/>
+  {{ base.icon_c(t, t.icon or 'blind', 22) }}
+  {{ base.value_tr(t) }}
+  {{ base.caption(t, t.status) }}
+{% endmacro %}
+
+{#- ---- рулонные и римские шторы ----
+    Полотно висит сверху и уходит вверх, а не в стороны. Высота его
+    пропорциональна тому, насколько штора НЕ поднята.
+
+    Поднятая до конца штора рисуется не пустотой, а узкой полосой ткани
+    у карниза: собранное полотно никуда не девается, и без него плитка
+    в крайнем положении выглядела бы поломанной, а не открытой.
+
+    Складки сжимаются вместе с полотном: шаг берётся по трети высоты,
+    пока она меньше обычного. Так у поднятой шторы видно стопку у
+    карниза, а у опущенной - ровные ряды карманов под рейки. -#}
+{% macro tile_roller(t) %}
+  {% set stack = t.h * (0.06 + 0.10 * t.open) %}
+  {% set drop = [t.h * (1 - t.open), stack]|max %}
+  {% set step = [t.h * 0.15, [drop / 3.0, 3.0]|max]|min %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}sky)"/>
+
+    {#- та же рама, что у раздвижной: плитка должна читаться как окно
+        независимо от того, куда едет ткань -#}
+    {% set fx = t.w * 0.16 %}
+    {% set fy = t.h * 0.12 %}
+    {% set fw = t.w * 0.68 %}
+    {% set fh = t.h * 0.60 %}
+    <g class="frame">
+      <rect x="{{ '%.1f'|format(fx) }}" y="{{ '%.1f'|format(fy) }}"
+            width="{{ '%.1f'|format(fw) }}" height="{{ '%.1f'|format(fh) }}" rx="2"/>
+      <line x1="{{ '%.1f'|format(fx + fw / 2) }}" y1="{{ '%.1f'|format(fy) }}"
+            x2="{{ '%.1f'|format(fx + fw / 2) }}" y2="{{ '%.1f'|format(fy + fh) }}"/>
+      <line x1="{{ '%.1f'|format(fx) }}" y1="{{ '%.1f'|format(fy + fh * 0.42) }}"
+            x2="{{ '%.1f'|format(fx + fw) }}" y2="{{ '%.1f'|format(fy + fh * 0.42) }}"/>
+      <line x1="{{ '%.1f'|format(fx - t.w * 0.05) }}" y1="{{ '%.1f'|format(fy + fh) }}"
+            x2="{{ '%.1f'|format(fx + fw + t.w * 0.05) }}" y2="{{ '%.1f'|format(fy + fh) }}"
+            class="sill"/>
+    </g>
+
+    <rect x="0" y="0" width="{{ t.w }}" height="{{ '%.1f'|format(drop) }}"
+          fill="url(#{{ uid }}weave)"/>
+    <g class="pleat">
+      {% for k in range(1, 12) %}
+      {% set py = k * step %}
+      {% if py < drop - 1.5 %}
+      <line x1="0" y1="{{ '%.1f'|format(py) }}"
+            x2="{{ t.w }}" y2="{{ '%.1f'|format(py) }}"/>
+      {% endif %}
+      {% endfor %}
+    </g>
+    {#- тень под нижней рейкой и сама рейка: без них край полотна
+        сливается с окном, и непонятно, где штора кончается -#}
+    <rect x="0" y="{{ '%.1f'|format([drop - 12, 0]|max) }}" width="{{ t.w }}"
+          height="{{ '%.1f'|format([drop, 12]|min) }}" fill="url(#{{ uid }}foldB)"/>
+    <rect x="0" y="{{ '%.1f'|format([drop - 2.4, 0]|max) }}" width="{{ t.w }}"
+          height="{{ '%.1f'|format([drop, 2.4]|min) }}" class="hem"/>
 
     {# гашение к низу под подписи #}
     <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}scrim)"/>

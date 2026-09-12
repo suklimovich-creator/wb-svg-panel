@@ -145,6 +145,9 @@
  #crtview .mark{position:absolute;top:0;bottom:0;width:2px;display:none;
                 background:rgba(255,255,255,.9);
                 box-shadow:0 0 12px rgba(0,0,0,.7)}
+ /* рулонная: полотно ходит вверх-вниз, значит и метка лежит поперёк */
+ #crtview.vert{cursor:ns-resize}
+ #crtview.vert .mark{top:0;bottom:auto;left:0;right:0;width:auto;height:2px}
  #crtview .read{position:absolute;left:0;right:0;top:42%;display:none;
                 text-align:center;color:#fff;font-size:42px;font-weight:600;
                 text-shadow:0 2px 12px rgba(0,0,0,.8)}
@@ -845,12 +848,17 @@ function padLevel(node){
    Пока палец ведёт, показываем то, что он выбрал; отпустил - отправляем
    одно значение. Промежуточные значения слать нельзя: у привода каждая
    команда это новая цель, и он дёргался бы за пальцем. */
-function padCurtain(node){
+function padCurtain(node, axis){
   /* Раскрытая штора - это та же плитка, только крупно: рисует её сервер тем
      же макросом, что и на панели. Своей вёрстки тут нет намеренно, иначе
      пришлось бы поддерживать два разных изображения одной вещи.
      Поверх картинки лежит прозрачный слой: ведём правую створку от центра
-     к правому краю, как саму штору руками. */
+     к правому краю, как саму штору руками.
+
+     axis = 'y' - то же самое для рулонной и римской: полотно ходит вверх,
+     и жест повторяет его, а не створки, которых у неё нет. Отдельного
+     пульта для этого не заводим - расходятся только ось и подписи. */
+  var vert = axis === 'y';
   var i = node.getAttribute('data-i');
   var w = Math.min(Math.round(window.innerWidth * 0.90), 1400);
   var h = Math.min(Math.round(window.innerHeight * 0.62), 900);
@@ -859,21 +867,29 @@ function padCurtain(node){
   var card = el('div','card'); card.textContent = '…';
   var wrap = el('div'); wrap.id = 'crtwrap';
   var view = el('div'); view.id = 'crtview';
+  if(vert) view.className = 'vert';
   var mark = el('div','mark');            // куда поедет
   var read = el('div','read');            // проценты крупно
   view.appendChild(mark); view.appendChild(read);
   wrap.appendChild(card); wrap.appendChild(view);
 
   var title = el('div','ttl', node.getAttribute('data-title') || 'Штора');
-  var hint  = el('div','hint','Ведите правую створку от центра к краю');
+  var hint  = el('div','hint', vert ? 'Ведите нижний край полотна вверх и вниз'
+                                    : 'Ведите правую створку от центра к краю');
   var pos   = parseFloat(node.getAttribute('data-pos')||'0');
   var shown = pos;
 
   function paint(){
-    // 0 - створка у центра (закрыто), 1 - у правого края (открыто)
+    // 0 - створка у центра (закрыто), 1 - у правого края (открыто);
+    // у рулонной 0 - полотно внизу, 1 - у карниза
     var svg = card.querySelector('svg');
-    if(svg){
-      var rs = svg.getBoundingClientRect(), rv = view.getBoundingClientRect();
+    var rs = svg ? svg.getBoundingClientRect() : null;
+    var rv = svg ? view.getBoundingClientRect() : null;
+    if(vert){
+      if(rs) mark.style.top = Math.round(rs.top - rv.top
+                                         + (1 - shown)*rs.height) + 'px';
+      else   mark.style.top = ((1 - shown)*100) + '%';
+    } else if(rs){
       var left = rs.left - rv.left, mid = left + rs.width/2;
       mark.style.left = Math.round(mid + shown*rs.width/2) + 'px';
     } else {
@@ -908,7 +924,8 @@ function padCurtain(node){
       })
       .catch(function(e){ flash('Не удалось: '+e.message); });
   }
-  button('Закрыть', '', function(){ send(node.getAttribute('data-off')); });
+  button(vert ? 'Опустить' : 'Закрыть', '',
+         function(){ send(node.getAttribute('data-off')); });
   /* Стоп есть не у всех приводов: у HomeKit-совместимых это отдельная
      характеристика, и топик задаётся в конфиге явно. Нет топика - нет кнопки:
      рисовать неработающую хуже, чем не рисовать вовсе. */
@@ -920,7 +937,8 @@ function padCurtain(node){
         .catch(function(e){ flash('Не удалось: '+e.message); });
     });
   }
-  button('Открыть', '', function(){ send(node.getAttribute('data-on')); });
+  button(vert ? 'Поднять' : 'Открыть', '',
+         function(){ send(node.getAttribute('data-on')); });
 
   openOv([title, wrap, row, hint]);
   if(!ov.offsetHeight){ closeOv(); window.open(url, '_blank'); return; }
@@ -931,8 +949,13 @@ function padCurtain(node){
     var box = card.querySelector('svg') || view;
     var r = box.getBoundingClientRect();
     var p = evPoint(ev);
-    // центр картинки = створки сомкнуты, правый край = открыто настежь
-    shown = Math.max(0, Math.min(1, (p.clientX - (r.left + r.width/2)) / (r.width/2)));
+    if(vert){
+      // верх картинки = поднято настежь, низ = опущено до конца
+      shown = Math.max(0, Math.min(1, 1 - (p.clientY - r.top) / r.height));
+    } else {
+      // центр картинки = створки сомкнуты, правый край = открыто настежь
+      shown = Math.max(0, Math.min(1, (p.clientX - (r.left + r.width/2)) / (r.width/2)));
+    }
     paint();
   }
   function begin(ev){ dragging = true; at(ev); }
@@ -1579,6 +1602,7 @@ function openPad(node){
   else if(pad==='thermostat') padThermostat(node);
   else if(pad==='level') padLevel(node);
   else if(pad==='curtain') padCurtain(node);
+  else if(pad==='roller') padCurtain(node, 'y');
   else if(pad==='ac') padAC(node);
   else if(pad==='camera') padCamera(node);
   else if(pad==='tv') padTV(node);

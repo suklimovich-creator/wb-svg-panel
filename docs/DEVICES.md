@@ -65,6 +65,7 @@ python3 tools/probe-roles.py --service 'Sprut.hub-XXXXXXXX_1/accessories/108/13'
 - type: roller
   title: "Римская штора"
   channel: "Sprut.hub-XXXXXXXX_1/accessories/341/13/16"        # факт
+  channel_goal: "Sprut.hub-XXXXXXXX_1/accessories/341/13/15"   # куда едет
   channel_state: "Sprut.hub-XXXXXXXX_1/accessories/341/13/17"  # едет/стоит
   command_topic: "Sprut.hub-XXXXXXXX_1/accessories/341/13/15/set"
   command_topic_stop: "Sprut.hub-XXXXXXXX_1/accessories/341/13/18/set"
@@ -94,6 +95,13 @@ python3 tools/probe-roles.py --service 'Sprut.hub-XXXXXXXX_1/accessories/108/13'
 значений он не шлёт вовсе, а иногда публикует конечное задолго до конца
 хода. В покое канал правдив, во время движения — нет. Индикатором движения
 работает `channel_state`, и именно поэтому его стоит задавать.
+
+Из-за этого же стоит задавать и `channel_goal` — `TargetPosition`
+привода. Цель приходит сразу, ещё до того, как он тронулся, и пока он
+едет, плитка рисует пунктиром, где полотно окажется, а подпись читается
+как «Поднимается до 80 %». Без этого канала полминуты хода выглядят так,
+будто команда не ушла: факт не меняется, и показывать нечего. Задавать
+не обязательно — без него плитка работает как раньше.
 
 ## Реле, диммеры, светодиодные ленты
 

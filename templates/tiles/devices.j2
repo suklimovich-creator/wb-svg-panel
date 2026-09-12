@@ -19,6 +19,11 @@
      светлая линия, какой стала бы, взявшись от цвета текста. */
   .pleat line{ stroke: #000; stroke-width: calc(1px * var(--fs)); opacity: .13; }
   .hem{ fill: #000; opacity: .22; }
+  /* цель хода. Оранжевый, как у всего действующего на панели, и пунктир -
+     чтобы не спутать с кромкой полотна, которая сплошная. */
+  .goal{ stroke: var(--active); stroke-width: calc(1.8px * var(--fs));
+         stroke-dasharray: calc(5px * var(--fs)) calc(4px * var(--fs));
+         opacity: .95; }
   /* циферблат термостата */
   .dial .track { fill: none; stroke: var(--ink); stroke-width: calc(7px * var(--fs));
                  stroke-linecap: round; opacity: .12; }
@@ -151,6 +156,18 @@
 
     {# гашение к низу под подписи #}
     <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}scrim)"/>
+
+    {#- Куда едет: пунктир на уровне цели, только на ходу - у стоящего
+        привода цель совпадает с кромкой полотна.
+
+        Поверх гашения, а не под ним: низ плитки гасится до цвета подложки
+        под подписи, и цель вроде «опустить до 10 %» под ним просто
+        пропадала - то есть была не видна ровно тогда, когда нужнее всего.
+        Точное число всё равно стоит в подписи, пунктир показывает место. -#}
+    {% if t.goal is not none %}
+    <line class="goal" x1="0" y1="{{ '%.1f'|format(t.h * (1 - t.goal)) }}"
+          x2="{{ t.w }}" y2="{{ '%.1f'|format(t.h * (1 - t.goal)) }}"/>
+    {% endif %}
   </g>
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
         class="rim {{ 'on' if t.on }}"/>

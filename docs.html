@@ -401,6 +401,7 @@ HomeKit (<code>PositionState</code>): 0 закрывается, 1 открыва
 <pre><code>      - type: roller
         title: "Римская штора"
         channel: "Sprut.hub-.../accessories/341/13/16"      # 0…100
+        channel_goal: "Sprut.hub-.../accessories/341/13/15"  # куда едет
         channel_state: "Sprut.hub-.../accessories/341/13/17" # необязательно
         command_topic: "Sprut.hub-.../accessories/341/13/15/set"
         command_topic_stop: "Sprut.hub-.../accessories/341/13/18/set"
@@ -414,6 +415,11 @@ HomeKit (<code>PositionState</code>): 0 закрывается, 1 открыва
 выводится: раздвижная и рулонная дают одинаковый набор характеристик
 <code>WindowCovering</code>, и различить их по MQTT нечем — без явного типа
 служба опознается как <code>curtain</code>.</p>
+<p><code>channel_goal</code> — <code>TargetPosition</code> привода, куда он едет.
+Пока привод в движении, плитка рисует на этом уровне оранжевый пунктир, а
+подпись читается как «Поднимается до 80 %». Нужно это медленным приводам:
+у них факт по дороге не меняется, и полминуты хода без этого канала
+выглядят так, будто команда не ушла. Поле необязательное.</p>
 <p><code>inverted</code> разворачивает только показ. Чтобы развернуть и команду,
 к нему добавляются <code>command_open: 0</code> и <code>command_close: 100</code>.</p>
 

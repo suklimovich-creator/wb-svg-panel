@@ -248,9 +248,9 @@ class Roller(Tile):
     channel_left с channel_right в этой геометрии нечему соответствовать.
     """
 
-    roles = ("target", "state", "stop")
-    fields = {"target": "channel", "state": "channel_state",
-              "stop": "channel_stop"}
+    roles = ("target", "goal", "state", "stop")
+    fields = {"target": "channel", "goal": "channel_goal",
+              "state": "channel_state", "stop": "channel_stop"}
     commands = {"target": "command_topic", "stop": "command_topic_stop"}
 
     def prepare(self, ctx):
@@ -266,13 +266,31 @@ class Roller(Tile):
         if code is not None and int(code) in (0, 1):
             moving = "Опускается" if int(code) == 0 else "Поднимается"
 
+        # Куда едет. Показываем только на ходу: у стоящего привода цель
+        # равна положению, и пунктир по краю полотна был бы просто шумом.
+        #
+        # Нужно это там, где факт по дороге молчит. Медленный привод за
+        # мостом публикует положение только в конце хода, и полминуты
+        # плитка показывает старое - верно, но бесполезно. Цель же
+        # приходит сразу, и по ней сразу видно, что команда принята.
+        goal = ctx.number("goal") if moving else None
+        if goal is not None and ctx.opt("inverted"):
+            goal = 100 - goal
+        if goal is not None and pos is not None and abs(goal - pos) < 1:
+            goal = None
+
+        status = moving or (("Открыто %d%%" % round(pos))
+                            if pos is not None else "Нет данных")
+        if moving and goal is not None:
+            status = "%s до %d%%" % (moving, round(goal))
+
         return {
             "moving": moving,
             "open": 0.0 if pos is None else max(0.0, min(100.0, pos)) / 100.0,
+            "goal": None if goal is None else max(0.0, min(100.0, goal)) / 100.0,
             "known": pos is not None,
             "on": bool(pos and pos > 1),
-            "status": moving or (("Открыто %d%%" % round(pos))
-                                 if pos is not None else "Нет данных"),
+            "status": status,
             "short": ("%d %%" % round(pos)) if pos is not None else "",
         }
 

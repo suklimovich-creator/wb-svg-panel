@@ -148,6 +148,8 @@
  /* рулонная: полотно ходит вверх-вниз, значит и метка лежит поперёк */
  #crtview.vert{cursor:ns-resize}
  #crtview.vert .mark{top:0;bottom:auto;left:0;right:0;width:auto;height:2px}
+ /* белая метка - там, где палец; оранжевая - куда привод едет сам */
+ #crtview .mark.going{background:#E09B2D;box-shadow:0 0 12px rgba(0,0,0,.5)}
  #crtview .read{position:absolute;left:0;right:0;top:42%;display:none;
                 text-align:center;color:#fff;font-size:42px;font-weight:600;
                 text-shadow:0 2px 12px rgba(0,0,0,.8)}
@@ -878,25 +880,33 @@ function padCurtain(node, axis){
                                     : 'Ведите правую створку от центра к краю');
   var pos   = parseFloat(node.getAttribute('data-pos')||'0');
   var shown = pos;
+  /* Куда привод поехал по нашей команде. Держится на экране, пока он
+     едет: у медленного привода факт по дороге не меняется вовсе, и без
+     этой отметки после отпускания пальца не остаётся ничего - картинка
+     та же, что была, как будто команда не ушла. */
+  var goal = null;
 
   function paint(){
     // 0 - створка у центра (закрыто), 1 - у правого края (открыто);
     // у рулонной 0 - полотно внизу, 1 - у карниза
+    var at = goal === null ? shown : goal;
     var svg = card.querySelector('svg');
     var rs = svg ? svg.getBoundingClientRect() : null;
     var rv = svg ? view.getBoundingClientRect() : null;
     if(vert){
       if(rs) mark.style.top = Math.round(rs.top - rv.top
-                                         + (1 - shown)*rs.height) + 'px';
-      else   mark.style.top = ((1 - shown)*100) + '%';
+                                         + (1 - at)*rs.height) + 'px';
+      else   mark.style.top = ((1 - at)*100) + '%';
     } else if(rs){
       var left = rs.left - rv.left, mid = left + rs.width/2;
-      mark.style.left = Math.round(mid + shown*rs.width/2) + 'px';
+      mark.style.left = Math.round(mid + at*rs.width/2) + 'px';
     } else {
-      mark.style.left = (50 + shown*50) + '%';
+      mark.style.left = (50 + at*50) + '%';
     }
-    read.textContent = Math.round(shown*100) + ' %';
-    mark.style.display = read.style.display = dragging ? 'block' : 'none';
+    read.textContent = Math.round(at*100) + ' %';
+    var show = dragging || goal !== null;
+    mark.style.display = read.style.display = show ? 'block' : 'none';
+    mark.classList.toggle('going', !dragging && goal !== null);
   }
   var dragging = false;
 
@@ -928,7 +938,11 @@ function padCurtain(node, axis){
      оверлеем и обновится сама, когда он закроется. */
   var key = node.getAttribute('data-topic');
   var poll = null, ticks = 0, seenMoving = false;
-  function stopPoll(){ if(poll){ clearInterval(poll); poll = null; } }
+  function stopPoll(){
+    if(poll){ clearInterval(poll); poll = null; }
+    // Привод встал: дальше на экране правда, а не наша цель.
+    if(goal !== null){ goal = null; shown = pos; paint(); }
+  }
   function watch(){
     stopPoll(); ticks = 0; seenMoving = false;
     poll = setInterval(function(){
@@ -946,7 +960,7 @@ function padCurtain(node, axis){
           var p = parseFloat(g.getAttribute('data-pos') || '0');
           if(Math.abs(p - pos) > 0.004){
             pos = p;
-            if(!dragging) shown = p;
+            if(!dragging && goal === null) shown = p;
             load();
           }
           // Между командой и первым «поехал» проходит несколько секунд:
@@ -961,11 +975,13 @@ function padCurtain(node, axis){
   ovCleanup = stopPoll;
 
   function send(value){
+    var want = parseFloat(value);
     pub(node.getAttribute('data-topic'), value)
       .then(function(){
+        if(!isNaN(want)){ goal = Math.max(0, Math.min(1, want / 100)); }
         setTimeout(load, 700); setTimeout(load, 2500);
         setTimeout(refresh, 800);
-        watch();
+        watch(); paint();
       })
       .catch(function(e){ flash('Не удалось: '+e.message); });
   }
@@ -978,7 +994,11 @@ function padCurtain(node, axis){
   if(stopTopic){
     button('Стоп', 'stop', function(){
       pub(stopTopic, node.getAttribute('data-stop-value') || '2')
-        .then(function(){ setTimeout(load, 700); watch(); })
+        .then(function(){
+          // Где именно он встанет, мы не знаем - показывать цель больше нечестно.
+          goal = null; paint();
+          setTimeout(load, 700); watch();
+        })
         .catch(function(e){ flash('Не удалось: '+e.message); });
     });
   }
@@ -1005,8 +1025,7 @@ function padCurtain(node, axis){
   }
   function begin(ev){ dragging = true; at(ev); }
   function done(){
-    dragging = false; paint();
-    pos = shown;
+    dragging = false;
     // Промежуточные значения не шлём: для привода каждое - новая цель,
     // и он дёргался бы за пальцем.
     send(Math.round(shown*100));

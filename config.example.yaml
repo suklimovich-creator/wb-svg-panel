@@ -185,6 +185,8 @@ panels:
       - type: roller
         title: "Римская штора"
         channel: "Sprut.hub-XXXXXXXX_1/accessories/341/13/16"
+        # куда едет: пунктир на плитке, пока привод в движении
+        channel_goal: "Sprut.hub-XXXXXXXX_1/accessories/341/13/15"
         channel_state: "Sprut.hub-XXXXXXXX_1/accessories/341/13/17"
         command_topic: "Sprut.hub-XXXXXXXX_1/accessories/341/13/15/set"
         command_topic_stop: "Sprut.hub-XXXXXXXX_1/accessories/341/13/18/set"

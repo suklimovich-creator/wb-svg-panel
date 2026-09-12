@@ -62,6 +62,8 @@ role("switch", writable=True, numeric=False, label="Включение")
 role("bright", writable=True, label="Яркость")
 role("temp", writable=True, label="Цветовая температура")
 role("progress", label="Выполнено")
+role("goal", label="Куда едет",
+     doc="цель привода: показывается, пока он в движении")
 role("left", writable=True, label="Левая створка")
 role("right", writable=True, label="Правая створка")
 

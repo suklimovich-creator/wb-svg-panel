@@ -211,7 +211,7 @@
        border:1px solid #DCDCE1;display:flex;align-items:center;justify-content:center;
        font-size:17px;font-weight:600;color:#1C1C1E;cursor:pointer;
        user-select:none;touch-action:manipulation}
- #ov .tvdead{opacity:.35;pointer-events:none}
+ #ov .tvdim{opacity:.45}
  #ov .acbtn{display:inline-block;margin:4px;padding:9px 14px;border-radius:12px;
             border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);
             font-size:14px;font-weight:600;cursor:pointer}
@@ -916,11 +916,56 @@ function padCurtain(node, axis){
     var b = el('span','cbtn'+(cls?' '+cls:''), text);
     b.onclick = fn; row.appendChild(b); return b;
   }
+
+  /* Три перечитывания в первые шесть секунд - это мерка по GM64T, который
+     доезжает за пару секунд. Привод помедленнее едет минуту, и к моменту
+     последнего перечитывания ещё даже не тронулся: картинка застывала на
+     старом положении до закрытия пульта.
+
+     Поэтому после команды следим за плиткой на панели: у неё есть data-pos
+     и data-moving. Меняется положение - перерисовываем картинку, встал
+     привод - перестаём спрашивать. Панель при этом не трогаем: она под
+     оверлеем и обновится сама, когда он закроется. */
+  var key = node.getAttribute('data-topic');
+  var poll = null, ticks = 0, seenMoving = false;
+  function stopPoll(){ if(poll){ clearInterval(poll); poll = null; } }
+  function watch(){
+    stopPoll(); ticks = 0; seenMoving = false;
+    poll = setInterval(function(){
+      // Предохранитель: привод мог не ответить вовсе, и таймер не должен
+      // остаться тикать до конца сессии.
+      if(++ticks > 40){ stopPoll(); return; }
+      var q = Q();
+      fetch(NAME + '.svg' + q + (q ? '&' : '?') + 't=' + Date.now(), {cache:'no-store'})
+        .then(function(r){ return r.ok ? r.text() : null; })
+        .then(function(text){
+          if(!text) return;
+          var doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+          var g = doc.querySelector('[data-topic="' + key + '"]');
+          if(!g) return;
+          var p = parseFloat(g.getAttribute('data-pos') || '0');
+          if(Math.abs(p - pos) > 0.004){
+            pos = p;
+            if(!dragging) shown = p;
+            load();
+          }
+          // Между командой и первым «поехал» проходит несколько секунд:
+          // у приводов за мостом это круг до устройства и обратно. Пока
+          // движения не видели ни разу, даём три круга на раскачку.
+          if(g.getAttribute('data-moving')) seenMoving = true;
+          else if(seenMoving || ticks >= 7) stopPoll();
+        })
+        .catch(function(){});
+    }, 3000);
+  }
+  ovCleanup = stopPoll;
+
   function send(value){
     pub(node.getAttribute('data-topic'), value)
       .then(function(){
-        setTimeout(load, 700); setTimeout(load, 2500); setTimeout(load, 6000);
+        setTimeout(load, 700); setTimeout(load, 2500);
         setTimeout(refresh, 800);
+        watch();
       })
       .catch(function(e){ flash('Не удалось: '+e.message); });
   }
@@ -933,7 +978,7 @@ function padCurtain(node, axis){
   if(stopTopic){
     button('Стоп', 'stop', function(){
       pub(stopTopic, node.getAttribute('data-stop-value') || '2')
-        .then(function(){ setTimeout(load, 700); setTimeout(load, 2000); })
+        .then(function(){ setTimeout(load, 700); watch(); })
         .catch(function(e){ flash('Не удалось: '+e.message); });
     });
   }
@@ -1476,19 +1521,34 @@ function padTV(node){
     }).catch(function(e){ flash('Не удалось: ' + e.message); });
   }
   /* Кнопка. icon - ключ из TVI, иначе показывается текст.
-     needs === false у питания: включение идёт через Wake-on-LAN, канал
-     управления ему не нужен, и на выключенном телевизоре это
-     единственная кнопка, ради которой пульт открывают. */
+
+     Нажатие вешается всегда, даже когда канал управления недоступен.
+     Раньше такие кнопки были мертвы намертво, и это било дважды: пока
+     телевизор просыпается, пульт бесполезен, а состояние «ожил» до него
+     не доходило вовсе - sync обновлял подпись и подсветку приложений, но
+     обработчики оставались неприклеенными до конца сессии. Нажал питание,
+     дождался включения - и пульт всё равно не работает.
+
+     Теперь недоступность только показывается бледным, а решает
+     telegram-мост: не дошло так не дошло, второе нажатие ничего не
+     испортит. needs === false у питания: оно идёт через Wake-on-LAN и в
+     канале управления не нуждается, поэтому не гаснет никогда. */
+  var dimmed = [];
   function btn(cls, label, control, icon, needs){
     var b = el('div', cls);
     if(icon) b.innerHTML = '<svg viewBox="0 0 24 24">' + TVI[icon] + '</svg>';
     else b.textContent = label;
-    if(needs === false || link){
-      b.onclick = control === 'power'
-                ? pressPower
-                : function(){ press(control); };
-    } else b.classList.add('tvdead');
+    b.onclick = control === 'power'
+              ? pressPower
+              : function(){ press(control); };
+    if(needs !== false) dimmed.push(b);
     return b;
+  }
+  function setLive(live){
+    link = live;
+    for(var k = 0; k < dimmed.length; k++){
+      dimmed[k].classList.toggle('tvdim', !live);
+    }
   }
   function row(items){
     var r = el('div','tvrow');
@@ -1523,7 +1583,7 @@ function padTV(node){
       if(!parts[0]) return;
       var title = parts[1] || parts[0];
       var b = el('div','tvapp' + (title === app ? ' now' : ''), title);
-      if(link) b.onclick = (function(c, node){ return function(){
+      b.onclick = (function(c, node){ return function(){
         press(c);
         /* Подсвечиваем нажатое сразу, не дожидаясь ответа. Мост
            переспрашивает телевизор на ближайшем круге опроса, и через
@@ -1533,7 +1593,7 @@ function padTV(node){
         for(var k = 0; k < all.length; k++) all[k].classList.remove('now');
         node.classList.add('now');
       }; })(parts[0], b);
-      else b.classList.add('tvdead');
+      dimmed.push(b);
       grid.appendChild(b);
     });
     card.appendChild(grid);
@@ -1556,11 +1616,11 @@ function padTV(node){
 
   /* громкость: широкая пара, приглушение между */
   var vd = el('div','tvvol','VOL −'), vu = el('div','tvvol','VOL +');
-  if(link){
-    vd.onclick = function(){ press('vol_down'); };
-    vu.onclick = function(){ press('vol_up'); };
-  } else { vd.classList.add('tvdead'); vu.classList.add('tvdead'); }
+  vd.onclick = function(){ press('vol_down'); };
+  vu.onclick = function(){ press('vol_up'); };
+  dimmed.push(vd); dimmed.push(vu);
   card.appendChild(row([vd, btn('tvc','','mute','mute'), vu]));
+  setLive(link);
 
   /* Пока пульт открыт, автообновление панели стоит - иначе разметка
      менялась бы под пальцем. Но статус нужен именно сейчас, когда пульт
@@ -1581,6 +1641,10 @@ function padTV(node){
         var live = g.getAttribute('data-tv-link') === '1';
         sub.textContent = st + (now ? ' · ' + now : '')
                         + (live ? '' : ' · доступно только включение');
+        // Телевизор просыпается секунд двадцать. Как только мост до него
+        // достучался, пульт перестаёт быть бледным сам - без этого он
+        // оставался в том виде, в каком открылся.
+        if(live !== link) setLive(live);
         // Подсветка активного приложения: телевизор могли переключить и
         // обычным пультом, поэтому идём от того, что сообщил мост.
         var chips = card.querySelectorAll('.tvapp');

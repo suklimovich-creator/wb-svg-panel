@@ -159,4 +159,4 @@ esac
 echo
 echo "Панель:  http://$(hostname).local/panel/"
 [ -L "$EN8080" ] && echo "         http://$(hostname).local:8080/          (запасной порт)"
-echo "Если что-то не так: python3 $SRC/diag.py"
+echo "Если что-то не так: python3 $SRC/tools/diag.py"

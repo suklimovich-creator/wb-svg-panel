@@ -39,6 +39,15 @@
   .dial .mark-dot { fill: var(--ink); opacity: .70; }
   .dial .mark.target { stroke: var(--active); stroke-width: calc(3.4px * var(--fs)); opacity: 1; }
   .dial.muted  { opacity: .5; }
+  /* Полосы скорости вентилятора: три ступени, как шкала сигнала. Горят
+     оранжевым только когда оборудование действительно работает - серые
+     полосы у стоящего вентилятора отличают «просили» от «крутится». */
+  .fanbars rect      { fill: var(--ink); opacity: .16; }
+  .fanbars rect.on   { opacity: .45; }
+  .fanbars.live rect.on { fill: var(--active); opacity: .95; }
+  .siderow           { font-size: calc(12.5px * var(--fs)); font-weight: 500;
+                       fill: var(--ink-dim); }
+  .siderow.on        { fill: var(--ink); }
   .dial-big    { font-size: calc(30px * var(--fs)); font-weight: 600; letter-spacing: -1px;
                  fill: var(--ink); }
   .dial-deg    { font-size: calc(18px * var(--fs)); font-weight: 500; fill: var(--ink); }
@@ -304,3 +313,88 @@
   {% endif %}
 {% endmacro %}
 
+
+{#- ---- фанкойл ----
+    Циферблат термостата: дуга со шкалой, две засечки - факт и уставка,
+    закрашен разрыв между ними. Дошёл до уставки - закраска исчезла, и
+    это видно без слов.
+
+    На широкой плитке дуга уезжает влево, оставаясь окружностью: радиус
+    считается от меньшей стороны. Справа встаёт колонка - режим,
+    вентилятор со ступенями скорости и клапан. Строкой внизу это не
+    передать, а на дугу не положить. -#}
+{% macro tile_fancoil(t) %}
+  {{ base.plate(t) }}
+  {% if t.dial and not t.compact %}
+    <g class="dial {{ 'live' if t.on }} {{ 'cool' if t.cooling }} {{ 'muted' if not t.enabled }}">
+      {% if t.dial.track %}<path d="{{ t.dial.track }}" class="track"/>{% endif %}
+      {% if t.dial.fill %}<path d="{{ t.dial.fill }}" class="fill"/>{% endif %}
+      {% for m in t.dial.marks %}
+      <line x1="{{ m.x1 }}" y1="{{ m.y1 }}" x2="{{ m.x2 }}" y2="{{ m.y2 }}"
+            class="mark {{ m.kind }}"/>
+      {% if m.kind == 'current' %}
+      <circle cx="{{ m.x2 }}" cy="{{ m.y2 }}" r="2.6" class="mark-dot"/>
+      {% endif %}
+      {% endfor %}
+    </g>
+    {#- центрируем ЧИСЛО, знак градуса приписываем за ним -#}
+    <g {% if not t.enabled %}opacity=".5"{% endif %}>
+      <text x="{{ t.dial.cx }}" y="{{ t.dial.cy + 6 }}" class="dial-big"
+            text-anchor="middle">{{ t.target_num }}</text>
+      {% if t.target_num != '--' %}
+      <text x="{{ t.dial.cx + t.deg_dx }}" y="{{ t.dial.cy - 8 }}" class="dial-deg">°</text>
+      {% endif %}
+    </g>
+    {% if t.current %}
+    <text x="{{ t.dial.cx }}" y="{{ t.dial.cy + 27 }}" class="dial-sub"
+          text-anchor="middle">сейчас {{ t.current }}</text>
+    {% endif %}
+    <text x="{{ t.dial.cx }}" y="20" class="tag" text-anchor="middle">{{ t.title|upper }}</text>
+    <text x="{{ t.dial.cx }}" y="{{ t.h - 16 }}" class="dial-mode"
+          text-anchor="middle">{{ t.status }}</text>
+
+    {#- узкая плитка: значки по верхним углам, колонки там нет -#}
+    {% if t.corners %}
+    <use href="#{{ uid }}ic-{{ t.corners.mode.icon }}" xlink:href="#{{ uid }}ic-{{ t.corners.mode.icon }}"
+         x="{{ t.corners.mode.x }}" y="12" width="17" height="17"
+         opacity="{{ '.95' if t.corners.mode.on else '.40' }}"/>
+    <use href="#{{ uid }}ic-{{ t.corners.fan.icon }}" xlink:href="#{{ uid }}ic-{{ t.corners.fan.icon }}"
+         x="{{ t.corners.fan.x }}" y="12" width="17" height="17"
+         opacity="{{ '.95' if t.corners.fan.on else '.40' }}"/>
+    <g class="fanbars {{ 'live' if t.on }}">
+      {% for b in t.corners.fan.bars %}
+      <rect x="{{ b.x }}" y="{{ b.y }}" width="4" height="{{ b.h }}" rx="1.5"
+            class="{{ 'on' if b.on }}"/>
+      {% endfor %}
+    </g>
+    {% endif %}
+
+    {% if t.side %}
+    {% for row in t.rows %}
+    <use href="#{{ uid }}ic-{{ row.icon }}" xlink:href="#{{ uid }}ic-{{ row.icon }}"
+         x="{{ t.side.x }}" y="{{ row.y - 13 }}" width="17" height="17"
+         opacity="{{ '.95' if row.on else '.40' }}"/>
+    <text x="{{ t.side.text_x }}" y="{{ row.y }}"
+          class="siderow{{ ' on' if row.on }}">{{ row.text }}</text>
+    {% if row.bars %}
+    <g class="fanbars {{ 'live' if t.on }}">
+      {% for b in row.bars %}
+      <rect x="{{ b.x }}" y="{{ b.y }}" width="4" height="{{ b.h }}" rx="1.5"
+            class="{{ 'on' if b.on }}"/>
+      {% endfor %}
+    </g>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+  {% else %}
+    {{ base.icon_c(t, t.icon or 'fan', 24) }}
+    {% if t.current and not t.compact %}
+    <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.current }}</text>
+    {% endif %}
+    {% if not t.compact %}
+    <text x="20" y="{{ t.h - 62 }}" class="big"
+          {% if not t.enabled %}opacity=".5"{% endif %}>{{ t.target }}</text>
+    {% endif %}
+    {{ base.caption(t, t.status) }}
+  {% endif %}
+{% endmacro %}

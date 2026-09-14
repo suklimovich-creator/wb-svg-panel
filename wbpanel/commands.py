@@ -158,6 +158,9 @@ CMD_ATTRS = [
     ("dot_x", "data-dot-x"), ("dot_y", "data-dot-y"),
     ("ac_target", "data-ac-target"), ("ac_mode", "data-ac-mode"),
     ("ac_fan", "data-ac-fan"), ("ac_quiet", "data-ac-quiet"),
+    # Наборы кнопок пульта: у фанкойла режимы и скорости числовые и свои
+    # у каждого прибора, зашитый в страницу список сплита там не годится.
+    ("ac_modes", "data-ac-modes"), ("ac_fans", "data-ac-fans"),
     ("ac_lo", "data-ac-lo"), ("ac_hi", "data-ac-hi"), ("ac_step", "data-ac-step"),
     ("ac_now", "data-ac-now"), ("ac_cur", "data-ac-cur"),
     ("ac_mode_now", "data-ac-mode-now"), ("ac_fan_now", "data-ac-fan-now"),

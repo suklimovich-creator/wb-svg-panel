@@ -56,6 +56,9 @@ role("current", label="Текущее значение", doc="то, что пр�
 role("target", writable=True, label="Уставка", doc="то, к чему он стремится")
 role("state", label="Состояние", doc="работает сейчас или ждёт")
 role("mode", writable=True, label="Режим")
+role("fan", writable=True, label="Скорость вентилятора")
+role("fan_state", label="Фактическая скорость",
+     doc="что крутится сейчас, а не что просили: у фанкойла это разные каналы")
 role("stop", writable=True, numeric=False, label="Остановка",
      doc="прервать движение на полпути")
 role("switch", writable=True, numeric=False, label="Включение")

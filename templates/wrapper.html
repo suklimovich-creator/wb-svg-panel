@@ -565,7 +565,13 @@ function expand(node){
   var card = el('div','card wide');
   card.textContent = '…';
   var hint = el('div','hint','Нажмите вне карточки, чтобы закрыть');
-  openOv([card, hint]);
+  // Плитка, у которой короткое нажатие раскрывает картинку, а пульт висит
+  // на долгом: органы управления идут прямо сюда, под карточку. Иначе
+  // раскрытый фанкойл - красивая картинка, которой нельзя управлять.
+  var parts = [card];
+  if(node.getAttribute('data-pad') === 'ac') parts = parts.concat(acControls(node));
+  parts.push(hint);
+  openOv(parts);
   // если оверлей по какой-то причине не показался, откроем картинку отдельно
   if(!ov.offsetHeight){ closeOv(); window.open(url, '_blank'); return; }
   fetch(url, {cache:'no-store'})
@@ -763,35 +769,60 @@ function padAC(node){
   }
   drag(wrap, at, send, begin);
 
-  function chooser(list, attr, nowValue){
-    var row = el('div','acrow');
-    list.forEach(function(item){
-      var b = el('div', 'acbtn' + (item[0] === nowValue ? ' on' : ''), item[1]);
-      b.onclick = function(){
-        var topic = node.getAttribute(attr);
-        if(!topic) return;
-        pub(topic, item[0]).then(function(){
-          var all = row.querySelectorAll('.acbtn');
-          for(var i = 0; i < all.length; i++) all[i].classList.remove('on');
-          b.classList.add('on');
-        }).catch(function(e){ flash('Не удалось: ' + e.message); });
-      };
-      row.appendChild(b);
-    });
-    return row;
-  }
+  var parts = [title, big, wrap, sub].concat(acControls(node));
+  openOv(parts);
+}
 
-  var modes = chooser([['cool','Охлаждение'],['heat','Нагрев'],['dry','Осушение'],
-                       ['fan_only','Вентиляция'],['auto','Авто']],
-                      'data-ac-mode', node.getAttribute('data-ac-mode-now'));
-  var fans = chooser([['low','1'],['medium','2'],['high','3'],['auto','Авто']],
-                     'data-ac-fan', node.getAttribute('data-ac-fan-now'));
-  var power = powerRow(node);
-  var parts = [title, big, wrap, sub, modes,
-               el('div','hint','Скорость вентилятора'), fans];
+/* Ряд кнопок «выбери одно». Вынесен из padAC наружу: те же ряды нужны
+   полноэкранному виду, а там своего пульта нет. */
+function acChooser(node, list, attr, nowValue){
+  var row = el('div','acrow');
+  list.forEach(function(item){
+    var b = el('div', 'acbtn' + (item[0] === nowValue ? ' on' : ''), item[1]);
+    b.onclick = function(){
+      var topic = node.getAttribute(attr);
+      if(!topic) return;
+      pub(topic, item[0]).then(function(){
+        var all = row.querySelectorAll('.acbtn');
+        for(var i = 0; i < all.length; i++) all[i].classList.remove('on');
+        b.classList.add('on');
+      }).catch(function(e){ flash('Не удалось: ' + e.message); });
+    };
+    row.appendChild(b);
+  });
+  return row;
+}
+
+/* Набор кнопок: "значение|подпись;…" из атрибута плитки, иначе зашитый
+   здесь. У фанкойла режимы и скорости числовые и свои у каждого прибора,
+   да и у сплита осушение с авто есть далеко не всегда. */
+function acChoices(node, attr, fallback){
+  var raw = node.getAttribute(attr), out = [];
+  if(!raw) return fallback;
+  raw.split(';').forEach(function(item){
+    var p = item.split('|');
+    if(p[0] !== '') out.push([p[0], p.length > 1 ? p[1] : p[0]]);
+  });
+  return out.length ? out : fallback;
+}
+
+/* Управление прибором: режимы, скорость вентилятора, лопасти, питание.
+   Один набор на два места - пульт и полный экран. У фанкойла короткое
+   нажатие раскрывает плитку, и если бы органы управления жили только в
+   пульте, до скорости вентилятора пришлось бы добираться вслепую. */
+function acControls(node){
+  var parts = [];
+  parts.push(acChooser(node, acChoices(node, 'data-ac-modes',
+             [['cool','Охлаждение'],['heat','Нагрев'],['dry','Осушение'],
+              ['fan_only','Вентиляция'],['auto','Авто']]),
+             'data-ac-mode', node.getAttribute('data-ac-mode-now')));
+  parts.push(el('div','hint','Скорость вентилятора'));
+  parts.push(acChooser(node, acChoices(node, 'data-ac-fans',
+             [['low','1'],['medium','2'],['high','3'],['auto','Авто']]),
+             'data-ac-fan', node.getAttribute('data-ac-fan-now')));
   if(node.getAttribute('data-ac-swing')){
     parts.push(el('div','hint','Лопасти вертикальные'));
-    parts.push(chooser([['auto','Авто'],['off','Выкл'],['upper','Верх'],
+    parts.push(acChooser(node, [['auto','Авто'],['off','Выкл'],['upper','Верх'],
                         ['position_2','2'],['position_3','3'],['position_4','4'],
                         ['bottom','Низ']],
                        'data-ac-swing', node.getAttribute('data-ac-swing-now')));
@@ -799,12 +830,12 @@ function padAC(node){
   if(node.getAttribute('data-ac-swing-h')){
     parts.push(el('div','hint','Лопасти горизонтальные'));
     // кнопки идут слева направо, как реальные положения: 4·5·1·6·7
-    parts.push(chooser([['auto','Авто'],['position_4','◀◀'],['position_5','◀'],
+    parts.push(acChooser(node, [['auto','Авто'],['position_4','◀◀'],['position_5','◀'],
                         ['position_1','●'],['position_6','▶'],['position_7','▶▶']],
                        'data-ac-swing-h', node.getAttribute('data-ac-swing-h-now')));
   }
-  parts.push(power.el);
-  openOv(parts);
+  parts.push(powerRow(node).el);
+  return parts;
 }
 
 /* ---------- пульт диммера: линейный ---------- */
@@ -1105,7 +1136,11 @@ function bind(){
   var nodes = host.querySelectorAll('[data-topic],[data-expand],[data-pad],[data-href],[data-chart]');
   for(var i=0;i<nodes.length;i++){
     var n = nodes[i];
-    if(n.getAttribute('data-expand')){ n.onclick=function(){ expand(this); }; continue; }
+    // Плитка, у которой есть и полный экран, и пульт (фанкойл), не может
+    // обойтись простым onclick: короткое нажатие раскрывает, долгое
+    // открывает пульт. Поэтому она идёт общим путём с жестами ниже.
+    if(n.getAttribute('data-expand') && !n.getAttribute('data-pad')){
+      n.onclick=function(){ expand(this); }; continue; }
     // Чип строки состояния: короткое нажатие открывает график канала.
     // Долгого жеста у него нет - переключать нечего.
     if(n.getAttribute('data-chart')){ n.onclick=function(){ chartOv(this); }; continue; }
@@ -1144,6 +1179,10 @@ function bind(){
         // Термостат: по краям плитки шаг уставки, в центре - открыть пульт.
         // Режим короткое нажатие не трогает: случайно выключить отопление
         // касанием экрана нельзя, для этого есть кнопка на пульте.
+        // Раскрытие стоит раньше переключения: у фанкойла есть и топик
+        // питания (его берёт пульт), но выключать прибор промахом по
+        // экрану нельзя - короткое нажатие только раскрывает плитку.
+        else if(this.getAttribute('data-expand')) expand(this);
         else if(this.getAttribute('data-pad') === 'thermostat') openPad(this);
         // Камера: короткое нажатие открывает поток. Долгое ждать незачем -
         // переключать у неё нечего, и держать палец шесть десятых секунды

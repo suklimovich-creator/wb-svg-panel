@@ -107,6 +107,26 @@ panels:
         temp_min: 16
         temp_max: 30
 
+      # --- фанкойл ----------------------------------------------------------
+      # Канальный термостат (BAC-1000 и родня): режим и скорость числами,
+      # плюс клапан. Выглядит как термостат - на дуге видно, далеко ли до
+      # уставки. Ширину давайте в две клетки: тогда дуга уезжает влево, а
+      # справа встают режим, скорость вентилятора и клапан.
+      - type: fancoil
+        title: "Фанкойл"
+        w: 2
+        channel_switch:    "thermostat-interface-v1-0_1/power"
+        channel_mode:      "thermostat-interface-v1-0_1/operating_mode"
+        channel_fan:       "thermostat-interface-v1-0_1/fan_speed"
+        channel_fan_state: "thermostat-interface-v1-0_1/fan_speed_status"  # факт
+        channel_target:    "thermostat-interface-v1-0_1/set_temperature"
+        channel_current:   "thermostat-interface-v1-0_1/room_temperature"
+        channel_state:     "thermostat-interface-v1-0_1/valve"
+        scale_min: 14       # пределы ШКАЛЫ на дуге
+        scale_max: 30
+        temp_min: 16        # пределы УСТАВКИ на пульте: в meta канала
+        temp_max: 30        # у BAC-1000 стоит max 65535
+
       # --- выключатель ------------------------------------------------------
       - type: switch
         title: "Отопление"

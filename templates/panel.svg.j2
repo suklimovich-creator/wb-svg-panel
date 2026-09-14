@@ -120,6 +120,7 @@
   {% elif t.kind == 'thermostat' %}{{ devices.tile_thermostat(t) }}
   {% elif t.kind == 'forecast' %}{{ forecast.tile_forecast(t) }}
   {% elif t.kind == 'ac' %}{{ ac.tile_ac(t) }}
+  {% elif t.kind == 'fancoil' %}{{ devices.tile_fancoil(t) }}
   {% elif t.kind == 'header' %}{{ basic.tile_header(t) }}
   {% elif t.kind == 'link' %}{{ basic.tile_link(t) }}
   {% elif t.kind == 'scene' %}{{ basic.tile_scene(t) }}

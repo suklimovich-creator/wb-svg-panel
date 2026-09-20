@@ -596,7 +596,7 @@ class Ac(Tile):
 #: Кнопки пульта. Имена совпадают с контролами моста wb-tv: там они тоже
 #: заданы конфигом, и менять их в двух местах пришлось бы одинаково.
 TV_KEYS = ("up", "down", "left", "right", "ok", "back", "home", "source",
-           "vol_up", "vol_down", "mute", "play", "pause", "rewind", "forward")
+           "vol_up", "vol_down", "mute", "play_pause", "rewind", "forward")
 
 #: Что публикует мост в контрол state и как это назвать по-русски.
 TV_STATE_RU = {"on": "Включён", "standby": "Ожидание", "offline": "Выключен"}

@@ -184,6 +184,11 @@ class Tile(object):
     #: вечно висела бы полупрозрачной с серой точкой.
     reads = True
 
+    #: Молчание канала - норма: прибор шлёт значение, только когда оно
+    #: меняется (датчик протечки, кран). Жёлтая точка «давно не
+    #: обновлялось» такой плитке не ставится.
+    quiet = False
+
     # Имена полей, если они отличаются от принятых у роли. В конфигах уже
     # сложились свои: у диммера выключатель зовётся channel, а не
     # channel_switch. Ломать чужие конфиги ради стройности не стоит.
@@ -303,6 +308,7 @@ def build(conf, state, history=None):
     return {"kind": kind, "template": obj.template, "data": data,
             "zones": zones, "pad": pad, "bound": bound, "writable": writable,
             "snaps": ctx.snaps, "problem": problem, "reads": bool(cls.reads),
+            "quiet": bool(cls.quiet),
             "source": conf.get("source") or type(bind).__name__}
 
 

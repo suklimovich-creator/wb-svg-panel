@@ -325,6 +325,7 @@ def from_registry(conf, state, history=None):
     data["_pad"] = result["pad"]
     data["_writable"] = result["writable"]
     data["_reads"] = result.get("reads", True)
+    data["_quiet"] = result.get("quiet", False)
     return data
 
 

@@ -220,6 +220,55 @@ class Water(object):
                 "status_s": short,
                 "count": count, "known": known}
 
+    def valve_open(self, state, name):
+        """Открыт ли кран: True / False / None, если выход ещё не известен.
+        invert - как у плитки крана."""
+        conf = self.valves().get(name) or {}
+        ch = conf.get("channel")
+        if not ch:
+            return None
+        raw = state.snapshot(str(ch))["raw"]
+        if raw is None or str(raw).strip() == "":
+            return None
+        opened = is_on(raw)
+        return (not opened) if conf.get("invert") else opened
+
+    def valves_of(self, sensors):
+        """Краны, которые перекрывают эти датчики, в порядке описания."""
+        names = set()
+        for s in sensors:
+            names.update(s.get("closes") or [])
+        return [n for n in self.valves() if n in names]
+
+    def water_status(self, state, sensors):
+        """
+        Что с водой, одной фразой для спокойной плитки протечки: «вода
+        открыта», «вода перекрыта», «перекрыта: Горячая». None - кранов
+        нет или их состояние неизвестно.
+        """
+        names = self.valves_of(sensors)
+        known = [(n, self.valve_open(state, n)) for n in names]
+        known = [(n, o) for n, o in known if o is not None]
+        if not known:
+            return None
+        closed = [str((self.valves().get(n) or {}).get("title") or n)
+                  for n, o in known if not o]
+        if not closed:
+            return "вода открыта"
+        if len(closed) == len(known):
+            return "вода перекрыта"
+        return "перекрыта: " + ", ".join(closed)
+
+    def channels_with_valves(self, sensors):
+        """Каналы датчиков, флагов модулей и кранов, которые они перекрывают."""
+        out = self.channels(sensors)
+        valves = self.valves()
+        for n in self.valves_of(sensors):
+            ch = (valves.get(n) or {}).get("channel")
+            if ch:
+                out.add(str(ch))
+        return out
+
     def closers(self, state, valve_name):
         """
         Кто держит кран перекрытым: мокрые датчики, которые его перекрывают,

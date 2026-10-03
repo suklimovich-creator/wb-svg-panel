@@ -31,6 +31,8 @@
 кран перекрыт. Подключили наоборот - invert: true у крана.
 """
 
+from .const import CELL
+from .geometry import text_width
 from .registry import Tile, Zone, tile
 from .state import is_on
 from .water import command_of, rows_attr, water
@@ -40,6 +42,54 @@ WATER_COLOR = {"cold": "#3B8FD4", "hot": "#D9433C"}
 
 def _sensors(conf):
     return water.pick_sensors(conf.get("sensors"), conf.get("channel"))
+
+
+def _chips(rows, ctx):
+    """
+    Датчики на крупной плитке: точка и имя, в строку с переносом. Пустая
+    плитка 2 x 1 с одной подписью внизу не говорила, какие датчики за ней
+    стоят и какой из них намок. Сухой - пустой кружок, мокрый - залитый,
+    без данных - бледный.
+
+    Помещается, сколько помещается между значком и подписью; не влезло -
+    последним идёт «+N».
+    """
+    w = float(ctx.opt("inner_w") or 0)
+    h = float(ctx.opt("inner_h") or 0)
+    if w < CELL * 2 or h < 117 or not rows:
+        return []
+    fs = float(ctx.opt("fs") or 1.0)
+    size = round(14 * fs, 1)
+    r = round(4.5 * fs, 1)
+    gap = 16 * fs
+    line = 24 * fs
+    y = 72 * fs
+    last = h - 62 * fs              # ниже - название плитки
+    if y > last:
+        return []
+    left, right = 20.0, w - 20.0
+    x = left
+    out = []
+    for n, row in enumerate(rows):
+        text = row["title"]
+        # Мокрый пишется полужирным - он шире.
+        width = 2 * r + 7 + text_width(text, size, 0.68 if row["on"] else 0.6)
+        if x > left and x + width > right:
+            x, y = left, y + line
+            if y > last:
+                # Не влезло: последний показанный уступает место «+N».
+                rest = len(rows) - n
+                spot = out.pop()
+                out.append({"x": spot["x"], "y": spot["y"], "size": size,
+                            "r": r, "more": "+%d" % (rest + 1)})
+                return out
+        state = "off" if row["on"] is None else ("wet" if row["on"] else "dry")
+        out.append({"x": round(x, 1), "y": round(y, 1), "text": text,
+                    "state": state, "size": size, "r": r,
+                    "tx": round(x + 2 * r + 7, 1),
+                    "cy": round(y - size * 0.35, 1), "cx": round(x + r, 1)})
+        x += width + gap
+    return out
 
 
 @tile("leak")
@@ -69,10 +119,14 @@ class Leak(Tile):
     """
 
     roles = ("alarm", "reset")
+    # Датчик шлёт значение, только когда намок или высох: молчание - норма.
+    quiet = True
 
     @staticmethod
     def channels(conf):
-        return water.channels(_sensors(conf))
+        # Краны - ради строки «Сухо · вода открыта»: без подписки на них
+        # она отставала бы от крана до таймаута.
+        return water.channels_with_valves(_sensors(conf))
 
     @staticmethod
     def writes(conf):
@@ -88,12 +142,20 @@ class Leak(Tile):
         sensors = _sensors(ctx.conf)
         extra = ctx.flag("alarm") if ctx.has("alarm") else False
         view = water.leak(ctx.state, sensors, ctx.snaps, extra)
+        status = view["status"]
+        if not view["alarm"] and view["known"]:
+            # В покое «Сухо · 3 датчика» ничего не говорило: датчики теперь
+            # видны списком, а важнее - открыта ли вода.
+            wst = water.water_status(ctx.state, sensors)
+            if wst:
+                status = "Сухо · " + wst
         return {
             "on": False,
             "alarm": view["alarm"],
             "icon": ctx.opt("icon", "drop"),
-            "status": view["status"],
+            "status": status,
             "status_s": view["status_s"],
+            "chips": _chips(view["rows"], ctx),
             "always_status": True,
             "rows": view["rows"],
             "wet": len(view["wet"]),
@@ -143,6 +205,8 @@ class Valve(Tile):
     """
 
     roles = ("value", "alarm")
+    # Выход крана меняется только по команде или при протечке.
+    quiet = True
 
     @staticmethod
     def expand(conf):

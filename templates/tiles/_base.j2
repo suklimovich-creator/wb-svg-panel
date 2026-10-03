@@ -166,6 +166,15 @@
   /* Пункты списка. Кегль задаётся атрибутом: его считает сервер по полю
      font плитки и масштабу, и объявлять font-size здесь нельзя - правило
      таблицы стилей сильнее атрибута и перебило бы его. */
+  .lk        { fill: var(--ink); font-weight: 450; }
+  .lk.wet    { font-weight: 650; }
+  .lk-more   { fill: var(--ink-dim); font-weight: 500; }
+  .lk-dry    { fill: none; stroke: var(--ink-dim); stroke-width: 1.6; }
+  .lk-wet    { fill: #C4553B; }
+  .lk-off    { fill: var(--ink-dim); opacity: .35; }
+  .onlight .lk, .onlight .lk-more { fill: #FFFFFF; }
+  .onlight .lk-dry { stroke: rgba(255,255,255,.8); }
+  .onlight .lk-wet { fill: #FFFFFF; }
   .li        { fill: var(--ink); font-weight: 450; }
   .li-dot    { fill: var(--ink-dim); }
   .li-more   { fill: var(--ink-dim); font-weight: 450; }
@@ -573,7 +582,8 @@
 
 {#- тумблер как на скриншотах: пилюля с бегунком, бегунок уезжает вправо -#}
 {% macro toggle(t) %}
-  <g transform="translate(18,20)">
+  {#- На половинной плитке - по середине высоты, вровень с подписью. -#}
+  <g transform="translate(18,{{ ((t.h - 20) / 2) if (t.h < LOW and not t.compact) else 20 }})">
     <rect x="0" y="0" width="34" height="20" rx="10" fill="none"
           stroke="{{ 'var(--active)' if t.on else 'var(--stroke)' }}" stroke-width="2.2"/>
     <circle cx="{{ 23 if t.on else 11 }}" cy="10" r="6.2"
@@ -582,7 +592,8 @@
 {% endmacro %}
 
 {% macro value_tr(t) %}
-  {% if t.short and not t.compact %}
+  {#- На половинной плитке значение во второй строке подписи, см. caption. -#}
+  {% if t.short and not t.compact and t.h >= LOW %}
   <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.short }}</text>
   {% endif %}
 {% endmacro %}
@@ -601,12 +612,21 @@
   {% if t.compact %}
   <text x="{{ t.w / 2 }}" y="{{ t.h - 13 }}" class="name-s" text-anchor="middle">{{ t.title_s or t.title }}</text>
   {% elif t.h < LOW %}
-  {#- Половинная высота: текст правее значка и по центру строки. -#}
-  {% if status and (t.show_status or t.always_status) %}
-  {{ title_text(t, 56, t.h / 2 - 3, 'name') }}
-  <text x="56" y="{{ t.h / 2 + 15 }}" class="status">{{ status }}</text>
-  {% else %}
-  {{ title_text(t, 56, t.h / 2 + 5, 'name') }}
+  {#- Половинная высота: название правее значка одной строкой (обрезано по
+      ширине в assemble), под ним значение и состояние. Значение в углу,
+      как на высокой плитке, на узкой ложилось поверх названия. -#}
+  {% set lx = t.low_x or 56 %}
+  {% set shown = status if (status and (t.show_status or t.always_status)) else '' %}
+  {% set sub = (t.low_value ~ (' · ' ~ shown if shown else '')) if t.low_value else shown %}
+  {% set lines = t.title_low or [t.title] %}
+  {#- Строки идут по 17: две названия и значение - блок по центру высоты. -#}
+  {% set n = lines|length + (1 if sub else 0) %}
+  {% set y0 = t.h / 2 + 5 - (n - 1) * 17 / 2 %}
+  {% for line in lines %}
+  <text x="{{ lx }}" y="{{ y0 + loop.index0 * 17 }}" class="name">{{ line }}</text>
+  {% endfor %}
+  {% if sub %}
+  <text x="{{ lx }}" y="{{ y0 + lines|length * 17 - 1 }}" class="status">{{ sub }}</text>
   {% endif %}
   {% elif status and (t.show_status or t.always_status) %}
   {{ title_text(t, 20, t.h - 40, 'name') }}

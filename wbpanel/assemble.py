@@ -60,6 +60,76 @@ def resolve_sections(panel_conf, all_panels):
     return out or [(None, [], panel_conf, "")]
 
 
+#: Плитка в половину высоты: одна ячейка. Тот же порог, что LOW в
+#: шаблоне tiles/_base.j2.
+LOW_H = 117
+
+#: Типы, у которых на половинной плитке значение («45 %») уходит из угла
+#: во вторую строку подписи.
+LOW_VALUE_KINDS = ("switch", "dimmer", "light", "curtain", "roller")
+
+#: Средняя ширина буквы в долях кегля для названий. Кириллица шире цифр,
+#: но 0.6 обрезало «Гардеробную», которая на деле помещается.
+LETTER = 0.57
+
+
+def _fit_low(tile, pw, fs):
+    """
+    Подпись плитки в половину высоты: название справа от значка одной
+    строкой, значение - строкой ниже.
+
+    Раньше значение стояло в правом верхнем углу, как на высокой плитке, а
+    название шло с отступа под значок. На узкой плитке (три в ряд на
+    телефоне) «Подсветка стена» и «3 %» ложились друг на друга, а
+    длинное название вылезало за край. Теперь значение под названием, а
+    название обрезается по ширине с многоточием.
+    """
+    toggle = tile["kind"] == "switch" and tile.get("icon") == "toggle"
+    # Тумблер шире значка: 34 против 27, и текст от него отступает дальше.
+    x = 64 if toggle else 56
+    tile["low_x"] = x
+    size = 15.0 * float(fs or 1.0)
+    title = " ".join(tile.get("title_lines") or [tile.get("title") or ""]).strip()
+    # Вторая строка короче: в правом нижнем углу живёт точка состояния.
+    tile["title_low"] = _wrap2(title, pw - x - 10, pw - x - 28, size)
+    if tile["kind"] in LOW_VALUE_KINDS:
+        # У ленты в углу - «3 % · 2700 K», на половинной плитке хватит
+        # яркости: положение точки и так показывает цвет.
+        tile["low_value"] = tile.get("short_min") or tile.get("short") or ""
+
+
+def _wrap2(text, width, width2, size):
+    """
+    Название в одну строку, а не влезло - в две, по словам. Вторая строка
+    обрезается с многоточием. Половинная плитка вмещает три строки: две
+    названия и одну значения - «Подсветка / стена / 3 %».
+    """
+    if text_width(text, size, LETTER) <= width:
+        return [text]
+    words = text.split()
+    first = ""
+    while words:
+        probe = (first + " " + words[0]).strip()
+        if first and text_width(probe, size, LETTER) > width:
+            break
+        first = probe
+        words.pop(0)
+    if not words:
+        # одно длинное слово: переносить нечего
+        return [_fit(text, width, size)]
+    return [_fit(first, width, size), _fit(" ".join(words), width2, size)]
+
+
+def _fit(text, width, size):
+    """Обрезать строку по ширине с многоточием."""
+    if text_width(text, size, LETTER) <= width:
+        return text
+    out = text
+    while out and text_width(out + "…", size, LETTER) > width:
+        out = out[:-1]
+    return out.rstrip() + "…"
+
+
 def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactive):
     """
     Собрать одну плитку: геометрия, данные, команда.
@@ -113,6 +183,9 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     snaps = tile.pop("snaps", None) or [tile.pop("snap", None)]
     snaps = [s for s in snaps if s]
 
+    if not tile["compact"] and ph < LOW_H:
+        _fit_low(tile, pw, conf["fs"])
+
     # Служебные поля реестра до шаблона доходить не должны.
     zones = tile.pop("_zones", None) or []
     bound = tile.pop("_bound", None) or {}
@@ -144,7 +217,11 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
                         panel_conf.get("stale_after",
                         (config.get("stale_after", STALE_AFTER)
                          if config else STALE_AFTER))))
-    tile["stale"] = reads and bool(known) and all(
+    # Плитки, у которых молчание канала - норма (датчик протечки шлёт
+    # значение, только когда намок), жёлтой точкой не отмечаются: иначе она
+    # висела бы на них всегда. Пропажу прибора по-прежнему видно - серой.
+    quiet = tile.pop("_quiet", False)
+    tile["stale"] = reads and not quiet and bool(known) and all(
         now - s["ts"] > stale_after for s in known)
     return tile
 

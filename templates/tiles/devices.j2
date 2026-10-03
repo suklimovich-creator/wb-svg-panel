@@ -227,7 +227,7 @@
     {{ base.icon_c(t, t.icon or 'strip', 25) }}
     {#- на мелкой плитке цифру не пишем: поле «холодный-тёплый» и положение
         точки уже показывают и яркость, и температуру -#}
-    {% if not t.compact %}
+    {% if not t.compact and t.h >= base.LOW %}
     {% set label = t.short if t.w >= 260 else t.short_min %}
     {% if label %}
     <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ label }}</text>

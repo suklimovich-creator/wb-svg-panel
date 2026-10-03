@@ -92,6 +92,15 @@ if [ -d .git ] && command -v git >/dev/null 2>&1; then
     else
         echo "ok   config.yaml не в индексе"
     fi
+    # Списки - личное: покупки, дела. Лежат в data/, который в .gitignore.
+    if [ -n "$(git ls-files data/ 2>/dev/null)" ]; then
+        FOUND=1
+        echo
+        echo "!! data/ под контролем git (там списки)"
+        echo "   -> git rm -r --cached data/"
+    else
+        echo "ok   data/ не в индексе"
+    fi
 fi
 
 echo

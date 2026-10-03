@@ -97,6 +97,35 @@
   {{ base.caption(t, t.status) }}
 {% endmacro %}
 
+{#- ---- список ----
+    Значок и название сверху, число открытых пунктов справа, ниже -
+    пункты в том порядке, что задан в окне. Сколько строк влезло,
+    посчитал сервер по высоте плитки; последняя строка, если не влезло
+    всё, - «ещё N». Мелкая плитка показывает только число и первый пункт
+    вместо подписи. -#}
+{% macro tile_list(t) %}
+  {{ base.plate(t) }}
+  {% if t.compact_list or not t.rows and not t.count %}
+  {{ base.icon_c(t, t.icon or 'list', 24) }}
+  {% if t.count and not t.compact %}
+  <text x="{{ t.w - 20 }}" y="41" class="li-count" text-anchor="end">{{ t.count }}</text>
+  {% endif %}
+  {{ base.caption(t, t.status) }}
+  {% else %}
+  <use href="#{{ uid }}ic-{{ t.icon or 'list' }}" xlink:href="#{{ uid }}ic-{{ t.icon or 'list' }}"
+       x="16" y="{{ 15 * fs }}" width="{{ 26 * fs }}" height="{{ 26 * fs }}"/>
+  <text x="{{ 16 + 34 * fs }}" y="{{ 35 * fs }}" class="name">{{ t.head or t.title }}</text>
+  <text x="{{ t.w - 20 }}" y="{{ 36 * fs }}" class="li-count" text-anchor="end">{{ t.count }}</text>
+  {% for r in t.rows %}
+  <circle cx="{{ 20 + t.dot_r }}" cy="{{ r.y - t.size * 0.33 }}" r="{{ t.dot_r }}" class="li-dot"/>
+  <text x="{{ 38 }}" y="{{ r.y }}" font-size="{{ t.size }}" class="li">{{ r.text }}</text>
+  {% endfor %}
+  {% if t.more %}
+  <text x="38" y="{{ t.more_y }}" font-size="{{ t.size * 0.9 }}" class="li-more">ещё {{ t.more }}…</text>
+  {% endif %}
+  {% endif %}
+{% endmacro %}
+
 {#- ---- простое значение ---- -#}
 {% macro tile_value(t) %}
   {{ base.plate(t) }}

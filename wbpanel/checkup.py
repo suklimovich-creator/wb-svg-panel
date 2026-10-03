@@ -137,6 +137,27 @@ def _check_tile(tile, panel_title, panel_name, config, state,
                     "у камеры %s не задан user" % name,
                     "Hikvision без аутентификации не отдаёт ни кадр, ни поток"))
 
+    # --- список ------------------------------------------------------------
+    # Данные не в MQTT, а в файле демона, и единственное, в чём можно
+    # ошибиться, - имя списка. Молча это выглядит как пустой список.
+    if kind == "list":
+        from .lists import lists
+        name = tile.get("list")
+        if not name:
+            out.append(_problem(ERROR, panel_title, tile,
+                                "не задано поле list",
+                                "имя из раздела lists: верхнего уровня"))
+        elif not lists.known(str(name)):
+            out.append(_problem(
+                ERROR, panel_title, tile,
+                "список %s не описан" % name,
+                "известные: %s" % (", ".join(sorted(lists.defs())) or "ни одного")))
+        elif not interactive:
+            out.append(_problem(
+                WARNING, panel_title, tile,
+                "панель без interactive: окно списка не откроется",
+                "список будет виден, но отметить пункт с этой панели нельзя"))
+
     # --- каналы, про которые брокер молчит ---------------------------------
     # Самая частая поломка: опечатка в имени. Плитка рисуется, но пустая.
     for channel in sorted(channels_of(tile, state)):

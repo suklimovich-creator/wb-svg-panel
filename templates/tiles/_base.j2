@@ -162,6 +162,13 @@
   .offline   { opacity: .40; }
   .dot-warn  { fill: #E09B2D; }
   .dot-off   { fill: var(--ink-faint); }
+  /* Пункты списка. Кегль задаётся атрибутом: его считает сервер по полю
+     font плитки и масштабу, и объявлять font-size здесь нельзя - правило
+     таблицы стилей сильнее атрибута и перебило бы его. */
+  .li        { fill: var(--ink); font-weight: 450; }
+  .li-dot    { fill: var(--ink-dim); }
+  .li-more   { fill: var(--ink-dim); font-weight: 450; }
+  .li-count  { font-size: calc(17px * var(--fs)); font-weight: 600; fill: var(--ink-dim); }
 {% endmacro %}
 
 {#- Библиотека значков. Живёт в <defs> каркаса, адресуется по uid.
@@ -228,6 +235,16 @@
   <symbol id="{{ uid }}ic-power" viewBox="0 0 24 24">
     <path class="icon" d="M12 3.5v8"/>
     <path class="icon" d="M7.2 6.6a7.2 7.2 0 1 0 9.6 0"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-list" viewBox="0 0 24 24">
+    <path class="icon" d="M9.5 6.5h10M9.5 12h10M9.5 17.5h10"/>
+    <path class="icon" d="M4 6.4l1.3 1.3 2.2-2.4M4 11.9l1.3 1.3 2.2-2.4"/>
+    <circle class="icon" cx="5.4" cy="17.5" r="1.2"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-cart" viewBox="0 0 24 24">
+    <path class="icon" d="M3 4.5h2.4l2.3 10.2h10.1l2-7.2H6.4"/>
+    <circle class="icon" cx="9.2" cy="18.8" r="1.4"/>
+    <circle class="icon" cx="16.4" cy="18.8" r="1.4"/>
   </symbol>
   <symbol id="{{ uid }}ic-bulb" viewBox="0 0 24 24">
     <path class="icon" d="M12 3.2a5.7 5.7 0 0 0-3.3 10.3c.6.4.9 1 .9 1.7v.4h4.8v-.4c0-.7.3-1.3.9-1.7A5.7 5.7 0 0 0 12 3.2z"/>

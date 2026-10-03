@@ -126,6 +126,7 @@
   {% elif t.kind == 'link' %}{{ basic.tile_link(t) }}
   {% elif t.kind == 'scene' %}{{ basic.tile_scene(t) }}
   {% elif t.kind == 'camera' %}{{ basic.tile_camera(t) }}
+  {% elif t.kind == 'list' %}{{ basic.tile_list(t) }}
   {#- Телевизор рисуется как обычный выключатель: значок, обводка по
       питанию и строка состояния. Своего макроса ему не нужно -
       всё нестандартное живёт в пульте, а не на плитке. -#}

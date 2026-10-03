@@ -26,6 +26,8 @@ from .assemble import (build_tile, cmd_attrs, prepare,
                        resolve_sections, xml_escape)
 from .render import resolve_css_vars
 from . import cameras
+from .lists import ListError, lists
+from . import checkup
 import html
 import threading
 
@@ -198,6 +200,7 @@ def index():
 <div class="links">
  <a href="docs"><b>Как собирать панели</b></a> ·
  <a href="channels">Список каналов</a> ·
+ <a href="check">Проверка конфига</a> ·
  <a href="healthz">healthz</a> ·
  плитка ведёт на <code>.html</code> с автообновлением,
  сама картинка — <code>&lt;имя&gt;.svg</code>
@@ -307,6 +310,54 @@ def api_publish():
     mqtt_client.publish(topic, value)
     log.info("публикация %s = %s", topic, value)
     return Response('{"ok":true}', mimetype="application/json")
+
+
+def _json(body, status=200):
+    return Response(json.dumps(body, ensure_ascii=False), status=status,
+                    mimetype="application/json",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.route("/api/list/<name>", methods=["GET", "POST"])
+def api_list(name):
+    """
+    Список целиком (GET) или одно действие над ним (POST).
+
+        POST {"op": "add", "text": "Молоко"}
+        POST {"op": "done" | "undo" | "delete", "id": "…"}
+        POST {"op": "move", "id": "…", "to": "up" | "down" | "top"}
+        POST {"op": "edit", "id": "…", "text": "…"}
+        POST {"op": "clear"}            выполненные - сразу, не дожидаясь срока
+
+    Белый список здесь - раздел lists: в config.yaml: писать можно только
+    в описанные там списки, и только словами, а не топиками. Ответ на
+    любое действие - список после него, чтобы окну не пришлось
+    переспрашивать.
+
+    Быстрой команде на iPhone хватает того же адреса с паролем nginx:
+    POST на /panel/api/list/shopping с телом {"op":"add","text":"…"}.
+    """
+    config.reload()
+    if not lists.known(name):
+        return _json({"error": "список %r не описан в config.yaml" % name}, 404)
+    if request.method == "POST":
+        raw = request.get_data(as_text=True) or ""
+        if len(raw) > 4096:
+            return _json({"error": "слишком длинный запрос"}, 413)
+        try:
+            body = json.loads(raw or "{}")
+        except ValueError:
+            # Быстрые команды иногда шлют текст как есть, а не JSON: такое
+            # тело считаем новым пунктом.
+            body = {"op": "add", "text": raw}
+        if not isinstance(body, dict):
+            return _json({"error": "ждём объект JSON"}, 400)
+        try:
+            lists.apply(name, body)
+        except ListError as exc:
+            return _json({"error": str(exc)}, exc.status)
+        log.info("список %s: %s", name, body.get("op"))
+    return _json(lists.view(name))
 
 
 @app.route("/cam/<name>.jpg")
@@ -731,6 +782,60 @@ def channels():
     return Response(page, mimetype="text/html; charset=utf-8")
 
 
+@app.route("/check")
+def check_page():
+    """
+    Проверка конфига: что панель поняла, а что нет.
+
+    Описана в 0.10.0, но маршрут потерялся при одной из сборок файлов -
+    сама проверка в checkup.py была цела, а открыть её было негде.
+
+    curl -s localhost:8088/check?format=text - то же для консоли.
+    """
+    config.reload()
+    problems = checkup.check_config(config, state, history)
+    if request.args.get("format") == "text":
+        return Response(checkup.as_text(problems),
+                        mimetype="text/plain; charset=utf-8")
+    esc = html.escape
+    total = checkup.summary(problems)
+    rows = []
+    for p in problems:
+        rows.append(
+            '<tr class="%s"><td class="lv">%s</td><td>%s</td>'
+            '<td><b>%s</b> <span class="k">%s</span></td>'
+            '<td>%s%s</td></tr>' % (
+                "err" if p["level"] == checkup.ERROR else "warn",
+                esc(p["level"]), esc(str(p["panel"])), esc(str(p["tile"])),
+                esc(str(p["kind"])), esc(p["text"]),
+                ('<div class="h">%s</div>' % esc(p["hint"])) if p["hint"] else ""))
+    page = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка конфига</title><style>
+ body{font:14px/1.45 -apple-system,'Segoe UI',Inter,system-ui,sans-serif;
+      margin:0;padding:16px;background:#F1F1F3;color:#3A3A3E}
+ h1{font-size:19px;margin:0 0 4px}
+ .sub{color:#8A8A90;margin-bottom:14px}
+ table{border-collapse:collapse;width:100%%;background:#fff;border-radius:12px;
+       overflow:hidden}
+ td{padding:8px 12px;border-bottom:1px solid #EDEDF0;vertical-align:top}
+ .lv{font-weight:600;white-space:nowrap}
+ .err .lv{color:#C0392B} .warn .lv{color:#B8791A}
+ .k{color:#8A8A90;font-size:12.5px}
+ .h{color:#8A8A90;font-size:13px;margin-top:3px}
+ .ok{background:#fff;border-radius:12px;padding:16px;color:#1F8F4E}
+</style></head><body>
+<h1>Проверка конфига</h1>
+<div class="sub">Ошибок %(e)d, предупреждений %(w)d ·
+<a href="check?format=text">текстом</a> · <a href="./">к панелям</a></div>
+%(body)s
+</body></html>""" % {
+        "e": total["errors"], "w": total["warnings"],
+        "body": ("<table>%s</table>" % "".join(rows)) if rows
+                else '<div class="ok">Проблем не найдено.</div>'}
+    return Response(page, mimetype="text/html; charset=utf-8")
+
+
 @app.route("/healthz")
 def healthz():
     with state.lock:
@@ -758,6 +863,9 @@ def main():
     # Камеры читают адреса и пароли из того же конфига, и тоже
     # вызываются оттуда, куда параметр не передать.
     cameras.config = config
+    # Списки живут в файле рядом с конфигом; при старте заодно уходят
+    # выполненные, у которых вышел срок, пока демон не работал.
+    lists.configure(config, state)
     state.set_watched(config.used_channels())
 
     jinja = Environment(
@@ -776,6 +884,10 @@ def main():
 
     global mqtt_client
     mqtt_client = client
+    # QoS 1: копия списка публикуется и при старте, ещё до подключения, а
+    # сообщение с нулевым QoS paho в таком случае просто выбрасывает.
+    lists.publish = lambda topic, payload, retain=False: client.publish(
+        topic, payload, qos=1, retain=retain)
     rpc = MqttRpc(client, client_id)
     hconf = config.get("history", {}) or {}
     history = History(rpc,
@@ -787,6 +899,12 @@ def main():
 
     def sync_raw_topics(cli):
         """Подписаться на топики сторонних шлюзов, упомянутые в конфиге."""
+        # Списки могли дописать в конфиг на ходу: тогда подписка на приём
+        # пунктов и копия в брокер появляются без перезапуска.
+        if lists.defs() and lists.add_topic() not in subscribed_raw:
+            cli.subscribe(lists.add_topic(), 0)
+            subscribed_raw.add(lists.add_topic())
+            lists.mirror_all()
         wanted = config.raw_topics()
         new = wanted - subscribed_raw
         if new:
@@ -819,6 +937,8 @@ def main():
         payload = msg.payload.decode("utf-8", "replace")
         if msg.topic.startswith("/rpc/v1/"):
             rpc.on_reply(payload)
+        elif lists.on_message(msg.topic, payload):
+            pass
         else:
             state.on_message(msg.topic, payload)
 

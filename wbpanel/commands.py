@@ -177,6 +177,8 @@ CMD_ATTRS = [
     ("tv_on", "data-tv-on"), ("tv_link", "data-tv-link"),
     ("tv_state", "data-tv-state"), ("tv_app", "data-tv-app"),
     ("tv_apps", "data-tv-apps"),
+    # Список: окну нужно только имя, всё остальное оно спросит у демона.
+    ("list", "data-list"),
 ]
 
 

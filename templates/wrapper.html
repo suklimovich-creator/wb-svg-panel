@@ -231,6 +231,48 @@
             border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);
             font-size:14px;font-weight:600;cursor:pointer}
  #ov .acbtn.on{border-color:#8E6BC4;color:#fff;background:rgba(142,107,196,.22)}
+ /* Список на весь экран. Кнопки крупные, по 44 px: окно открывают ради
+    галочек, и промах мимо строки дороже места на экране. */
+ /* Своя подложка, а не прозрачный оверлей, как у пультов: строки текста
+    поверх просвечивающей панели читались плохо. Отступ сверху - под
+    крестик закрытия, который висит в углу экрана. */
+ #ov .lst{width:520px;max-width:94vw;box-sizing:border-box;text-align:left;
+          margin:40px auto 7px;background:#1C1C20;border-radius:22px;
+          padding:16px 12px 14px}
+ #ov .lst .lhead{display:flex;align-items:baseline;gap:10px;margin:2px 6px 12px}
+ #ov .lst .lttl{color:#fff;font-size:20px;font-weight:600}
+ #ov .lst .lcnt{color:rgba(255,255,255,.5);font-size:15px}
+ #ov .lst .ladd{display:flex;gap:8px;margin-bottom:12px}
+ #ov .lst input{flex:1;min-width:0;font:16px -apple-system,'Segoe UI',Inter,system-ui,sans-serif;
+          padding:12px 14px;border-radius:14px;border:1.5px solid rgba(255,255,255,.18);
+          background:rgba(255,255,255,.07);color:#fff;outline:none;
+          -webkit-user-select:text;user-select:text}
+ #ov .lst input:focus{border-color:#E09B2D}
+ #ov .lst .lgo{flex:0 0 auto;padding:0 18px;border-radius:14px;background:#E09B2D;
+          color:#1B1B1F;font-weight:600;font-size:15px;display:flex;align-items:center;
+          cursor:pointer;touch-action:manipulation}
+ #ov .lst .lrow{display:flex;align-items:center;gap:6px;min-height:52px;
+          border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:0 4px}
+ #ov .lst .lchk{flex:0 0 44px;height:44px;display:flex;align-items:center;
+          justify-content:center;cursor:pointer;touch-action:manipulation}
+ #ov .lst .lchk i{width:22px;height:22px;border-radius:50%;box-sizing:border-box;
+          border:2px solid rgba(255,255,255,.45);display:block}
+ #ov .lst .done .lchk i{background:#E09B2D;border-color:#E09B2D}
+ #ov .lst .ltxt{flex:1;min-width:0;color:#fff;font-size:16px;line-height:1.3;
+          padding:8px 2px;overflow-wrap:anywhere;cursor:text}
+ #ov .lst .done .ltxt{color:rgba(255,255,255,.45);text-decoration:line-through}
+ #ov .lst .lbtn{flex:0 0 40px;height:44px;display:flex;align-items:center;
+          justify-content:center;color:rgba(255,255,255,.55);font-size:17px;
+          cursor:pointer;border-radius:10px;touch-action:manipulation}
+ #ov .lst .lbtn:active{background:rgba(255,255,255,.12)}
+ #ov .lst .lbtn.off{opacity:.2;pointer-events:none}
+ #ov .lst .lbtn.ask{flex-basis:auto;padding:0 10px;color:#FFD8CE;
+          background:rgba(196,85,59,.35);font-size:14px;font-weight:600}
+ #ov .lst .lfoot{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+ #ov .lst .lfoot span{padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;
+          border:2px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);cursor:pointer}
+ #ov .lst .lempty{color:rgba(255,255,255,.45);text-align:center;padding:18px 0}
+ #ov .lst .lnote{color:rgba(255,255,255,.4);font-size:12.5px;margin:10px 4px 0}
 </style></head><body>
 <a id="back" href="./">← Панели</a>
 <div id="cols"></div>
@@ -1301,6 +1343,9 @@ function bind(){
         // Случайное касание не должно выключать телевизор посреди фильма,
         // поэтому питание живёт только внутри пульта.
         else if(this.getAttribute('data-pad') === 'tv') openPad(this);
+        // Список: нажатие открывает окно, на самой плитке отмечать нечего -
+        // строка там в полтора десятка пикселей, промахнуться легко.
+        else if(this.getAttribute('data-pad') === 'list') openPad(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -1835,6 +1880,150 @@ function padTV(node){
   openOv([card]);
 }
 
+/* ---------- список ----------
+   Окно рисует себя само, по ответу /api/list/<имя>. Каждое действие - это
+   одна операция над одним пунктом, а не «вот новый список»: два телефона,
+   отметившие по пункту почти одновременно, иначе затирали бы друг друга.
+   Ответ на действие - список после него, переспрашивать не нужно.
+
+   Пока окно открыто, список перечитывается раз в три секунды: его могли
+   поменять с другого телефона, сценарием или быстрой командой. Строку
+   ввода перерисовка не трогает - иначе набранное пропадало бы. */
+function padList(node){
+  var name = node.getAttribute('data-list');
+  if(!name) return;
+  var url = 'api/list/' + encodeURIComponent(name);
+  var box = el('div','lst');
+  var head = el('div','lhead'), ttl = el('div','lttl', node.getAttribute('data-title') || ''),
+      cnt = el('div','lcnt');
+  head.appendChild(ttl); head.appendChild(cnt);
+  var add = el('div','ladd'), input = document.createElement('input'),
+      go = el('div','lgo','Добавить');
+  input.type = 'text'; input.maxLength = 200;
+  input.placeholder = 'Новый пункт';
+  input.setAttribute('enterkeyhint', 'done');
+  add.appendChild(input); add.appendChild(go);
+  var body = el('div'), foot = el('div','lfoot'), note = el('div','lnote');
+  box.appendChild(head); box.appendChild(add); box.appendChild(body);
+  box.appendChild(foot); box.appendChild(note);
+
+  var view = null, showDone = false, busy = false, timer = null, lastSig = '';
+
+  function call(op){
+    busy = true;
+    return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                       body: JSON.stringify(op)})
+      .then(function(r){ return r.json().then(function(j){
+        if(!r.ok) throw new Error(j.error || r.status); return j; }); })
+      .then(function(j){ view = j; draw(); })
+      .catch(function(e){ flash('Не удалось: ' + e.message); })
+      .then(function(){ busy = false; });
+  }
+  function load(){
+    if(busy) return;
+    fetch(url + '?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        if(!j || busy) return;
+        // Ничего не поменялось - не перерисовываем: иначе раз в три
+        // секунды сбрасывалось бы «Удалить?» и прыгала прокрутка.
+        var sig = JSON.stringify([j.open, j.done]);
+        if(sig === lastSig) return;
+        view = j; draw();
+      })
+      .catch(function(){});
+  }
+  function submit(){
+    var text = input.value.replace(/^\s+|\s+$/g, '');
+    if(!text) return;
+    input.value = '';
+    call({op:'add', text:text});
+    // Клавиатура остаётся: пункты чаще добавляют подряд, чем по одному.
+    input.focus();
+  }
+  go.onclick = submit;
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); submit(); }
+  });
+
+  function btn(text, cls, fn){
+    var b = el('div', 'lbtn' + (cls ? ' ' + cls : ''), text);
+    b.onclick = fn; return b;
+  }
+  function row(item, k, total, done){
+    var r = el('div', 'lrow' + (done ? ' done' : ''));
+    var chk = el('div','lchk'); chk.appendChild(el('i'));
+    chk.onclick = function(){ call({op: done ? 'undo' : 'done', id: item.id}); };
+    var txt = el('div','ltxt', item.text);
+    // Правка - по нажатию на текст. Окно ввода системное: на телефоне
+    // оно же открывает клавиатуру, своё рисовать незачем.
+    txt.onclick = function(){
+      var t = window.prompt('Пункт', item.text);
+      if(t !== null && t.replace(/\s+/g,'') && t !== item.text)
+        call({op:'edit', id:item.id, text:t});
+    };
+    r.appendChild(chk); r.appendChild(txt);
+    if(!done){
+      r.appendChild(btn('\u25B2', k === 0 ? 'off' : '',
+                        function(){ call({op:'move', id:item.id, to:'up'}); }));
+      r.appendChild(btn('\u25BC', k === total - 1 ? 'off' : '',
+                        function(){ call({op:'move', id:item.id, to:'down'}); }));
+    }
+    // Удаление со вторым нажатием: первое превращает крестик в «Удалить?»,
+    // и через три секунды он возвращается сам. Отменить удаление потом
+    // нечем, а промах по крестику рядом со стрелками - дело обычное.
+    var del = btn('\u2715', '', null);
+    var armed = null;
+    del.onclick = function(){
+      if(armed){ clearTimeout(armed); call({op:'delete', id:item.id}); return; }
+      del.textContent = 'Удалить?'; del.classList.add('ask');
+      armed = setTimeout(function(){
+        armed = null; del.textContent = '\u2715'; del.classList.remove('ask');
+      }, 3000);
+    };
+    r.appendChild(del);
+    return r;
+  }
+  function draw(){
+    if(!view) return;
+    lastSig = JSON.stringify([view.open, view.done]);
+    ttl.textContent = view.title || ttl.textContent;
+    cnt.textContent = view.open.length ? String(view.open.length) : '';
+    body.innerHTML = '';
+    if(!view.open.length)
+      body.appendChild(el('div','lempty', view.done.length ? 'Всё сделано' : 'Пусто'));
+    view.open.forEach(function(item, k){ body.appendChild(row(item, k, view.open.length, false)); });
+    if(showDone) view.done.forEach(function(item){ body.appendChild(row(item, 0, 0, true)); });
+    foot.innerHTML = '';
+    if(view.done.length){
+      var t = el('span', '', (showDone ? 'Скрыть выполненные' : 'Показать выполненные')
+                             + ' (' + view.done.length + ')');
+      t.onclick = function(){ showDone = !showDone; draw(); };
+      foot.appendChild(t);
+      if(showDone){
+        var c = el('span', '', 'Очистить выполненные');
+        c.onclick = function(){ call({op:'clear'}); };
+        foot.appendChild(c);
+      }
+    }
+    note.textContent = view.done.length
+      ? 'Выполненные удаляются сами через ' + fmtDays(view.keep_days) + ' после отметки.'
+      : '';
+  }
+  function fmtDays(d){
+    if(d < 1) return Math.round(d * 24) + ' ч';
+    var n = Math.round(d), m10 = n % 10, m100 = n % 100;
+    var w = (m10 === 1 && m100 !== 11) ? 'день'
+          : (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) ? 'дня' : 'дней';
+    return n + ' ' + w;
+  }
+
+  openOv([box]);
+  load();
+  timer = setInterval(load, 3000);
+  ovCleanup = function(){ clearInterval(timer); };
+}
+
 function openPad(node){
   var pad = node.getAttribute('data-pad');
   if(pad==='xy') padXY(node);
@@ -1845,6 +2034,7 @@ function openPad(node){
   else if(pad==='ac') padAC(node);
   else if(pad==='camera') padCamera(node);
   else if(pad==='tv') padTV(node);
+  else if(pad==='list') padList(node);
 }
 
 /* ---------- обновление ---------- */

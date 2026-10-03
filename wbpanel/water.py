@@ -204,8 +204,20 @@ class Water(object):
                                                       "датчика", "датчиков"))
         else:
             status = "Сухо"
+        # Мелкой плитке (0.5 x 0.5) подписи с именами датчиков не влезают:
+        # там одно слово вместо названия - значок капли и так говорит, что
+        # это протечка.
+        if wet:
+            short = "Протечка"
+        elif latched:
+            short = "Сбросьте"
+        elif rows and not known:
+            short = "Нет данных"
+        else:
+            short = "Сухо"
         return {"rows": rows, "wet": wet, "latched": latched,
                 "alarm": bool(wet) or latched, "status": status,
+                "status_s": short,
                 "count": count, "known": known}
 
     def closers(self, state, valve_name):

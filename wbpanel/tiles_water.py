@@ -93,6 +93,7 @@ class Leak(Tile):
             "alarm": view["alarm"],
             "icon": ctx.opt("icon", "drop"),
             "status": view["status"],
+            "status_s": view["status_s"],
             "always_status": True,
             "rows": view["rows"],
             "wet": len(view["wet"]),

@@ -154,7 +154,13 @@
     {% if t.alarm and t.wet and t.count > 1 and not t.compact and t.h >= 117 %}
     <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.wet }}</text>
     {% endif %}
+    {% if t.compact %}
+    {#- Мелкая плитка: вместо названия - состояние. Название «Протечки» на
+        ней ничего не говорит, а «Сухо» и «Протечка» говорят всё. -#}
+    <text x="{{ t.w / 2 }}" y="{{ t.h - 13 }}" class="name-s" text-anchor="middle">{{ t.status_s }}</text>
+    {% else %}
     {{ base.caption(t, t.status) }}
+    {% endif %}
   </g>
 {% endmacro %}
 

@@ -373,6 +373,7 @@ function toggleSection(node){
     host.classList.add('wait');
   }
   refresh(true);
+  restartPoll();
 }
 
 function Q(){
@@ -415,6 +416,7 @@ function drawCols(){
       saveCols(this.getAttribute('data-v'));
       drawCols();
       refresh();
+      restartPoll();
     };
   }
   box.className = 'touched';
@@ -1254,6 +1256,18 @@ function toggle(node){
   // перерисуется, и подтвердить нажатие обновлением не получится. Поэтому
   // подсвечиваем сами - иначе кнопка кажется мёртвой и её жмут дважды.
   var scene = node.getAttribute('data-kind') === 'scene';
+  var was = node.getAttribute('data-state') === '1';
+  /* Рамка переключается сразу, не дожидаясь прибора: у реле ответ
+     приходит за доли секунды, а у устройств за Sprut.hub - за две-три.
+     Плитка притушена, пока прибор не подтвердил; подтверждение - это
+     новая картинка плитки от сервера. Не подтвердил за HOLD_MS - плитку
+     заменяет то, что сервер знает на самом деле, и рамка вернётся. */
+  function flip(on){
+    var rims = node.querySelectorAll('.plate,.rim');
+    for (var k = 0; k < rims.length; k++) rims[k].classList.toggle('on', on);
+    node.setAttribute('data-state', on ? '1' : '0');
+  }
+  if (!scene) { flip(!was); hold(node); }
   node.classList.add('busy');
   pub(node.getAttribute('data-topic'), value).then(function(){
     if(scene){
@@ -1261,21 +1275,40 @@ function toggle(node){
       node.classList.add('fired');
       setTimeout(function(){ node.classList.remove('fired'); }, 700);
     }
-    setTimeout(refresh, 400); setTimeout(refresh, 1200);
-  }).catch(function(e){ flash('Не удалось: '+e.message); node.classList.remove('busy'); });
+    // Ответ прибора принесёт ждущий запрос. Старый сервер его не умеет -
+    // тогда переспрашиваем сами, как раньше.
+    if (!LIVE) { setTimeout(refresh, 400); setTimeout(refresh, 1200); }
+  }).catch(function(e){
+    flash('Не удалось: '+e.message);
+    node.classList.remove('busy');
+    if (!scene) flip(was);
+  });
 }
 
-function bind(){
+/* Узлы под селектор внутри root, включая сам root. После точечной замены
+   плитки обработчики вешаются только на неё, а не на всю панель заново. */
+function within(root, sel){
+  var out = [];
+  var m = root.matches || root.webkitMatchesSelector || root.msMatchesSelector;
+  if (root !== host && m && m.call(root, sel)) out.push(root);
+  var found = root.querySelectorAll(sel);
+  for (var i = 0; i < found.length; i++) out.push(found[i]);
+  return out;
+}
+
+function bind(root){
+  root = root || host;
   // Заголовки разделов работают и без interactive: сворачивание ничего
   // не включает и не выключает, это способ смотреть.
-  var folds = host.querySelectorAll('[data-section]');
+  var folds = within(root, '[data-section]');
   for (var f = 0; f < folds.length; f++) {
     folds[f].onclick = function(){ if (tapOk()) toggleSection(this); };
   }
-  ACCORDION = host.querySelector('[data-accordion="1"]') !== null;
+  if (root === host)
+    ACCORDION = host.querySelector('[data-accordion="1"]') !== null;
 
   if(!INTERACTIVE) return;
-  var nodes = host.querySelectorAll('[data-topic],[data-expand],[data-pad],[data-href],[data-chart]');
+  var nodes = within(root, '[data-topic],[data-expand],[data-pad],[data-href],[data-chart]');
   for(var i=0;i<nodes.length;i++){
     var n = nodes[i];
     // Плитка, у которой есть и полный экран, и пульт (фанкойл), не может
@@ -1576,9 +1609,9 @@ function padThermostat(node){
     paint();
   }
   var ticker = setInterval(function(){
-    // Сначала просим свежую панель, потом читаем из неё: пока оверлей
-    // открыт, само по себе обновление не сработает.
-    refresh(true);
+    // Панель под окном обновляет ждущий запрос, и прибор оттуда виден
+    // сразу. Со старым сервером просим свежую картинку сами.
+    if (!LIVE) refresh(true);
     sync();
   }, 1200);
 
@@ -2039,12 +2072,11 @@ function openPad(node){
 
 /* ---------- обновление ---------- */
 /* Ответы приходят не в том порядке, в каком ушли запросы. Фоновое
-   обновление раз в десять секунд и запрос после нажатия на заголовок
-   идут параллельно, и если фоновое ушло до нажатия со старой свёрткой, а
-   вернулось после, оно перерисовывало панель обратно: раздел не
-   открывался или открывался и тут же захлопывался. Поэтому у каждого
-   запроса номер, и ответ старее показанного выбрасывается, а ответ на
-   запрос с другой свёрткой или числом колонок - тоже. */
+   обновление и запрос после нажатия на заголовок идут параллельно, и если
+   фоновое ушло до нажатия со старой свёрткой, а вернулось после, оно
+   перерисовывало панель обратно. Поэтому у каждого запроса номер, и ответ
+   старее показанного выбрасывается, а ответ на запрос с другой свёрткой
+   или числом колонок - тоже. */
 var reqSeq = 0, shownSeq = 0, pendingSvg = null, inflight = 0, lastReqAt = 0;
 
 /* Последние картинки по состоянию свёртки: повторно раскрытый раздел
@@ -2059,6 +2091,108 @@ function remember(q, svg){
   svgCache[q] = {svg: svg, at: Date.now()};
 }
 
+/* ---------- точечная замена ----------
+   Новая картинка разбирается целиком, но в документ попадают только те
+   плитки, что изменились. Остальные узлы остаются прежними - с их
+   обработчиками, нажатием, которое сейчас идёт, и ссылками, которые
+   держат пульты. Раньше innerHTML менял всю панель: полторы сотни
+   килобайт разметки и обработчики заново на каждую плитку раз в десять
+   секунд.
+
+   Сравниваются дети главной группы: заголовки разделов, чипы, плитки,
+   часы в шапке - каждый своей строкой. Стили, defs и размеры - отдельно:
+   если поменялись они, раскладка другая, и панель заменяется целиком. */
+var XP = window.DOMParser ? new DOMParser() : null;
+var XS = window.XMLSerializer ? new XMLSerializer() : null;
+var shownHead = null, shownParts = null;
+/* Плитки с мгновенным откликом: индекс -> до какого времени не трогать.
+   Пока прибор не ответил, сервер присылает плитку в прежнем виде, и без
+   этого рамка мигнула бы обратно на первом же ответе. */
+var holds = {}, HOLD_MS = 8000;
+
+function kids(node){
+  var out = [];
+  for (var c = node.firstChild; c; c = c.nextSibling)
+    if (c.nodeType === 1) out.push(c);
+  return out;
+}
+function mainOf(svgEl){
+  var k = kids(svgEl);
+  return k.length ? k[k.length - 1] : null;
+}
+function headOf(svgEl){
+  var k = kids(svgEl), s = '';
+  for (var i = 0; i < k.length - 1; i++) s += XS.serializeToString(k[i]);
+  var a = ['width', 'height', 'viewBox', 'class', 'style'];
+  for (var j = 0; j < a.length; j++) s += '|' + (svgEl.getAttribute(a[j]) || '');
+  return s;
+}
+function partsOf(g){
+  var k = kids(g), out = [];
+  for (var i = 0; i < k.length; i++) out.push(XS.serializeToString(k[i]));
+  return out;
+}
+function parseSvg(svg){
+  if (!XP || !XS) return null;
+  var doc = XP.parseFromString(svg, 'image/svg+xml');
+  if (!doc || !doc.documentElement || doc.getElementsByTagName('parsererror').length)
+    return null;
+  return doc.documentElement;
+}
+function hold(node){
+  var g = host.querySelector('svg') ? mainOf(host.querySelector('svg')) : null;
+  if (!g) return;
+  var k = kids(g);
+  for (var n = node; n && n !== g; n = n.parentNode) {
+    var i = k.indexOf(n);
+    if (i >= 0) { holds[i] = Date.now() + HOLD_MS; return; }
+  }
+}
+
+/* Заменить только изменившееся. false - не вышло, нужна полная замена. */
+function patch(root){
+  var cur = host.querySelector('svg');
+  if (!cur || !shownParts || !root) return false;
+  var head = headOf(root);
+  if (head !== shownHead) return false;
+  var ng = mainOf(root), cg = mainOf(cur);
+  if (!ng || !cg) return false;
+  var nk = kids(ng), ck = kids(cg);
+  if (nk.length !== ck.length || nk.length !== shownParts.length) return false;
+  var now = Date.now();
+  for (var i = 0; i < nk.length; i++) {
+    var str = XS.serializeToString(nk[i]);
+    // Не изменилась - не трогаем. Исключение - плитка с мгновенным
+    // откликом, которую прибор так и не подтвердил: её возвращаем к
+    // тому, что знает сервер.
+    var expired = holds[i] && holds[i] <= now;
+    if (str === shownParts[i] && !expired) continue;
+    var fresh = document.importNode(nk[i], true);
+    cg.replaceChild(fresh, ck[i]);
+    shownParts[i] = str;
+    delete holds[i];
+    bind(fresh);
+  }
+  return true;
+}
+
+function full(svg, root){
+  if (root) {
+    shownHead = headOf(root);
+    shownParts = partsOf(mainOf(root));
+    holds = {};
+    var node = document.importNode(root, true);
+    while (host.firstChild) host.removeChild(host.firstChild);
+    host.appendChild(node);
+  } else {
+    // Разобрать как XML не вышло - вставляем по-старому, без точечных
+    // замен в дальнейшем, пока не придёт разбираемая картинка.
+    shownHead = shownParts = null;
+    host.innerHTML = svg;
+  }
+  bind();
+}
+
 function applySvg(svg, seq){
   if (seq < shownSeq) return;
   if (fingerHeld()) {
@@ -2066,8 +2200,10 @@ function applySvg(svg, seq){
     return;
   }
   shownSeq = seq; pendingSvg = null;
-  host.innerHTML = svg; host.classList.remove('wait');
-  bind(); err.style.display='none';
+  var root = parseSvg(svg);
+  if (!patch(root)) full(svg, root);
+  host.classList.remove('wait');
+  err.style.display = 'none';
 }
 function flushPending(){
   if (!pendingSvg || fingerHeld()) return;
@@ -2075,16 +2211,33 @@ function flushPending(){
   applySvg(p.svg, p.seq);
 }
 
-/* force нужен пультам: пока открыт оверлей, автообновление стоит - иначе
-   разметка меняется под пальцем. Но пульт термостата сам следит за
-   состоянием и переспрашивает панель осознанно, поэтому ему разрешено. */
+/* Версия состояния, которую видела страница. Её отдаёт сервер в
+   X-Panel-Version, и ждущий запрос держится открытым, пока она не
+   изменится. Нет заголовка - старый сервер, работаем опросом. */
+var VER = null, LIVE = true;
+function noteVersion(r){
+  var v = r.headers && r.headers.get ? r.headers.get('X-Panel-Version') : null;
+  if (v === null || v === undefined || v === '') { LIVE = false; return; }
+  VER = parseInt(v, 10);
+}
+function svgUrl(q, extra){
+  return NAME + '.svg' + q + (q ? '&' : '?') + (extra || '') + 't=' + Date.now();
+}
+
+/* Разовый запрос: после нажатий, смены свёртки, закрытия окна.
+   force нужен пультам: пока открыт оверлей, автообновление стоит, но
+   пульт термостата сам следит за прибором и переспрашивает осознанно. */
 function refresh(force){
   if(paused && !force) return;
   var q = Q(), seq = ++reqSeq, settled = false;
   function settle(){ if(!settled){ settled = true; inflight--; } }
   inflight++; lastReqAt = Date.now();
-  fetch(NAME + '.svg' + q + (q ? '&' : '?') + 't=' + Date.now(), {cache:'no-store'})
-    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+  fetch(svgUrl(q), {cache:'no-store'})
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      noteVersion(r);
+      return r.text();
+    })
     .then(function(svg){
       settle();
       if(svg.indexOf('<svg')<0) throw new Error('пустой ответ');
@@ -2093,8 +2246,7 @@ function refresh(force){
       if(q !== Q()) return;
       applySvg(svg, seq);
       // Первая загрузка: гармошку страница узнаёт только из разметки, и
-      // первый запрос ушёл без раскрытого раздела. Не ждём десять секунд
-      // до следующего обновления - переспрашиваем сразу.
+      // первый запрос ушёл без раскрытого раздела. Переспрашиваем сразу.
       if(q !== Q()) refresh(true);
     })
     .catch(function(e){
@@ -2106,10 +2258,71 @@ function refresh(force){
       host.textContent = 'Не удалось загрузить панель: ' + e.message;
     });
 }
-/* Фоновое обновление не встаёт в очередь за предыдущим: на большой
-   панели контроллер отвечает за четверть секунды, а на занятом - дольше,
-   и запросы копились бы. Зависший запрос держит очередь не дольше
-   пятнадцати секунд. */
+
+/* ---------- ждущий запрос ----------
+   Один запрос всегда открыт: сервер отвечает, как только на панели
+   что-то поменялось, а без изменений - через refresh секунд, как раньше
+   ходил таймер. Ответ - вся панель, но в документ попадают только
+   изменившиеся плитки.
+
+   Ответ пришёл подозрительно быстро - сервер не стал ждать (занято или
+   изменения сыплются подряд). Тогда следующий запрос через секунду, а не
+   сразу: иначе страница крутилась бы в цикле и грела контроллер. */
+var pollTimer = null, pollAbort = null, pollBusy = false, pollFails = 0;
+function schedule(ms){
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(poll, ms);
+}
+function poll(){
+  if (pollBusy) return;
+  if (document.hidden) return;          // продолжим, когда вкладку покажут
+  if (!LIVE) { if (!paused) refresh(); schedule(EVERY); return; }
+  pollBusy = true;
+  var q = Q(), t0 = Date.now();
+  var ctl = window.AbortController ? new AbortController() : null;
+  pollAbort = ctl;
+  var opts = {cache:'no-store'};
+  if (ctl) opts.signal = ctl.signal;
+  fetch(svgUrl(q, VER !== null ? 'since=' + VER + '&' : ''), opts)
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      noteVersion(r);
+      return r.text();
+    })
+    .then(function(svg){
+      pollBusy = false; pollAbort = null; pollFails = 0;
+      if (svg.indexOf('<svg') >= 0) {
+        remember(q, svg);
+        // Панель обновляется и под открытым окном: замена точечная и
+        // ничего не ломает под пальцем, а пульты (термостат) читают
+        // прибор прямо с неё.
+        // Номер - на момент ответа, а не запроса: ждущий запрос уходит
+        // раньше всех, а приносит самое свежее. С номером запроса его
+        // ответ проигрывал бы разовому, ушедшему позже, и изменение
+        // терялось бы до следующего таймаута.
+        if (q === Q()) applySvg(svg, ++reqSeq);
+      }
+      if (q !== Q()) { schedule(0); return; }
+      schedule(Date.now() - t0 < 300 ? 1000 : 0);
+    })
+    .catch(function(e){
+      pollBusy = false; pollAbort = null;
+      if (e && e.name === 'AbortError') { schedule(0); return; }
+      pollFails += 1;
+      // Контроллер перезагружается или сеть пропала: не долбим, а
+      // отступаем, но не дольше обычного шага обновления.
+      schedule(Math.min(EVERY, 1000 * pollFails));
+    });
+}
+/* Свёртку или колонки поменяли - ждущий запрос несёт старый адрес.
+   Обрываем его и открываем новый, иначе следующее изменение пришло бы
+   только после его таймаута. */
+function restartPoll(){
+  if (pollAbort) { try { pollAbort.abort(); } catch(e) {} }
+  else schedule(0);
+}
+/* Совместимость: прежний тик раз в EVERY. Теперь им служит ждущий
+   запрос, а функция осталась для тех, кто её зовёт. */
 function tick(){
   if (inflight > 0 && Date.now() - lastReqAt < 15000) return;
   refresh();
@@ -2149,6 +2362,14 @@ function videoAwake(){
 keepAwake();
 document.addEventListener('visibilitychange', function(){
   if (!document.hidden && !wakeLock) keepAwake();
+  // Вкладку спрятали - ждущий запрос не держим, поток на контроллере
+  // нужнее. Показали - сразу свежая картинка и снова ждём.
+  if (document.hidden) {
+    if (pollAbort) { try { pollAbort.abort(); } catch(e) {} }
+    clearTimeout(pollTimer);
+  } else {
+    refresh(); schedule(300);
+  }
 });
 
 /* Полный экран по двойному касанию - на случай, если страница открыта
@@ -2162,5 +2383,7 @@ document.addEventListener('dblclick', function(){
 
 drawCols();
 refresh();
-setInterval(tick, EVERY);
+// Ждущий запрос - чуть позже первой картинки: она приходит без версии, а
+// с версией он и ждёт по-настоящему.
+schedule(800);
 </script></body></html>

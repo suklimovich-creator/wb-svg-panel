@@ -343,7 +343,7 @@ class History:
         while not stop_event.is_set():
             try:
                 config.reload()
-                state.set_watched(config.used_channels())
+                state.set_watched(config.used_channels(), config.service_prefixes())
                 for channel, span, points in config.chart_series():
                     if stop_event.is_set():
                         break

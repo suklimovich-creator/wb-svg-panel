@@ -21,7 +21,7 @@ from .history import History
 from .geometry import cells, parse_duration, text_width
 from .status import status_entries
 from . import assemble
-from .registry import writable_of
+from .registry import channels_of, writable_of
 from .assemble import (build_tile, cmd_attrs, prepare,
                        resolve_sections, xml_escape)
 from .render import resolve_css_vars
@@ -30,6 +30,7 @@ from .lists import ListError, lists
 from . import checkup
 import html
 import threading
+from collections import OrderedDict
 
 
 app = Flask(__name__)
@@ -51,7 +52,7 @@ jinja = None
 
 def render_panel(name, cols=None):
     config.reload()
-    state.set_watched(config.used_channels())
+    state.set_watched(config.used_channels(), config.service_prefixes())
     panel_conf = config.panels.get(name)
     if panel_conf is None:
         abort(404, "панель %r не найдена в конфиге" % name)
@@ -471,8 +472,152 @@ def docs():
                     status=404, mimetype="text/plain; charset=utf-8")
 
 
+# ==========================================================================
+#  Панель: кэш готовой картинки и ожидание изменений
+# ==========================================================================
+
+# Готовые картинки по ключу состояния. Телефон и планшет на одной панели
+# получают одну и ту же отрисовку, а не две: на WB7 большая панель стоит
+# четверть секунды процессора. Держим немного - по одной на панель,
+# свёртку и число колонок, которые сейчас открыты.
+_RENDERED = OrderedDict()
+_RENDER_LOCK = threading.Lock()
+_RENDER_MAX = 12
+
+# Сколько запросов одновременно могут ждать изменений. Каждый держит поток
+# waitress, а потоков двенадцать, и часть нужна камерам и пультам. Лишний
+# запрос не ждёт, а отвечает сразу - страница просто спросит ещё раз.
+_WAITERS = threading.BoundedSemaphore(6)
+
+# После пробуждения - короткая пауза: изменения ходят пачками (кондиционер
+# публикует полдюжины каналов подряд), и без неё пачка дала бы полдюжины
+# отрисовок.
+_SETTLE = 0.15
+
+
+def _refresh_every():
+    return max(2, int((config.get("http", {}) or {}).get("refresh", 10)))
+
+
+def _panel_args(name, cols):
+    closed = tuple(p for p in (request.args.get("closed") or "").split(",") if p)
+    opened = request.args.get("open") or None
+    flat = request.args.get("flat") not in ("0", "false", "no")
+    return closed, opened, flat
+
+
+def cached_panel(name, cols, version):
+    """
+    Готовая панель из кэша либо свежая отрисовка.
+
+    В ключе, помимо версии состояния, - отметка времени с шагом refresh:
+    часть картинки зависит от часов, а не от каналов. Это часы в шапке,
+    точки «давно не обновлялось», кадр камеры и графики, которые фоновый
+    поток подгружает из истории без всякой версии.
+    """
+    closed, opened, flat = _panel_args(name, cols)
+    bucket = int(time.time() // _refresh_every())
+    key = (name, cols, closed, opened, flat, version, bucket,
+           getattr(config, "_mtime", 0))
+    with _RENDER_LOCK:
+        hit = _RENDERED.get(key)
+        if hit is not None:
+            _RENDERED.move_to_end(key)
+            return hit
+        svg = render_panel(name, cols=cols)
+        if flat:
+            panel_conf = config.panels.get(name) or {}
+            svg = resolve_css_vars(
+                svg, panel_conf.get("theme", config.get("theme", "light")), 1.0)
+        _RENDERED[key] = svg
+        while len(_RENDERED) > _RENDER_MAX:
+            _RENDERED.popitem(last=False)
+        return svg
+
+
+_WATCH = {}
+
+
+def panel_watch(name):
+    """
+    Что панель читает: ключи каналов и префиксы служб Sprut.hub.
+
+    По этому ждущий запрос решает, его ли это изменение. Версия состояния
+    общая на весь контроллер, и без фильтра страница детской просыпалась
+    бы от каждого датчика гостиной.
+    """
+    stamp = getattr(config, "_mtime", 0)
+    hit = _WATCH.get(name)
+    if hit and hit[0] == stamp:
+        return hit[1], hit[2]
+    panel_conf = config.panels.get(name) or {}
+    keys, prefixes = set(), set()
+    sources = [panel_conf]
+    for _title, tiles, status_src, _key in resolve_sections(panel_conf,
+                                                            config.panels):
+        sources.append(status_src)
+        for tile in tiles:
+            if not isinstance(tile, dict):
+                continue
+            keys.update(channels_of(tile, state))
+            if tile.get("service"):
+                prefixes.add(str(tile["service"]).rstrip("/") + "/")
+            if tile.get("type") == "list" and tile.get("list"):
+                keys.add("list:%s" % tile["list"])
+            if tile.get("type") == "header":
+                sources.append(tile)
+    for src in sources:
+        for entry in status_entries(src or {}):
+            for field in ("channel", "value_channel"):
+                if entry.get(field):
+                    keys.add(entry[field])
+            req = entry.get("require")
+            for item in (req if isinstance(req, list) else [req]):
+                if isinstance(item, dict) and item.get("channel"):
+                    keys.add(item["channel"])
+    _WATCH[name] = (stamp, frozenset(keys), tuple(sorted(prefixes)))
+    return _WATCH[name][1], _WATCH[name][2]
+
+
+def wait_for_panel(name, since, timeout):
+    """
+    Ждать изменения, которое касается этой панели. Возвращает версию.
+
+    Просыпаемся на любое изменение, но отвечаем, только если поменялось
+    то, что панель рисует; чужое пропускаем и ждём дальше. Время вышло -
+    отвечаем как есть: часы и кадр камеры обновляются по таймеру, как и
+    раньше.
+    """
+    deadline = time.time() + timeout
+    keys, prefixes = panel_watch(name)
+    seen = since
+    while True:
+        left = deadline - time.time()
+        if left <= 0:
+            return state.version
+        version = state.wait_change(seen, left)
+        if version <= seen:
+            return version
+        # «list:» и пустая метка тоже ключи: список и прочее, что поднимает
+        # версию не через MQTT.
+        if state.touched_since(seen, keys, prefixes) or \
+                state.touched_since(seen, ("",)):
+            time.sleep(_SETTLE)
+            return state.version
+        seen = version
+
+
 @app.route("/<name>.svg")
 def panel_svg(name):
+    """
+    Панель картинкой.
+
+    С параметром since=<версия> запрос держится открытым, пока не
+    поменяется что-нибудь нарисованное на этой панели, но не дольше
+    refresh секунд. Так изменение доезжает до экрана сразу, а не на
+    следующем круге опроса. Номер версии отдаётся в X-Panel-Version -
+    страница пришлёт его в следующем запросе.
+    """
     config.reload()
     # /main.svg?cols=2 - та же панель в две колонки, для телефона.
     # Отдельную панель в конфиге заводить не нужно.
@@ -482,23 +627,45 @@ def panel_svg(name):
         cols = None
     if cols:
         cols = max(1, min(cols, 12))
+    if name not in config.panels:
+        abort(404, "панель %r не найдена в конфиге" % name)
+
+    since = request.args.get("since")
+    if since is not None:
+        try:
+            since = int(since)
+        except ValueError:
+            since = None
+    # Ждём, только если страница видела ровно текущую версию. Меньше -
+    # она что-то пропустила, отвечаем сразу. Больше - демон перезапускался
+    # и считает заново с нуля: тоже отвечаем сразу, иначе страница ждала
+    # бы версии, до которой счётчик дойдёт нескоро.
+    if since is not None and since == state.version:
+        if _WAITERS.acquire(blocking=False):
+            try:
+                wait_for_panel(name, since, _refresh_every())
+            finally:
+                _WAITERS.release()
+
     with state.lock:
         version = state.version
+    headers = {"X-Panel-Version": str(version),
+               "Access-Control-Allow-Origin": "*",
+               "Access-Control-Expose-Headers": "X-Panel-Version"}
+    if since is not None:
+        headers["Cache-Control"] = "no-store"
+        return Response(cached_panel(name, cols, version),
+                        mimetype="image/svg+xml", headers=headers)
+
     # v2 в ключе: после смены формата страницы старые записи в кэше браузера
     # не должны совпадать с новыми
     etag = '"v2-%s-%s-%d"' % (name, cols or "d", version)
     if request.headers.get("If-None-Match") == etag:
         return Response(status=304, headers={"ETag": etag})
-    svg = render_panel(name, cols=cols)
-    if request.args.get("flat") not in ("0", "false", "no"):
-        panel_conf = config.panels.get(name) or {}
-        svg = resolve_css_vars(
-            svg, panel_conf.get("theme", config.get("theme", "light")), 1.0)
-    return Response(svg, mimetype="image/svg+xml", headers={
-        "ETag": etag,
-        "Cache-Control": "no-cache, must-revalidate",
-        "Access-Control-Allow-Origin": "*",
-    })
+    headers.update({"ETag": etag,
+                    "Cache-Control": "no-cache, must-revalidate"})
+    return Response(cached_panel(name, cols, version),
+                    mimetype="image/svg+xml", headers=headers)
 
 
 def panel_tiles(panel_conf):
@@ -866,7 +1033,7 @@ def main():
     # Списки живут в файле рядом с конфигом; при старте заодно уходят
     # выполненные, у которых вышел срок, пока демон не работал.
     lists.configure(config, state)
-    state.set_watched(config.used_channels())
+    state.set_watched(config.used_channels(), config.service_prefixes())
 
     jinja = Environment(
         loader=FileSystemLoader(TEMPLATE_DIRS),

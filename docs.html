@@ -826,6 +826,12 @@ Cloud второй пароль не спрашивается: облако уж
 <tr><td><code>/&lt;имя&gt;.svg</code></td><td>Картинка панели</td></tr>
 <tr><td><code>/&lt;имя&gt;.svg?cols=2</code></td><td>Она же в две колонки</td></tr>
 <tr><td><code>/&lt;имя&gt;.html</code></td><td>Обёртка с автообновлением — для планшета</td></tr>
+<tr><td><code>/&lt;имя&gt;.svg?since=N</code></td><td>Ждущий запрос: ответ приходит,
+  как только на панели что-то поменялось, или через <code>refresh</code> секунд.
+  Версия — в заголовке <code>X-Panel-Version</code></td></tr>
+<tr><td><code>/check</code></td><td>Проверка конфига: ошибки и предупреждения
+  по плиткам</td></tr>
+<tr><td><code>/api/list/&lt;имя&gt;</code></td><td>Список: GET — пункты, POST — действие</td></tr>
 <tr><td><code>/channels</code></td><td>Все каналы контроллера с фильтром</td></tr>
 <tr><td><code>/channels?format=text</code></td><td>То же для консоли</td></tr>
 <tr><td><code>/healthz</code></td><td>Состояние демона в JSON</td></tr>

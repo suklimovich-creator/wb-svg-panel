@@ -187,8 +187,7 @@ class Lists(object):
         if self.state is not None:
             # Панель отдаётся с ETag по версии состояния: без этого браузер
             # получил бы 304 и не увидел нового пункта на плитке.
-            with self.state.lock:
-                self.state.version += 1
+            self.state.bump("list:" + name)
         self.mirror(name)
 
     def _check(self, name):

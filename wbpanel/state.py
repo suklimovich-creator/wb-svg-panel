@@ -25,12 +25,73 @@ class WbState:
         self.meta = {}      # "device/control" -> dict
         self.stamps = {}    # "device/control" -> float (когда пришло)
         self.version = 0    # растёт, когда меняется что-то нарисованное
+        # Будильник для тех, кто ждёт изменений: страница держит запрос
+        # открытым, и ответ уходит в тот же миг, как поменялся канал, а не
+        # на следующем круге опроса. Условие живёт на том же замке, что и
+        # значения, - иначе между проверкой версии и засыпанием можно
+        # пропустить изменение.
+        self.changed = threading.Condition(self.lock)
         self.watched = set()
+        self.watched_prefixes = ()
+        self.touched = {}   # ключ -> версия, при которой он менялся
         self.connected = False
 
-    def set_watched(self, channels):
+    def _touch(self, key):
+        """Канал поменялся. Вызывается под замком."""
+        self.version += 1
+        # Кто и когда менялся: по этому ждущий запрос понимает, касается ли
+        # изменение его панели. Иначе страница детской просыпалась бы от
+        # каждого датчика гостиной и перерисовывалась впустую.
+        self.touched[key] = self.version
+        self.changed.notify_all()
+
+    def bump(self, key=None):
+        """Что-то нарисованное поменялось не через MQTT - например, список.
+        key - метка вида list:shopping, по ней узнаёт свою панель."""
+        with self.lock:
+            self._touch(key or "")
+
+    def _is_watched(self, topic):
+        if topic in self.watched:
+            return True
+        # Служба Sprut.hub одной строкой service: - каналов поимённо в
+        # конфиге нет, следим по префиксу. Без этого такие плитки
+        # обновлялись бы только по таймеру.
+        for prefix in self.watched_prefixes:
+            if topic.startswith(prefix):
+                return True
+        return False
+
+    def touched_since(self, since, keys, prefixes=()):
+        """Менялось ли после версии since что-то из keys или под prefixes."""
+        with self.lock:
+            for key in keys:
+                if self.touched.get(key, 0) > since:
+                    return True
+            if prefixes:
+                for key, ver in self.touched.items():
+                    if ver > since and any(key.startswith(p) for p in prefixes):
+                        return True
+        return False
+
+    def wait_change(self, since, timeout):
+        """
+        Ждать, пока версия станет больше since, но не дольше timeout секунд.
+        Возвращает текущую версию - ту же, если ничего не случилось.
+        """
+        deadline = time.time() + timeout
+        with self.lock:
+            while self.version <= since:
+                left = deadline - time.time()
+                if left <= 0:
+                    break
+                self.changed.wait(left)
+            return self.version
+
+    def set_watched(self, channels, prefixes=()):
         with self.lock:
             self.watched = set(channels)
+            self.watched_prefixes = tuple(p.rstrip("/") + "/" for p in prefixes if p)
 
     def on_message(self, topic, payload):
         parts = topic.split("/")
@@ -42,8 +103,8 @@ class WbState:
                 changed = self.values.get(topic) != payload
                 self.values[topic] = payload
                 self.stamps[topic] = time.time()
-                if changed and topic in self.watched:
-                    self.version += 1
+                if changed and self._is_watched(topic):
+                    self._touch(topic)
             return
         key = "%s/%s" % (parts[2], parts[4])
         rest = parts[5:]
@@ -53,7 +114,7 @@ class WbState:
                 self.values[key] = payload
                 self.stamps[key] = time.time()
                 if changed and key in self.watched:
-                    self.version += 1
+                    self._touch(key)
             elif rest == ["meta"]:
                 try:
                     meta = json.loads(payload) if payload else {}
@@ -62,12 +123,12 @@ class WbState:
                 if isinstance(meta, dict):
                     self.meta.setdefault(key, {}).update(meta)
                     if key in self.watched:
-                        self.version += 1
+                        self._touch(key)
             elif len(rest) == 2 and rest[0] == "meta":
                 # legacy-формат: /meta/units, /meta/type, /meta/error, /meta/max
                 self.meta.setdefault(key, {})[rest[1]] = payload
                 if key in self.watched:
-                    self.version += 1
+                    self._touch(key)
 
     def snapshot(self, key):
         """Всё, что известно про канал, одним словарём."""

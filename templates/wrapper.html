@@ -28,6 +28,18 @@
            user-select:none;-webkit-touch-callout:none}
  [data-topic],[data-expand],[data-pad],[data-href],[data-chart],[data-section]{cursor:pointer}
  [data-topic].busy,[data-pad].busy{opacity:.45}
+ /* Раздел раскрывается, а свежей картинки ещё нет: панель притушена,
+    чтобы было видно, что нажатие принято. Без этого на медленном ответе
+    нажимали второй раз - и попадали уже в следующий раздел. */
+ #host svg{transition:opacity .15s}
+ #host.wait svg{opacity:.55}
+ /* Пока открыт оверлей и ещё мгновение после закрытия, панель касаний не
+    принимает: иначе повторное касание или запоздалые события браузера
+    уходят в плитку, оказавшуюся под пальцем. */
+ #host.shield{pointer-events:none}
+ /* Фон под оверлеем не прокручивается: жест внутри окна не должен
+    уезжать в панель под ним. */
+ html.ovlock,html.ovlock body{overflow:hidden}
  /* выбор числа колонок: значение запоминается и переносится между панелями */
  /* назад к списку панелей: маленькая, полупрозрачная, всегда на месте */
  #back{position:fixed;top:8px;left:8px;z-index:15;text-decoration:none;
@@ -65,7 +77,8 @@
  #ov{position:fixed;top:0;left:0;right:0;bottom:0;
      background:rgba(10,10,12,.86);display:none;z-index:2147483000;
      align-items:center;justify-content:center;flex-direction:column;
-     padding:18px;box-sizing:border-box;overflow:auto}
+     padding:18px;box-sizing:border-box;overflow:auto;
+     overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
  /* именно auto по бокам: раньше тут было "7px 0", и это правило перебивало
     margin:0 auto у самих пультов - они прижимались к левому краю */
  #ov.open > *{margin:7px auto}
@@ -305,6 +318,18 @@ function toggleSection(node){
     if (i < 0) FOLDED.push(key); else FOLDED.splice(i, 1);
   }
   saveFold();
+  // Это состояние свёртки уже видели - показываем его сразу, а свежие
+  // данные догонят через долю секунды. Нет - притушиваем панель, чтобы
+  // было видно, что нажатие принято, и ждём сервер.
+  var hit = svgCache[Q()];
+  if (hit) {
+    applySvg(hit.svg, ++reqSeq);
+    // Картинка могла пролежать долго - пусть остаётся притушенной, пока
+    // не придёт свежая: старое значение не должно выглядеть текущим.
+    if (Date.now() - hit.at > EVERY * 3) host.classList.add('wait');
+  } else {
+    host.classList.add('wait');
+  }
   refresh(true);
 }
 
@@ -326,7 +351,7 @@ function fixBack(){
   if (!b) return;
   if (BACK_TO) {
     b.href = BACK_TO + '.html' + Q();
-    b.textContent = '\u2190 ' + decodeURIComponent(BACK_TO);
+    b.textContent = '← ' + decodeURIComponent(BACK_TO);
   } else {
     b.href = './' + Q();
   }
@@ -357,6 +382,62 @@ var INTERACTIVE = __INTERACTIVE__;
 var host = document.getElementById('host'), err = document.getElementById('err');
 var ov = document.getElementById('ov');
 var paused = false, press = null;
+
+/* ---------- предохранители касаний ----------
+   Плитки ловят нажатие парой pointerdown/pointerup, а не click, - так
+   работает долгое нажатие. Обратная сторона: браузер не отсеивает за нас
+   касания, которые нажатиями не были.
+
+   Касание, остановившее инерционную прокрутку. Палец не двигался, порог
+   сдвига не превышен, отмены не было - для плитки это обычное короткое
+   нажатие, и выключатель щёлкал. Поэтому помним, когда страница или
+   оверлей последний раз прокручивались: прокрутка перед касанием или во
+   время него означает, что человек листал, а не нажимал.
+
+   Касание сразу после закрытия оверлея. Окно закрылось, панель тут же
+   снова принимает касания - и второе касание, или запоздалые события
+   браузера от первого, уходят в плитку под пальцем. Поэтому пока окно
+   открыто и ещё немного после, панель касаний не принимает вовсе. */
+var SCROLL_GAP = 250, SHIELD_MS = 450;
+var lastScroll = 0, lastDown = 0, shieldUntil = 0, fingerDown = false;
+// Прокрутка не всплывает, поэтому слушаем на перехвате: так ловится и
+// страница, и оверлей со своей полосой прокрутки.
+document.addEventListener('scroll', function(){ lastScroll = Date.now(); },
+                          {capture:true, passive:true});
+
+/* Можно ли считать касание, начатое в t0, нажатием. */
+function tapOk(t0){
+  t0 = t0 || lastDown || Date.now();
+  if (Date.now() < shieldUntil || t0 < shieldUntil) return false;
+  return lastScroll < t0 - SCROLL_GAP;
+}
+
+/* Палец на экране. Пока он там, разметку панели не подменяем: если
+   замена приходится между касанием и отпусканием, элемент, на котором
+   начали, исчезает, и нажатие пропадает целиком. Отсюда были «иногда не
+   попадаю по заголовку». Отложенная картинка ставится сразу после
+   отпускания - с небольшой задержкой, чтобы успел пройти click. */
+function fingerOn(){ fingerDown = true; lastDown = Date.now(); }
+function fingerOff(){
+  fingerDown = false;
+  if (pendingSvg) setTimeout(flushPending, 120);
+}
+if (window.PointerEvent) {
+  document.addEventListener('pointerdown', fingerOn, true);
+  document.addEventListener('pointerup', fingerOff, true);
+  document.addEventListener('pointercancel', fingerOff, true);
+} else {
+  ['touchstart', 'mousedown'].forEach(function(e){
+    document.addEventListener(e, fingerOn, true);
+  });
+  ['touchend', 'touchcancel', 'mouseup'].forEach(function(e){
+    document.addEventListener(e, fingerOff, true);
+  });
+}
+// Палец «на экране» дольше десяти секунд - значит, отпускание потерялось
+// (ушли из окна, переключили приложение). Обновления не должны встать
+// из-за этого навсегда.
+function fingerHeld(){ return fingerDown && Date.now() - lastDown < 10000; }
 
 /* Координаты события.
    ВАЖНО про touchend: у него список touches ПУСТОЙ - палец уже оторван.
@@ -390,14 +471,33 @@ var ovCleanup = null;
 function closeOv(){ ov.classList.remove('open'); paused=false;
   if(ovCleanup){ ovCleanup(); ovCleanup = null; }
   var k=ov.querySelector('.card,#pad,#lvl,#crtwrap,.ttl,.hint');
-  while(ov.children.length>1) ov.removeChild(ov.lastChild); refresh(); }
-ov.addEventListener('click', function(e){ if(e.target===ov) closeOv(); });
+  while(ov.children.length>1) ov.removeChild(ov.lastChild);
+  document.documentElement.classList.remove('ovlock');
+  // Панель оживает не сразу: закрывающее касание ещё не отыграло своё.
+  shieldUntil = Date.now() + SHIELD_MS;
+  setTimeout(function(){
+    if (!ov.classList.contains('open')) host.classList.remove('shield');
+  }, SHIELD_MS);
+  refresh(); }
+/* Закрывает только касание, которое и началось на фоне. Иначе жест,
+   начатый на пульте и отпущенный мимо карточки, - потянули дугу
+   термостата за край - закрывал окно вместе с недоведённой уставкой. */
+var ovDownBg = false;
+(window.PointerEvent ? ['pointerdown'] : ['touchstart', 'mousedown']).forEach(function(n){
+  ov.addEventListener(n, function(e){ ovDownBg = e.target === ov; }, true);
+});
+ov.addEventListener('click', function(e){ if(e.target===ov && ovDownBg) closeOv(); });
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeOv(); });
 
 function openOv(nodes){ 
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
   nodes.forEach(function(n){ ov.appendChild(n); });
   ov.classList.add('open'); paused=true;
+  // Нажатие по плитке, которое открыло окно, своё отработало: его таймер
+  // долгого нажатия не должен сработать уже поверх окна.
+  if(press){ clearTimeout(press.timer); press = null; }
+  host.classList.add('shield');
+  document.documentElement.classList.add('ovlock');
 }
 function el(tag, cls, text){ var e=document.createElement(tag);
   if(cls) e.className=cls; if(text) e.textContent=text; return e; }
@@ -413,7 +513,7 @@ function stepRow(label, opts){
   var row = el('div', 'step');
   var lab = el('span', 'lab', label);
   var minus = el('button'), num = el('span', 'num'), plus = el('button');
-  minus.textContent = '\u2212'; plus.textContent = '+';
+  minus.textContent = '−'; plus.textContent = '+';
   // Кнопки рядом, а не по краям числа: большой палец дотягивается до обеих
   // не переставляя руку, и подкрутить на пару процентов можно одной рукой.
   var keys = el('div', 'keys');
@@ -1128,7 +1228,7 @@ function bind(){
   // не включает и не выключает, это способ смотреть.
   var folds = host.querySelectorAll('[data-section]');
   for (var f = 0; f < folds.length; f++) {
-    folds[f].onclick = function(){ toggleSection(this); };
+    folds[f].onclick = function(){ if (tapOk()) toggleSection(this); };
   }
   ACCORDION = host.querySelector('[data-accordion="1"]') !== null;
 
@@ -1140,10 +1240,11 @@ function bind(){
     // обойтись простым onclick: короткое нажатие раскрывает, долгое
     // открывает пульт. Поэтому она идёт общим путём с жестами ниже.
     if(n.getAttribute('data-expand') && !n.getAttribute('data-pad')){
-      n.onclick=function(){ expand(this); }; continue; }
+      n.onclick=function(){ if(tapOk()) expand(this); }; continue; }
     // Чип строки состояния: короткое нажатие открывает график канала.
     // Долгого жеста у него нет - переключать нечего.
-    if(n.getAttribute('data-chart')){ n.onclick=function(){ chartOv(this); }; continue; }
+    if(n.getAttribute('data-chart')){
+      n.onclick=function(){ if(tapOk()) chartOv(this); }; continue; }
     // короткое нажатие переключает, долгое открывает пульт
     // Короткое нажатие переключает, долгое открывает пульт.
     // Раньше случайные включения ловились из-за двух вещей: жест не
@@ -1156,9 +1257,15 @@ function bind(){
       // смениться, если палец сдвинулся.
       var zone = e.target && e.target.getAttribute
                  ? e.target.getAttribute('data-zone') : null;
-      press = {node:self, long:false, zone:zone, x:p.clientX, y:p.clientY, moved:false,
+      // Касание, остановившее прокрутку, или сразу после закрытия окна -
+      // не нажатие: ни короткого, ни долгого из него не выйдет.
+      var t0 = Date.now();
+      press = {node:self, long:false, zone:zone, x:p.clientX, y:p.clientY,
+        moved:!tapOk(t0), t0:t0,
         timer:setTimeout(function(){
-          if(press && !press.moved){ press.long = true; openPad(self); }
+          if(press && !press.moved && tapOk(press.t0)){
+            press.long = true; openPad(self);
+          }
         }, 600)};
     };
     var moved = function(e){
@@ -1173,6 +1280,8 @@ function bind(){
       if(!press) return;
       clearTimeout(press.timer);
       var href = this.getAttribute('data-href');
+      // Пока палец лежал, страницу прокрутили - листали, а не нажимали.
+      if(!tapOk(press.t0)) press.moved = true;
       if(!press.long && !press.moved){
         if(href) { location.href = href + Q(); }
         else if(press.zone) stepTarget(this, press.zone);
@@ -1345,9 +1454,9 @@ function padThermostat(node){
     cKnob.setAttribute('fill', color);
 
     tBig.setAttribute('x', CX); tBig.setAttribute('y', CY + S * 0.035);
-    tBig.textContent = value.toFixed(digits) + '\u00b0';
+    tBig.textContent = value.toFixed(digits) + '°';
     tSub.setAttribute('x', CX); tSub.setAttribute('y', CY + S * 0.105);
-    tSub.textContent = isNaN(current) ? '' : ('сейчас ' + current.toFixed(1) + '\u00b0');
+    tSub.textContent = isNaN(current) ? '' : ('сейчас ' + current.toFixed(1) + '°');
     tMode.setAttribute('x', CX); tMode.setAttribute('y', S - S * 0.03);
     tMode.textContent = node.getAttribute('data-status') || '';
   }
@@ -1376,7 +1485,7 @@ function padThermostat(node){
     var b = el('span','cbtn' + (cls ? ' ' + cls : ''), text);
     b.onclick = fn; row.appendChild(b); return b;
   }
-  button('\u2212', '', function(){ shift(-step); });
+  button('−', '', function(){ shift(-step); });
   button('+', '', function(){ shift(step); });
 
   var power = null;
@@ -1739,22 +1848,81 @@ function openPad(node){
 }
 
 /* ---------- обновление ---------- */
+/* Ответы приходят не в том порядке, в каком ушли запросы. Фоновое
+   обновление раз в десять секунд и запрос после нажатия на заголовок
+   идут параллельно, и если фоновое ушло до нажатия со старой свёрткой, а
+   вернулось после, оно перерисовывало панель обратно: раздел не
+   открывался или открывался и тут же захлопывался. Поэтому у каждого
+   запроса номер, и ответ старее показанного выбрасывается, а ответ на
+   запрос с другой свёрткой или числом колонок - тоже. */
+var reqSeq = 0, shownSeq = 0, pendingSvg = null, inflight = 0, lastReqAt = 0;
+
+/* Последние картинки по состоянию свёртки: повторно раскрытый раздел
+   показывается из памяти мгновенно, а свежие данные догоняют. Держим
+   немного - это по одной на раздел гармошки плюс пара вариантов колонок. */
+var svgCache = {}, cacheKeys = [], CACHE_MAX = 12;
+function remember(q, svg){
+  if (!svgCache[q]) {
+    cacheKeys.push(q);
+    if (cacheKeys.length > CACHE_MAX) delete svgCache[cacheKeys.shift()];
+  }
+  svgCache[q] = {svg: svg, at: Date.now()};
+}
+
+function applySvg(svg, seq){
+  if (seq < shownSeq) return;
+  if (fingerHeld()) {
+    if (!pendingSvg || seq > pendingSvg.seq) pendingSvg = {svg: svg, seq: seq};
+    return;
+  }
+  shownSeq = seq; pendingSvg = null;
+  host.innerHTML = svg; host.classList.remove('wait');
+  bind(); err.style.display='none';
+}
+function flushPending(){
+  if (!pendingSvg || fingerHeld()) return;
+  var p = pendingSvg; pendingSvg = null;
+  applySvg(p.svg, p.seq);
+}
+
 /* force нужен пультам: пока открыт оверлей, автообновление стоит - иначе
    разметка меняется под пальцем. Но пульт термостата сам следит за
    состоянием и переспрашивает панель осознанно, поэтому ему разрешено. */
 function refresh(force){
   if(paused && !force) return;
-  var q = Q();
+  var q = Q(), seq = ++reqSeq, settled = false;
+  function settle(){ if(!settled){ settled = true; inflight--; } }
+  inflight++; lastReqAt = Date.now();
   fetch(NAME + '.svg' + q + (q ? '&' : '?') + 't=' + Date.now(), {cache:'no-store'})
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
     .then(function(svg){
+      settle();
       if(svg.indexOf('<svg')<0) throw new Error('пустой ответ');
-      host.innerHTML = svg; bind(); err.style.display='none';
+      remember(q, svg);
+      // Пока запрос шёл, свёртку или колонки поменяли - картинка уже не та.
+      if(q !== Q()) return;
+      applySvg(svg, seq);
+      // Первая загрузка: гармошку страница узнаёт только из разметки, и
+      // первый запрос ушёл без раскрытого раздела. Не ждём десять секунд
+      // до следующего обновления - переспрашиваем сразу.
+      if(q !== Q()) refresh(true);
     })
     .catch(function(e){
+      settle();
+      // Притушенную панель не оставляем: свежего не будет, а старое
+      // лучше, чем ничего.
+      if(q === Q()) host.classList.remove('wait');
       if(host.querySelector('svg')) return;
       host.textContent = 'Не удалось загрузить панель: ' + e.message;
     });
+}
+/* Фоновое обновление не встаёт в очередь за предыдущим: на большой
+   панели контроллер отвечает за четверть секунды, а на занятом - дольше,
+   и запросы копились бы. Зависший запрос держит очередь не дольше
+   пятнадцати секунд. */
+function tick(){
+  if (inflight > 0 && Date.now() - lastReqAt < 15000) return;
+  refresh();
 }
 /* Экран не должен гаснуть.
    Сперва пробуем штатный способ, он есть в свежих браузерах. Если его нет -
@@ -1804,5 +1972,5 @@ document.addEventListener('dblclick', function(){
 
 drawCols();
 refresh();
-setInterval(refresh, EVERY);
+setInterval(tick, EVERY);
 </script></body></html>

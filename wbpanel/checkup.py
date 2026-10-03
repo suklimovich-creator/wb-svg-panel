@@ -96,6 +96,7 @@ def _check_tile(tile, panel_title, panel_name, config, state,
         return out
 
     # --- обязательные роли -------------------------------------------------
+    tile = cls.expand(tile)
     obj = cls()
     from .sources import bind
     bound = bind(tile, obj.schema(), state, obj)

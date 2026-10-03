@@ -47,6 +47,22 @@ lists:
     keep_done: 3d
     add_to: top          # новые сверху; по умолчанию снизу
 
+# Вода: краны, датчики протечки и модули, которые ими управляют (WB-MWAC v.2).
+# closes - какие краны перекрывает датчик: панель покажет, кто что перекрыл.
+# Модулей и стояков сколько угодно - у каждого крана и датчика свой module.
+water:
+  modules:                       # общий флаг тревоги и сброс модуля
+    mwac:
+      alarm: "wb-mwac-v2_1/Leakage Mode"
+      reset: "wb-mwac-v2_1/Leakage Mode Reset"
+  valves:
+    cold: {title: "Холодная", channel: "wb-mwac-v2_1/Output K1", water: cold, module: mwac}
+    hot:  {title: "Горячая",  channel: "wb-mwac-v2_1/Output K2", water: hot,  module: mwac}
+  sensors:                       # closes - какие краны перекрывает датчик
+    bath:    {title: "Ванная", channel: "wb-mwac-v2_1/Input F1", closes: [cold, hot], module: mwac}
+    shower:  {title: "Душ",    channel: "wb-mwac-v2_1/Input F2", closes: [cold, hot], module: mwac}
+    kitchen: {title: "Кухня",  channel: "wb-mwac-v2_1/Input F3", closes: [cold, hot], module: mwac}
+
 panels:
 
   # =========================================================================
@@ -219,6 +235,14 @@ panels:
         icon: cart
         w: 2
         h: 2
+
+      # --- вода: датчики протечки и краны -----------------------------------
+      # Описаны в разделе water: выше; здесь - только ссылки по имени.
+      # Протечка - тревога, а не выключатель: красная во всю плитку.
+      # Кран коротким нажатием не перекрывается - только кнопкой в окне.
+      - {type: leak, title: "Протечки", w: 2}
+      - {type: valve, valve: cold}
+      - {type: valve, valve: hot}
 
       # --- рулонная или римская штора ----------------------------------------
       # Полотно уходит вверх, а не в стороны, поэтому тип отдельный.

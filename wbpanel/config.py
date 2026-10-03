@@ -11,7 +11,7 @@ from .const import CONFIG_PATH, log
 from .geometry import parse_duration
 import threading
 from .registry import channels_of
-from .status import status_entries
+from .status import status_channels, status_entries
 from . import tiles          # noqa: F401  наполняет реестр типами плиток
 
 
@@ -84,17 +84,11 @@ class Config:
             t for t in self.all_tiles() if t.get("type") == "header"]
         for panel in sources:
             for entry in status_entries(panel):
-                for key in ("channel", "value_channel"):
-                    if entry.get(key):
-                        out.add(entry[key])
-                # Условие «прибор включён» читается из своего канала, и его
-                # тоже надо слушать. Без этого require всегда видит пустоту
-                # и считает прибор выключенным: чип не появляется вовсе,
-                # хотя канал режима приходит исправно.
-                req = entry.get("require")
-                for item in (req if isinstance(req, list) else [req]):
-                    if isinstance(item, dict) and item.get("channel"):
-                        out.add(item["channel"])
+                # Канал, канал числа и канал условия require: без последнего
+                # require всегда видит пустоту и считает прибор выключенным,
+                # хотя канал режима приходит исправно. У чипа протечки -
+                # датчики и флаги модулей из раздела water.
+                out.update(status_channels(entry))
         self._channels_cache = (self._mtime, frozenset(out))
         return out
 

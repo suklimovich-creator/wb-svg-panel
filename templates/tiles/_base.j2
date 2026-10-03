@@ -111,6 +111,7 @@
   /* ---- чип строки состояния --------------------------------------------- */
   .chip      { fill: var(--tile); stroke: var(--edge); stroke-width: var(--edge-w); }
   .chip.on   { fill: var(--active-soft); stroke: var(--active-soft-edge); }
+  .chip.alarm { fill: #C4553B; stroke: #C4553B; }
   .chip-val  { font-size: calc(14px * var(--fs)); font-weight: 500; fill: var(--ink); }
   /* Значки состояния красятся через currentColor, а не классом.
      Содержимое элемента use лежит в теневом дереве, и селекторы документа
@@ -169,6 +170,13 @@
   .li-dot    { fill: var(--ink-dim); }
   .li-more   { fill: var(--ink-dim); font-weight: 450; }
   .li-count  { font-size: calc(17px * var(--fs)); font-weight: 600; fill: var(--ink-dim); }
+  /* Протечка: красная во всю плитку, видно с другого конца коридора.
+     Цвет один в обеих темах - тревога не должна зависеть от оформления. */
+  .plate.alarm   { fill: #C4553B; stroke: #C4553B; }
+  /* Перекрытый кран: красная рамка. Открытый - норма и рамки не имеет. */
+  .plate.closed  { stroke: #C4553B; stroke-width: var(--active-w); }
+  .valve-mark    { font-size: calc(12px * var(--fs)); font-weight: 650;
+                   letter-spacing: .3px; }
 {% endmacro %}
 
 {#- Библиотека значков. Живёт в <defs> каркаса, адресуется по uid.
@@ -510,7 +518,7 @@
     цифры прямоугольные и липнут к краю сильнее, чем скруглённый значок.
     active тонирует чип, как .plate.on тонирует плитку. -#}
 {% macro chip(name, value=None, badge=None, active=False, w=None, badge_color=None,
-              chart=None, chart_title=None, unit=None) %}
+              chart=None, chart_title=None, unit=None, alarm=False, attrs='') %}
   {% set icon_size = 26 %}
   {#- Поля разные для двух случаев. Со значком и числом: 10 слева, 6 между,
       12 справа - цифры прямоугольные и липнут к краю сильнее, чем
@@ -519,19 +527,21 @@
   {% set pad_l = 10 if value else 7 %}
   {% set text_w = (value|length * 8.5) if value else 0 %}
   {% set width = w or (pad_l + icon_size + (6 + text_w + 12 if value else 7)) %}
-  {% set ink = 'var(--active-ink)' if active else 'var(--stroke)' %}
-  {% set knock = 'var(--active-soft)' if active else 'var(--tile)' %}
+  {#- Тревога - красный чип с белым значком, в обеих темах одинаково:
+      протечку не должно быть видно хуже из-за оформления. -#}
+  {% set ink = '#FFFFFF' if alarm else ('var(--active-ink)' if active else 'var(--stroke)') %}
+  {% set knock = '#C4553B' if alarm else ('var(--active-soft)' if active else 'var(--tile)') %}
   {#- data-chart делает чип кнопкой: по нажатию открывается график канала.
       Ставится только там, где график осмыслен, - решает build_status. -#}
   <g color="{{ ink }}"{% if chart %} data-chart="{{ chart }}"
-     data-chart-title="{{ chart_title }}" data-unit="{{ unit or '' }}"{% endif %}>
-    <rect class="chip {{ 'on' if active }}" x="0.75" y="0.75"
+     data-chart-title="{{ chart_title }}" data-unit="{{ unit or '' }}"{% endif %}{{ attrs|safe }}>
+    <rect class="chip{{ ' on' if active }}{{ ' alarm' if alarm }}" x="0.75" y="0.75"
           width="{{ width - 1.5 }}" height="34.5" rx="10"/>
     <g transform="translate({{ pad_l }},5)">
       {{ icon_badge(name, badge, icon_size, knock, badge_color) }}
     </g>
     {% if value %}
-    <text class="chip-val" x="{{ width - 12 }}" y="23" text-anchor="end">{{ value }}</text>
+    <text class="chip-val" x="{{ width - 12 }}" y="23" text-anchor="end"{% if alarm %} fill="#FFFFFF" style="fill:#FFFFFF"{% endif %}>{{ value }}</text>
     {% endif %}
   </g>
 {% endmacro %}

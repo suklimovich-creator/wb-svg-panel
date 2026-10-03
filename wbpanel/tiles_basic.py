@@ -129,16 +129,10 @@ class Header(Tile):
 
     @staticmethod
     def channels(conf):
-        from .status import status_entries
+        from .status import status_channels, status_entries
         out = set()
         for entry in status_entries(conf):
-            for key in ("channel", "value_channel"):
-                if entry.get(key):
-                    out.add(entry[key])
-            req = entry.get("require")
-            for item in (req if isinstance(req, list) else [req]):
-                if isinstance(item, dict) and item.get("channel"):
-                    out.add(item["channel"])
+            out.update(status_channels(entry))
         return out
 
     def prepare(self, ctx):

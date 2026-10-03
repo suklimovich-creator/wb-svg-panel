@@ -67,6 +67,10 @@ role("temp", writable=True, label="Цветовая температура")
 role("progress", label="Выполнено")
 role("goal", label="Куда едет",
      doc="цель привода: показывается, пока он в движении")
+role("alarm", numeric=False, label="Тревога",
+     doc="общий флаг: у WB-MWAC это Leakage Mode, держится до сброса")
+role("reset", writable=True, numeric=False, label="Сброс тревоги",
+     doc="кнопка, снимающая тревогу: у WB-MWAC v2 Leakage Mode Reset")
 role("left", writable=True, label="Левая створка")
 role("right", writable=True, label="Правая створка")
 

@@ -32,7 +32,7 @@
   {% for c in t.chips or [] %}
   <g transform="translate({{ c.x }},{{ c.y }})">
     {{ base.chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,
-            c.chart, c.chart_title, c.unit) }}
+            c.chart, c.chart_title, c.unit, c.alarm, c.attrs) }}
   </g>
   {% endfor %}
 {% endmacro %}
@@ -124,6 +124,56 @@
   <text x="38" y="{{ t.more_y }}" font-size="{{ t.size * 0.9 }}" class="li-more">ещё {{ t.more }}…</text>
   {% endif %}
   {% endif %}
+{% endmacro %}
+
+{#- ---- протечка ----
+    В покое - обычная плитка с каплей и «Сухо». При тревоге подложка
+    красная, текст и значок белые (класс onlight делает ровно это для
+    ленты), значок мигает. Мигание - анимацией SVG, а не CSS: librsvg её
+    просто не проигрывает, а разбор палитры к ней не прикасается. -#}
+{% macro tile_leak(t) %}
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="plate {{ 'alarm' if t.alarm }}"/>
+  <g class="{{ 'onlight' if t.alarm }}">
+    {% if t.alarm %}
+    {#- Значок рисуется прямо здесь, а не через use: селекторы не проникают
+        в теневое дерево символа, и onlight не сделал бы его белым - на
+        красном остался бы серый. Положение и размер - как у icon_c. -#}
+    {% if t.compact %}{% set ix, iy, isz = (t.w - 24) / 2, 14, 24 %}
+    {% elif t.h < 117 %}{% set ix, iy, isz = 16, (t.h - 27) / 2, 27 %}
+    {% else %}{% set ix, iy, isz = 18, 17, 27 %}{% endif %}
+    <g transform="translate({{ ix }},{{ iy }}) scale({{ isz / 24 }})">
+      <path d="M12 3.2s5.4 6 5.4 9.5a5.4 5.4 0 1 1-10.8 0C6.6 9.2 12 3.2 12 3.2z"
+            fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"/>
+      <animate attributeName="opacity" values="1;.25;1" dur="1.4s"
+               repeatCount="indefinite"/>
+    </g>
+    {% else %}
+    {{ base.icon_c(t, t.icon or 'drop', 24) }}
+    {% endif %}
+    {% if t.alarm and t.wet and t.count > 1 and not t.compact and t.h >= 117 %}
+    <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.wet }}</text>
+    {% endif %}
+    {{ base.caption(t, t.status) }}
+  </g>
+{% endmacro %}
+
+{#- ---- кран ----
+    Значок крана с каплей цвета воды: синяя - холодная, красная - горячая.
+    Перекрытый - красная рамка. Нажатие не переключает, а открывает окно с
+    одной кнопкой. -#}
+{% macro tile_valve(t) %}
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="plate {{ 'closed' if t.closed }}"/>
+  {{ base.icon_c(t, t.icon or 'tap', 24) }}
+  {% if not t.compact and t.h >= 117 %}
+  <circle cx="{{ t.w - 26 }}" cy="29" r="7" fill="{{ t.water_color }}"/>
+  {% elif not t.compact %}
+  <circle cx="{{ t.w - 22 }}" cy="{{ t.h / 2 }}" r="6" fill="{{ t.water_color }}"/>
+  {% else %}
+  <circle cx="{{ t.w - 12 }}" cy="12" r="4.5" fill="{{ t.water_color }}"/>
+  {% endif %}
+  {{ base.caption(t, t.status) }}
 {% endmacro %}
 
 {#- ---- простое значение ---- -#}

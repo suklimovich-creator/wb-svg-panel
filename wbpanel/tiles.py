@@ -336,3 +336,4 @@ from . import tiles_devices  # noqa: E402,F401
 from . import tiles_devicewide  # noqa: E402,F401
 from . import tiles_fancoil  # noqa: E402,F401
 from . import tiles_lists  # noqa: E402,F401
+from . import tiles_water  # noqa: E402,F401

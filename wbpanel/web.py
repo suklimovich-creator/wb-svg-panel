@@ -19,7 +19,7 @@ from .config import Config
 from .state import MqttRpc, WbState, make_client, state, to_float
 from .history import History
 from .geometry import cells, parse_duration, text_width
-from .status import status_entries
+from .status import status_channels, status_entries
 from . import assemble
 from .registry import channels_of, writable_of
 from .assemble import (build_tile, cmd_attrs, prepare,
@@ -27,6 +27,7 @@ from .assemble import (build_tile, cmd_attrs, prepare,
 from .render import resolve_css_vars
 from . import cameras
 from .lists import ListError, lists
+from .water import water
 from . import checkup
 import html
 import threading
@@ -283,6 +284,10 @@ def allowed_topics():
                                                              config.panels):
             for tile in tiles:
                 allowed.update(writable_of(tile, state))
+        # Сброс тревоги протечки нажимают и из окна чипа, а чип не плитка
+        # и белого списка своего не имеет. Сброс модулей из раздела water -
+        # кнопка, которую человек и так нажмёт на самом модуле.
+        allowed.update(water.all_resets())
     return allowed
 
 
@@ -568,13 +573,7 @@ def panel_watch(name):
                 sources.append(tile)
     for src in sources:
         for entry in status_entries(src or {}):
-            for field in ("channel", "value_channel"):
-                if entry.get(field):
-                    keys.add(entry[field])
-            req = entry.get("require")
-            for item in (req if isinstance(req, list) else [req]):
-                if isinstance(item, dict) and item.get("channel"):
-                    keys.add(item["channel"])
+            keys.update(status_channels(entry))
     _WATCH[name] = (stamp, frozenset(keys), tuple(sorted(prefixes)))
     return _WATCH[name][1], _WATCH[name][2]
 
@@ -1033,6 +1032,9 @@ def main():
     # Списки живут в файле рядом с конфигом; при старте заодно уходят
     # выполненные, у которых вышел срок, пока демон не работал.
     lists.configure(config, state)
+    # Раздел water читают плитки и чипы протечки, в том числе при подписке,
+    # то есть до первой отрисовки.
+    water.configure(config)
     state.set_watched(config.used_channels(), config.service_prefixes())
 
     jinja = Environment(

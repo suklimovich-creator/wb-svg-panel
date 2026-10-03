@@ -98,7 +98,7 @@
 {% for c in hd.chips or [] %}
 <g transform="translate({{ c.x }},{{ c.y }})">
   {{ base.chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,
-            c.chart, c.chart_title, c.unit) }}
+            c.chart, c.chart_title, c.unit, c.alarm, c.attrs) }}
 </g>
 {% endfor %}
 {% endfor %}
@@ -106,7 +106,7 @@
 {% for c in top_chips or [] %}
 <g transform="translate({{ c.x }},{{ c.y }})">
   {{ base.chip(c.icon, c.value, c.badge, c.active, none, c.badge_color,
-            c.chart, c.chart_title, c.unit) }}
+            c.chart, c.chart_title, c.unit, c.alarm, c.attrs) }}
 </g>
 {% endfor %}
 
@@ -127,6 +127,8 @@
   {% elif t.kind == 'scene' %}{{ basic.tile_scene(t) }}
   {% elif t.kind == 'camera' %}{{ basic.tile_camera(t) }}
   {% elif t.kind == 'list' %}{{ basic.tile_list(t) }}
+  {% elif t.kind == 'leak' %}{{ basic.tile_leak(t) }}
+  {% elif t.kind == 'valve' %}{{ basic.tile_valve(t) }}
   {#- Телевизор рисуется как обычный выключатель: значок, обводка по
       питанию и строка состояния. Своего макроса ему не нужно -
       всё нестандартное живёт в пульте, а не на плитке. -#}

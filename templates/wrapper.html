@@ -273,6 +273,31 @@
           border:2px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);cursor:pointer}
  #ov .lst .lempty{color:rgba(255,255,255,.45);text-align:center;padding:18px 0}
  #ov .lst .lnote{color:rgba(255,255,255,.4);font-size:12.5px;margin:10px 4px 0}
+ /* Окна воды: та же карточка, что у списка. Строка датчика - имя, время и
+    состояние; кнопка крана одна и крупная, чтобы не промахнуться мимо. */
+ #ov .lst .wrow{display:flex;align-items:center;gap:10px;min-height:48px;
+          border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:0 14px}
+ #ov .lst .wrow .wname{flex:1;color:#fff;font-size:16px}
+ #ov .lst .wrow .wwhen{color:rgba(255,255,255,.45);font-size:13px}
+ #ov .lst .wrow .wst{font-size:14px;font-weight:600;color:rgba(255,255,255,.7);
+          min-width:74px;text-align:right}
+ #ov .lst .wrow.wet{background:rgba(196,85,59,.35)}
+ #ov .lst .wrow.wet .wst{color:#FFD8CE}
+ #ov .lst .wclose{color:rgba(255,255,255,.45);font-size:12.5px;margin:-2px 14px 8px}
+ #ov .lst .wbig{display:block;text-align:center;color:#fff;font-size:26px;
+          font-weight:600;margin:14px 0 4px}
+ #ov .lst .wsub{text-align:center;color:rgba(255,255,255,.55);font-size:14px;
+          margin-bottom:14px}
+ #ov .lst .wbtn{display:block;text-align:center;padding:16px;border-radius:16px;
+          font-size:17px;font-weight:650;cursor:pointer;margin-top:10px;
+          touch-action:manipulation}
+ #ov .lst .wbtn.close{background:#C4553B;color:#fff}
+ #ov .lst .wbtn.open{background:#2F7DC4;color:#fff}
+ #ov .lst .wbtn.hot.open{background:#D9822B}
+ #ov .lst .wbtn.reset{background:rgba(255,255,255,.12);color:#fff}
+ #ov .lst .wbtn.off{opacity:.45;pointer-events:none}
+ #ov .lst .wwarn{color:#FFD8CE;background:rgba(196,85,59,.25);border-radius:12px;
+          padding:10px 12px;font-size:13.5px;margin-top:10px}
 </style></head><body>
 <a id="back" href="./">← Панели</a>
 <div id="cols"></div>
@@ -1379,6 +1404,10 @@ function bind(root){
         // Список: нажатие открывает окно, на самой плитке отмечать нечего -
         // строка там в полтора десятка пикселей, промахнуться легко.
         else if(this.getAttribute('data-pad') === 'list') openPad(this);
+        // Вода: протечка ничего не переключает, кран - тем более коротким
+        // нажатием. Оба открывают окно; перекрыть воду - кнопкой в нём.
+        else if(this.getAttribute('data-pad') === 'leak') openPad(this);
+        else if(this.getAttribute('data-pad') === 'valve') openPad(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -2057,6 +2086,127 @@ function padList(node){
   ovCleanup = function(){ clearInterval(timer); };
 }
 
+/* ---------- вода ----------
+   Окна протечки и крана читают плитку на панели, а панель под окном
+   обновляет ждущий запрос. Поэтому окно само видит, как прибор ответил:
+   раз в секунду переискиваем плитку по номеру и перерисовываемся. */
+function hhmm(ts){
+  if(!ts) return '';
+  var d = new Date(ts * 1000), now = new Date();
+  var t = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  if(d.toDateString() !== now.toDateString())
+    t = d.getDate() + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + ' ' + t;
+  return t;
+}
+function freshTile(node){
+  var i = node.getAttribute('data-i');
+  return host.querySelector('[data-i="' + i + '"][data-pad="' + node.getAttribute('data-pad') + '"]') || node;
+}
+
+function padLeak(node){
+  var box = el('div','lst');
+  var head = el('div','lhead'), ttl = el('div','lttl', node.getAttribute('data-title') || 'Протечки');
+  head.appendChild(ttl); box.appendChild(head);
+  var body = el('div'), foot = el('div');
+  box.appendChild(body); box.appendChild(foot);
+  var resetBusy = false;
+
+  function draw(){
+    node = freshTile(node);
+    body.innerHTML = '';
+    var raw = node.getAttribute('data-leak-rows') || '';
+    raw.split(';').forEach(function(item){
+      if(!item) return;
+      var p = item.split('|');
+      var on = p[1] === '1', unknown = p[1] === '?';
+      var r = el('div', 'wrow' + (on ? ' wet' : ''));
+      r.appendChild(el('div','wname', p[0]));
+      // Время - последнего сообщения датчика: у сработавшего это момент
+      // срабатывания, у сухого - когда он последний раз отчитался.
+      if(on && p[2] && p[2] !== '0') r.appendChild(el('div','wwhen','с ' + hhmm(+p[2])));
+      r.appendChild(el('div','wst', unknown ? 'нет данных' : (on ? 'Вода' : 'Сухо')));
+      body.appendChild(r);
+      // Что этот датчик перекрывает - знает раздел water. Видно сразу,
+      // какая вода пропала и почему.
+      if(p[3]) body.appendChild(el('div','wclose',
+        (on ? 'перекрыл: ' : 'перекрывает: ') + p[3]));
+    });
+    foot.innerHTML = '';
+    var alarm = node.getAttribute('data-alarm') === '1';
+    var reset = node.getAttribute('data-reset');
+    if(alarm && reset){
+      var b = el('div', 'wbtn reset' + (resetBusy ? ' off' : ''),
+                 resetBusy ? 'Сбрасываю…' : 'Сбросить тревогу');
+      b.onclick = function(){
+        resetBusy = true; draw();
+        // Модулей может быть несколько - у каждого свой сброс. Жмём все,
+        // что относятся к показанным датчикам.
+        var topics = reset.split('|');
+        Promise.all(topics.map(function(t){ return pub(t, 1); }))
+          .catch(function(e){ flash('Не удалось: ' + e.message); })
+          .then(function(){ setTimeout(function(){ resetBusy = false; draw(); }, 2500); });
+      };
+      foot.appendChild(b);
+      foot.appendChild(el('div','lnote',
+        'Сброс снимает тревогу модуля. Пока датчик мокрый, она поднимется снова.'));
+    } else if(alarm){
+      foot.appendChild(el('div','lnote',
+        'Тревога держится до сброса — на модуле или в его настройках.'));
+    }
+  }
+  draw();
+  var timer = setInterval(draw, 1000);
+  openOv([box]);
+  ovCleanup = function(){ clearInterval(timer); };
+}
+
+function padValve(node){
+  var box = el('div','lst');
+  var head = el('div','lhead'), ttl = el('div','lttl', node.getAttribute('data-title') || 'Кран');
+  head.appendChild(ttl); box.appendChild(head);
+  var big = el('div','wbig'), sub = el('div','wsub'), act = el('div'), warn = el('div');
+  box.appendChild(big); box.appendChild(sub); box.appendChild(act); box.appendChild(warn);
+  var hot = node.getAttribute('data-water') === 'hot';
+  // Куда просили перевести кран: пока прибор не ответил, пишем «…ется».
+  var want = null, wantUntil = 0;
+
+  function draw(){
+    node = freshTile(node);
+    var opened = node.getAttribute('data-state') === '1';
+    var alarm = node.getAttribute('data-alarm') === '1';
+    if(want !== null && (want === opened || Date.now() > wantUntil)) want = null;
+    big.textContent = want === null ? (opened ? 'Открыт' : 'Перекрыт')
+                                    : (want ? 'Открывается…' : 'Перекрывается…');
+    var st = node.getAttribute('data-status') || '';
+    var why = st.indexOf('Перекрыт: ') === 0 ? st.slice(10) : '';
+    if(why === 'протечка') why = '';   // кто именно - не знаем
+    sub.textContent = (hot ? 'Горячая вода' : 'Холодная вода')
+                    + (!opened && why ? ' · перекрыл датчик: ' + why
+                       : (!opened && alarm ? ' · перекрыт из-за протечки' : ''));
+    act.innerHTML = '';
+    var b = el('div', 'wbtn ' + (opened ? 'close' : 'open') + (hot ? ' hot' : '')
+                    + (want !== null ? ' off' : ''),
+               opened ? 'Перекрыть воду' : 'Открыть воду');
+    b.onclick = function(){
+      var topic = node.getAttribute('data-topic');
+      var value = node.getAttribute(opened ? 'data-off' : 'data-on');
+      want = !opened; wantUntil = Date.now() + 15000; draw();
+      pub(topic, value).catch(function(e){
+        want = null; draw(); flash('Не удалось: ' + e.message);
+      });
+    };
+    act.appendChild(b);
+    warn.innerHTML = '';
+    if(!opened && alarm)
+      warn.appendChild(el('div','wwarn',
+        'Тревога протечки не сброшена: модуль может перекрыть кран снова.'));
+  }
+  draw();
+  var timer = setInterval(draw, 1000);
+  openOv([box]);
+  ovCleanup = function(){ clearInterval(timer); };
+}
+
 function openPad(node){
   var pad = node.getAttribute('data-pad');
   if(pad==='xy') padXY(node);
@@ -2068,6 +2218,8 @@ function openPad(node){
   else if(pad==='camera') padCamera(node);
   else if(pad==='tv') padTV(node);
   else if(pad==='list') padList(node);
+  else if(pad==='leak') padLeak(node);
+  else if(pad==='valve') padValve(node);
 }
 
 /* ---------- обновление ---------- */

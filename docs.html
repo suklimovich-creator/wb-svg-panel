@@ -663,6 +663,62 @@ retained-сообщением <code>/wb-svg-panel/lists/&lt;имя&gt;</code>, �
 текстом. Пункт, который уже есть среди открытых, второй раз не
 добавляется.</p>
 
+<h3 id="t-water">water — краны, датчики протечки и модули</h3>
+<p>Раздел верхнего уровня, рядом с <code>panels:</code>. Описывается один раз;
+плитки <code>leak</code> и <code>valve</code> и чипы протечки ссылаются на
+него по имени.</p>
+<pre><code>water:
+  modules:                       # общий флаг тревоги и сброс модуля
+    mwac:
+      alarm: "wb-mwac-v2_131/Leakage Mode"
+      reset: "wb-mwac-v2_131/Leakage Mode Reset"
+  valves:
+    cold: {title: "Холодная", channel: "wb-mwac-v2_131/Output K1", water: cold, module: mwac}
+    hot:  {title: "Горячая",  channel: "wb-mwac-v2_131/Output K2", water: hot,  module: mwac}
+  sensors:                       # closes - какие краны перекрывает датчик
+    bath:    {title: "Ванная", channel: "wb-mwac-v2_131/Input F1", closes: [cold, hot], module: mwac}
+    shower:  {title: "Душ",    channel: "wb-mwac-v2_131/Input F2", closes: [cold, hot], module: mwac}
+    kitchen: {title: "Кухня",  channel: "wb-mwac-v2_131/Input F3", closes: [cold, hot], module: mwac}</code></pre>
+<p><code>closes</code> — какие краны перекрывает датчик. Перекрывает модуль
+по своей матрице действий, панель только знает об этом: кран показывает
+«Перекрыт: Ванная», а окно протечки — что перекрыл каждый датчик. Модулей,
+кранов и датчиков сколько угодно. У WB-MWAC по умолчанию 0 на выходе —
+кран перекрыт; подключено наоборот — <code>invert: true</code> у крана.</p>
+
+<h3 id="t-leak">leak — датчики протечки</h3>
+<pre><code>      - type: leak
+        title: "Протечки"
+        w: 2
+        # sensors: [bath, shower]     # по умолчанию - все из water</code></pre>
+<p>В покое плитка спокойная: «Сухо · 4 датчика». Сработал датчик — красная
+во всю плитку, значок мигает, в подписи — какой. Модуль держит тревогу и
+после того, как высохло: плитка остаётся красной с подписью «сухо,
+сбросьте». Нажатие ничего не переключает — окно со списком датчиков,
+временем срабатывания, тем, что каждый перекрыл, и кнопкой сброса.</p>
+<p>Без раздела <code>water</code> можно и по-старому: <code>sensors</code>
+списком <code>{channel, title}</code> или один <code>channel</code>, плюс
+<code>channel_alarm</code> и <code>channel_reset</code>. Тогда о трубах
+панель не знает.</p>
+
+<h3 id="t-valve">valve — кран холодной или горячей воды</h3>
+<pre><code>      - type: valve
+        valve: cold                # имя из water.valves</code></pre>
+<p>Открытый кран — норма, плитка спокойная. Перекрытый — красная рамка и
+«Перекрыт», а если его перекрыл датчик — какой: «Перекрыт: Ванная».
+Короткое нажатие воду не перекрывает: открывается окно с одной большой
+кнопкой «Перекрыть воду» или «Открыть воду». Можно и без раздела
+<code>water</code>: <code>channel</code>, <code>water: cold | hot</code>,
+<code>channel_alarm</code>.</p>
+
+<h3 id="t-leakchip">Чип протечки в строке состояния</h3>
+<pre><code>  bathroom:
+    status:
+      - leak: [bath]               # или all - все датчики раздела water</code></pre>
+<p>Появляется, только пока есть тревога, всегда красный, по нажатию — то же
+окно, что у плитки. На сводной панели <code>leak: all</code> — один чип на
+всю квартиру. Любой обычный чип тоже можно сделать красным:
+<code>alarm: true</code>.</p>
+
 <h3 id="t-value">value — просто число</h3>
 <pre><code>      - type: value
         title: "Давление"

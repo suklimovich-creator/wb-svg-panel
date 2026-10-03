@@ -207,6 +207,15 @@ class Tile(object):
         return None
 
     @staticmethod
+    def expand(conf):
+        """
+        Дополнить конфиг плитки до привязки ролей. Кран, заданный именем из
+        раздела water, получает здесь свой канал - иначе роль value не к
+        чему привязать. По умолчанию конфиг как есть.
+        """
+        return conf
+
+    @staticmethod
     def channels(conf):
         """
         Каналы, не выводимые из ролей: ряды графика, каналы устройства
@@ -275,6 +284,7 @@ def build(conf, state, history=None):
         return {"kind": kind, "problem": "неизвестный тип плитки: %r" % kind,
                 "data": {}, "zones": [], "bound": {}, "writable": set()}
 
+    conf = cls.expand(conf)
     obj = cls()
     roles = obj.schema()
     bound = bind(conf, roles, state, obj)
@@ -307,8 +317,10 @@ def channels_of(conf, state=None):
     cls = REGISTRY.get(resolve_type(conf, state))
     if cls is None:
         return set()
+    conf = cls.expand(conf)
     obj = cls()
-    out = set(cls.channels(conf) or ())
+    extra = set(cls.channels(conf) or ())
+    out = set(extra)
     known = set()
     for role in obj.schema():
         field = obj.field_of(role)
@@ -325,6 +337,10 @@ def channels_of(conf, state=None):
         if key != "channel" and not key.startswith("channel_"):
             continue
         if key in known or not isinstance(value, str) or not value:
+            continue
+        # Плитка прочла поле сама, мимо ролей: датчик протечки, заданный
+        # одним channel, - не опечатка.
+        if value in extra:
             continue
         log.warning("плитка %r: поле %s не отвечает ни одной роли типа %r",
                     conf.get("title") or "без названия", key,
@@ -344,6 +360,7 @@ def writable_of(conf, state=None):
     cls = REGISTRY.get(resolve_type(conf, state))
     if cls is None:
         return set()
+    conf = cls.expand(conf)
     obj = cls()
     out = set(cls.writes(conf) or ())
     for b in bind(conf, obj.schema(), state, obj).values():

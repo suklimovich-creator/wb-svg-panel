@@ -130,6 +130,64 @@ python3 tools/probe-roles.py --service 'Sprut.hub-XXXXXXXX_1/accessories/108/13'
 | WB-M1W2 / 1-Wire | Modbus | температура | да |
 | WB-MWAC v.2 | Modbus | протечка, счётчики воды | да |
 
+### WB-MWAC v.2: протечки и краны
+
+Плитки `leak` и `valve`. Имена каналов — из шаблона wb-mqtt-serial
+(`config-wb-mwac2*.json.jinja`):
+
+| Канал | Что это |
+|---|---|
+| `Input F1` … `Input F5`, `Input S6` | входы датчиков, 1 — вода |
+| `Leakage Mode` | общий флаг тревоги; держится, пока не сбросят |
+| `Leakage Mode Reset` | сброс тревоги (прошивки «ver2») |
+| `Output K1`, `Output K2` | выходы на краны |
+
+По умолчанию модуль при протечке **выключает** выходы, то есть 0 — кран
+перекрыт, 1 — открыт. Если краны подключены наоборот, у плитки крана
+`invert: true`. Проверить просто: при открытой воде посмотрите значение
+`Output K1` на `/channels`.
+
+Краны, датчики и модули описываются один раз — в разделе `water:`
+config.yaml, — а плитки и чипы ссылаются на них по имени:
+
+```yaml
+water:
+  modules:                       # общий флаг тревоги и сброс модуля
+    mwac:
+      alarm: "wb-mwac-v2_131/Leakage Mode"
+      reset: "wb-mwac-v2_131/Leakage Mode Reset"
+  valves:
+    cold: {title: "Холодная", channel: "wb-mwac-v2_131/Output K1", water: cold, module: mwac}
+    hot:  {title: "Горячая",  channel: "wb-mwac-v2_131/Output K2", water: hot,  module: mwac}
+  sensors:                       # closes - какие краны перекрывает датчик
+    bath:    {title: "Ванная", channel: "wb-mwac-v2_131/Input F1", closes: [cold, hot], module: mwac}
+    shower:  {title: "Душ",    channel: "wb-mwac-v2_131/Input F2", closes: [cold, hot], module: mwac}
+    kitchen: {title: "Кухня",  channel: "wb-mwac-v2_131/Input F3", closes: [cold, hot], module: mwac}
+
+# на панели
+- {type: leak, title: "Протечки", w: 2}   # все датчики; sensors: [bath] - только этот
+- {type: valve, valve: cold}
+- {type: valve, valve: hot}
+
+# в строке состояния комнаты или сводной панели
+status:
+  - leak: all                    # или [bath, shower]
+```
+
+`closes` — какие краны перекрывает датчик. Перекрывает сам модуль, по своей
+матрице действий (настраивается в веб-интерфейсе Wiren Board, в настройках
+WB-MWAC): панель только знает об этом, чтобы показать, кто и что перекрыл.
+Держите `closes` в согласии с матрицей модуля — иначе плитка крана будет
+называть не тот датчик.
+
+Квартира со своими стояками у кухни и у ванной, или два модуля — это
+просто больше записей: у каждого крана и датчика свой `module`, у каждого
+модуля свой флаг и сброс.
+
+Время хода крана модуль не сообщает: выход — это реле, обратной связи от
+привода нет. Окно крана пишет «Перекрывается…», пока выход не сменил
+значение, но доехал ли сам кран, панель не знает.
+
 ## Кондиционеры
 
 | Устройство | Подключение | Особенности | Проверено |

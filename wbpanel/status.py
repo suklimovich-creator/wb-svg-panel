@@ -48,9 +48,72 @@ def status_entries(panel_conf):
     out = []
     for entry in (panel_conf or {}).get("status", []) or []:
         if isinstance(entry, dict) and (entry.get("channel")
-                                        or entry.get("value_channel")):
+                                        or entry.get("value_channel")
+                                        or "leak" in entry):
             out.append(entry)
     return out
+
+
+def status_channels(entry):
+    """
+    Что читает чип: для подписки на MQTT и для ждущего запроса.
+
+    У обычного чипа это канал, канал числа и каналы условия require. У
+    чипа протечки - датчики и флаги тревоги их модулей из раздела water.
+    """
+    out = set()
+    for field in ("channel", "value_channel"):
+        if entry.get(field):
+            out.add(entry[field])
+    req = entry.get("require")
+    for item in (req if isinstance(req, list) else [req]):
+        if isinstance(item, dict) and item.get("channel"):
+            out.add(item["channel"])
+    if "leak" in entry:
+        from .water import water
+        out.update(water.channels(water.pick_sensors(entry.get("leak"))))
+    return out
+
+
+def leak_chip(entry, state):
+    """
+    Чип протечки: появляется, только пока есть тревога, всегда красный, по
+    нажатию - окно со списком датчиков и сбросом, как у плитки leak.
+
+        status:
+          - leak: all              # или имя датчика, или список имён
+    """
+    from .commands import xml_escape
+    from .water import rows_attr, water
+
+    spec = entry.get("leak")
+    sensors = water.pick_sensors(spec)
+    if not sensors:
+        return None
+    view = water.leak(state, sensors)
+    if not view["alarm"]:
+        return None
+    resets = water.resets(sensors)
+    names = spec if isinstance(spec, list) else [spec or "all"]
+    attrs = {
+        "data-pad": "leak",
+        # Номер, по которому окно переискивает чип после обновления
+        # панели: у чипа нет номера плитки, и он строится из того, что
+        # он показывает.
+        "data-i": "leak:" + ",".join(str(n) for n in names),
+        "data-title": entry.get("title") or "Протечка",
+        "data-leak-rows": rows_attr(view["rows"]),
+        "data-alarm": "1",
+    }
+    if resets:
+        attrs["data-reset"] = "|".join(resets)
+    value = str(len(view["wet"])) if len(view["wet"]) > 1 else None
+    return {"icon": entry.get("icon", "leak"), "badge": None, "value": value,
+            "chart": None, "chart_title": "", "unit": "",
+            "active": False, "badge_color": None, "alarm": True,
+            "attrs": " " + " ".join('%s="%s"' % (k, xml_escape(v))
+                                    for k, v in attrs.items()),
+            "w": chip_width(value)}
 
 
 def parse_span(text, default=0):
@@ -123,6 +186,11 @@ def build_status(panel_conf, state, now=None):
     now = now or time.time()
     chips = []
     for entry in status_entries(panel_conf):
+        if "leak" in entry:
+            chip = leak_chip(entry, state)
+            if chip:
+                chips.append(chip)
+            continue
         key = entry.get("channel")
         raw = state.snapshot(key)["raw"] if key else None
         icon = entry.get("icon", "power")
@@ -181,7 +249,10 @@ def build_status(panel_conf, state, now=None):
                       "active": bool(active and attention),
                       "badge_color": (entry.get("badge_color")
                                       or BADGE_COLORS.get(badge)),
-                      "alarm": bool(entry.get("alarm")),
+                      # alarm: true - чип тревоги, красный, а не
+                      # оранжевый «обрати внимание»: протечка, дым.
+                      "alarm": bool(entry.get("alarm")) and bool(active),
+                      "attrs": "",
                       "w": chip_width(value)})
     return chips
 

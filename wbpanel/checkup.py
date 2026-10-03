@@ -28,6 +28,25 @@ def _problem(level, panel, tile, text, hint=None):
             "kind": tile.get("type", "value"), "text": text, "hint": hint}
 
 
+def _check_lists(config):
+    """
+    Файл списков. Не плитка, а место на диске, но и поломка тихая: пункты
+    добавляются, отмечаются, а после перезагрузки списка нет.
+    """
+    from .lists import lists
+    if not lists.defs():
+        return []
+    reason = lists.save_error or lists.writable()
+    if not reason:
+        return []
+    return [{"level": ERROR, "panel": "Списки", "tile": "файл списков",
+             "kind": "list",
+             "text": "список не сохраняется: %s" % reason,
+             "hint": "пункты пропадут при перезапуске; файл должен лежать в "
+                     "data/ (lists_file), а юнит - быть из 1.12.1 и новее: "
+                     "sh install.sh"}]
+
+
 def check_config(config, state, history=None):
     """
     Пройти по всем панелям и собрать всё, что выглядит неправильно.
@@ -63,6 +82,8 @@ def check_config(config, state, history=None):
             for tile in tiles:
                 out.extend(_check_tile(tile, title, name, config, state,
                                        known, logged, interactive))
+
+    out.extend(_check_lists(config))
 
     rank = {ERROR: 0, WARNING: 1}
     out.sort(key=lambda p: (rank.get(p["level"], 9), p["panel"]))

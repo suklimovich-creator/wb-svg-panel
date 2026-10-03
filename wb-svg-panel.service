@@ -19,8 +19,17 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
-# Сервису нечего писать на диск вообще: состояние в памяти,
-# история читается через MQTT-RPC.
+# Писать демону можно только в data/ - там файл списков. Всё остальное
+# под ProtectSystem=strict только на чтение: состояние в памяти, история
+# читается через MQTT-RPC. Без ReadWritePaths списки жили только в памяти
+# и пропадали при каждом перезапуске (до 1.12.1).
+#
+# Папку создаём до запуска и вне песочницы («+»): systemd не смонтирует
+# на запись то, чего нет, а изнутри песочницы её уже не создать. «-» у
+# ReadWritePaths - не валить запуск, если папки всё же нет; это поймает
+# страница /check.
+ExecStartPre=+/bin/mkdir -p /mnt/data/wb-svg-panel/data
+ReadWritePaths=-/mnt/data/wb-svg-panel/data
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

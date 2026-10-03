@@ -72,6 +72,10 @@ class Lists(object):
         # Чем публиковать копию в брокер. Задаётся после подключения:
         # без брокера списки работают как прежде, просто без зеркала.
         self.publish = None
+        # Последняя ошибка записи файла. Пока она есть, список живёт только
+        # в памяти и пропадёт при перезапуске - об этом говорят окно списка
+        # и страница /check, а не только журнал.
+        self.save_error = None
         self._load()
 
     def configure(self, config, state):
@@ -182,8 +186,36 @@ class Lists(object):
                  len(items) - len(alive))
         return True
 
+    def writable(self):
+        """
+        Можно ли записать файл списков. None - можно, иначе причина.
+
+        Смотрим на сам файл, а если его ещё нет - на ближайшую существующую
+        папку над ним. Под ProtectSystem=strict юнита вся файловая система,
+        кроме ReadWritePaths, для демона только на чтение, и access() это
+        честно сообщает.
+        """
+        probe = self.path
+        while probe and not os.path.exists(probe):
+            parent = os.path.dirname(probe)
+            if parent == probe:
+                break
+            probe = parent
+        if probe and os.access(probe, os.W_OK):
+            return None
+        return "нет права записи в %s" % (probe or self.path)
+
     def _changed(self, name):
-        self._save()
+        try:
+            self._save()
+            self.save_error = None
+        except (OSError, IOError) as exc:
+            # Само действие не отменяем: пункт уже в памяти и уйдёт копией
+            # в брокер. Но молчать нельзя - до 1.12.1 так и было, и списки
+            # тихо пропадали при каждой перезагрузке.
+            self.save_error = "%s: %s" % (self.path, exc.strerror or exc)
+            log.error("списки: не удалось записать %s (%s) - изменения "
+                      "пропадут при перезапуске", self.path, exc)
         if self.state is not None:
             # Панель отдаётся с ETag по версии состояния: без этого браузер
             # получил бы 304 и не увидел нового пункта на плитке.
@@ -212,9 +244,12 @@ class Lists(object):
             opened = [dict(i) for i in items if not i.get("done")]
             done = sorted((dict(i) for i in items if i.get("done")),
                           key=lambda i: -float(i["done"]))
-            return {"name": name, "title": conf.get("title") or name,
-                    "open": opened, "done": done,
-                    "keep_days": round(self.keep(name) / 86400.0, 1)}
+            out = {"name": name, "title": conf.get("title") or name,
+                   "open": opened, "done": done,
+                   "keep_days": round(self.keep(name) / 86400.0, 1)}
+            if self.save_error:
+                out["warning"] = self.save_error
+            return out
 
     def purge_all(self):
         with self.lock:

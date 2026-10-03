@@ -92,6 +92,11 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
     python3-paho-mqtt python3-jinja2 python3-yaml python3-flask python3-waitress
 
+echo "==> данные"
+# Файл списков. Юнит пускает демон писать только сюда (ReadWritePaths).
+mkdir -p "$SRC/data"
+echo "    ok:  $SRC/data"
+
 echo "==> systemd"
 install -m 644 "$SRC/wb-svg-panel.service" /etc/systemd/system/wb-svg-panel.service
 systemctl daemon-reload

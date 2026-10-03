@@ -272,6 +272,9 @@
  #ov .lst .lfoot span{padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;
           border:2px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);cursor:pointer}
  #ov .lst .lempty{color:rgba(255,255,255,.45);text-align:center;padding:18px 0}
+ #ov .lst .lwarn{background:#C4553B;color:#fff;border-radius:12px;padding:10px 12px;
+   font-size:13.5px;line-height:1.35;margin:0 0 12px}
+ #ov .lst .lwarn:empty{display:none}
  #ov .lst .lnote{color:rgba(255,255,255,.4);font-size:12.5px;margin:10px 4px 0}
  /* Окна воды: та же карточка, что у списка. Строка датчика - имя, время и
     состояние; кнопка крана одна и крупная, чтобы не промахнуться мимо. */
@@ -1965,8 +1968,9 @@ function padList(node){
   input.placeholder = 'Новый пункт';
   input.setAttribute('enterkeyhint', 'done');
   add.appendChild(input); add.appendChild(go);
-  var body = el('div'), foot = el('div','lfoot'), note = el('div','lnote');
-  box.appendChild(head); box.appendChild(add); box.appendChild(body);
+  var body = el('div'), foot = el('div','lfoot'), note = el('div','lnote'),
+      warn = el('div','lwarn');
+  box.appendChild(head); box.appendChild(warn); box.appendChild(add); box.appendChild(body);
   box.appendChild(foot); box.appendChild(note);
 
   var view = null, showDone = false, busy = false, timer = null, lastSig = '';
@@ -1989,7 +1993,7 @@ function padList(node){
         if(!j || busy) return;
         // Ничего не поменялось - не перерисовываем: иначе раз в три
         // секунды сбрасывалось бы «Удалить?» и прыгала прокрутка.
-        var sig = JSON.stringify([j.open, j.done]);
+        var sig = JSON.stringify([j.open, j.done, j.warning || '']);
         if(sig === lastSig) return;
         view = j; draw();
       })
@@ -2048,7 +2052,12 @@ function padList(node){
   }
   function draw(){
     if(!view) return;
-    lastSig = JSON.stringify([view.open, view.done]);
+    lastSig = JSON.stringify([view.open, view.done, view.warning || '']);
+    // Демон не смог записать файл: список живёт в памяти до перезапуска.
+    warn.textContent = view.warning
+      ? 'Список не сохраняется на контроллере и пропадёт при перезапуске. '
+        + 'Откройте «Проверка конфига». (' + view.warning + ')'
+      : '';
     ttl.textContent = view.title || ttl.textContent;
     cnt.textContent = view.open.length ? String(view.open.length) : '';
     body.innerHTML = '';

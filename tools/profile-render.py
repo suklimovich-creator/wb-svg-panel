@@ -38,6 +38,12 @@ def setup(warmup=6.0):
     config = Config(CONFIG_PATH)
     assemble.config = config
     cameras.config = config
+    # Без этого плитки протечки и списка рисовались бы с ошибкой «не
+    # заданы датчики» и профиль врал бы: служба настраивает их в main().
+    from wbpanel.lists import lists
+    from wbpanel.water import water
+    lists.config = config
+    water.configure(config)
     state.set_watched(config.used_channels())
 
     web.config = config

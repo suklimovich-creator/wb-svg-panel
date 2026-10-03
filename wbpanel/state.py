@@ -74,6 +74,22 @@ class WbState:
                         return True
         return False
 
+    def last_touch(self, keys, prefixes=()):
+        """Последняя версия, при которой менялось что-то из keys или под
+        prefixes. Пустая метка - общие изменения (bump без ключа) - тоже
+        считается: её видят все панели."""
+        with self.lock:
+            best = self.touched.get("", 0)
+            for key in keys:
+                ver = self.touched.get(key, 0)
+                if ver > best:
+                    best = ver
+            if prefixes:
+                for key, ver in self.touched.items():
+                    if ver > best and any(key.startswith(p) for p in prefixes):
+                        best = ver
+            return best
+
     def wait_change(self, since, timeout):
         """
         Ждать, пока версия станет больше since, но не дольше timeout секунд.

@@ -481,18 +481,46 @@ def docs():
 #  Панель: кэш готовой картинки и ожидание изменений
 # ==========================================================================
 
-# Готовые картинки по ключу состояния. Телефон и планшет на одной панели
-# получают одну и ту же отрисовку, а не две: на WB7 большая панель стоит
-# четверть секунды процессора. Держим немного - по одной на панель,
-# свёртку и число колонок, которые сейчас открыты.
+# Готовые картинки. Телефон и планшет на одной панели получают одну и ту же
+# отрисовку, а не две: на WB7 большая панель стоит 0.13-0.15 с процессора.
+# Держим по одной на панель, свёртку и число колонок, которые сейчас
+# открыты.
+#
+# Перерисовка - не на любое изменение в доме, а только на изменение своих
+# каналов панели (версия панели, а не общая), и не чаще раза в _MIN_RENDER
+# секунд. До 1.12.4 ключом была общая версия: прихожая перерисовывалась от
+# каждого датчика CO2 в спальне, а десять открытых экранов разгоняли
+# процессор WB7 до 60 %.
 _RENDERED = OrderedDict()
 _RENDER_LOCK = threading.Lock()
 _RENDER_MAX = 12
 
 # Сколько запросов одновременно могут ждать изменений. Каждый держит поток
-# waitress, а потоков двенадцать, и часть нужна камерам и пультам. Лишний
-# запрос не ждёт, а отвечает сразу - страница просто спросит ещё раз.
-_WAITERS = threading.BoundedSemaphore(6)
+# waitress, и часть потоков нужна камерам и пультам. Лишний запрос не
+# ждёт, а получает короткий ответ 204 без картинки - страница спросит
+# через пару секунд.
+_WAITERS = None
+
+
+def _waiters():
+    global _WAITERS
+    if _WAITERS is None:
+        http = config.get("http", {}) or {}
+        threads = int(http.get("threads", 16))
+        n = int(http.get("waiters", max(2, threads - 6)))
+        _WAITERS = threading.BoundedSemaphore(max(1, n))
+    return _WAITERS
+
+
+def _min_render():
+    """Не чаще раза в столько секунд одна и та же панель перерисовывается.
+    Изменения пачкой (датчики, кондиционер) иначе давали бы отрисовку на
+    каждое."""
+    try:
+        return max(0.0, float((config.get("http", {}) or {}).get("min_render", 1.0)))
+    except (TypeError, ValueError):
+        return 1.0
+
 
 # После пробуждения - короткая пауза: изменения ходят пачками (кондиционер
 # публикует полдюжины каналов подряд), и без неё пачка дала бы полдюжины
@@ -511,36 +539,62 @@ def _panel_args(name, cols):
     return closed, opened, flat
 
 
-def cached_panel(name, cols, version):
-    """
-    Готовая панель из кэша либо свежая отрисовка.
+def panel_version(name):
+    """Версия своих каналов панели: растёт, только когда меняется то, что
+    она рисует. Общая версия растёт от любого датчика в доме."""
+    keys, prefixes = panel_watch(name)
+    return state.last_touch(keys, prefixes)
 
-    В ключе, помимо версии состояния, - отметка времени с шагом refresh:
-    часть картинки зависит от часов, а не от каналов. Это часы в шапке,
-    точки «давно не обновлялось», кадр камеры и графики, которые фоновый
-    поток подгружает из истории без всякой версии.
+
+def cached_panel(name, cols):
+    """
+    Готовая панель и версия состояния, которой она соответствует.
+
+    Из кэша, если с прошлой отрисовки не менялось ничего своего и не
+    сменилась отметка времени (часы в шапке, точки «давно не обновлялось»,
+    кадр камеры и графики живут по таймеру, а не по версии). Если своё
+    поменялось, но прошлая отрисовка моложе _MIN_RENDER, тоже из кэша - с
+    её старой версией: страница увидит, что отстала, и спросит снова через
+    секунду. Так пачка изменений даёт одну отрисовку, а не десять.
     """
     closed, opened, flat = _panel_args(name, cols)
+    base = (name, cols, closed, opened, flat, getattr(config, "_mtime", 0))
     bucket = int(time.time() // _refresh_every())
-    key = (name, cols, closed, opened, flat, version, bucket,
-           getattr(config, "_mtime", 0))
     with _RENDER_LOCK:
-        hit = _RENDERED.get(key)
-        if hit is not None:
-            _RENDERED.move_to_end(key)
-            return hit
+        now = time.time()
+        rv = panel_version(name)
+        hit = _RENDERED.get(base)
+        if hit is not None and hit["bucket"] == bucket:
+            if hit["rv"] == rv:
+                _RENDERED.move_to_end(base)
+                # Своё не менялось: картинка верна на текущую версию.
+                return hit["svg"], state.version
+            if now - hit["t"] < _min_render():
+                _RENDERED.move_to_end(base)
+                return hit["svg"], hit["ver"]
+        # Версию берём ДО отрисовки: то, что поменяется во время неё,
+        # страница увидит в следующем ответе, а не потеряет.
+        ver = state.version
         svg = render_panel(name, cols=cols)
         if flat:
             panel_conf = config.panels.get(name) or {}
             svg = resolve_css_vars(
                 svg, panel_conf.get("theme", config.get("theme", "light")), 1.0)
-        _RENDERED[key] = svg
+        _RENDERED[base] = {"svg": svg, "ver": ver, "rv": rv,
+                           "bucket": bucket, "t": now}
+        _RENDERED.move_to_end(base)
         while len(_RENDERED) > _RENDER_MAX:
             _RENDERED.popitem(last=False)
-        return svg
+        return svg, ver
 
 
 _WATCH = {}
+
+#: Типы плиток, чьи каналы не будят ждущий запрос: обновляются по таймеру.
+SLOW_TILES = ("chart", "forecast")
+
+#: Поля чипа строки состояния, при которых он считается медленным.
+SLOW_STATUS = ("above", "below")
 
 
 def panel_watch(name):
@@ -564,6 +618,12 @@ def panel_watch(name):
         for tile in tiles:
             if not isinstance(tile, dict):
                 continue
+            # Графики и прогноз - медленные: температура и CO2 меняются
+            # в сотых каждые пару секунд, и будить из-за них все экраны,
+            # перерисовывать и пересылать всю панель незачем. Они
+            # обновляются по таймеру, раз в refresh секунд, как и раньше.
+            if tile.get("type") in SLOW_TILES:
+                continue
             keys.update(channels_of(tile, state))
             if tile.get("service"):
                 prefixes.add(str(tile["service"]).rstrip("/") + "/")
@@ -573,9 +633,21 @@ def panel_watch(name):
                 sources.append(tile)
     for src in sources:
         for entry in status_entries(src or {}):
+            # Чип с порогом (движение: above: 60) меняется на экране, только
+            # когда значение пересекает порог, а Max Motion шумит каждую
+            # секунду. Такой чип тоже обновляется по таймеру.
+            if any(k in entry for k in SLOW_STATUS):
+                continue
             keys.update(status_channels(entry))
     _WATCH[name] = (stamp, frozenset(keys), tuple(sorted(prefixes)))
     return _WATCH[name][1], _WATCH[name][2]
+
+
+def panel_changed(name, since):
+    """Менялось ли после версии since то, что панель показывает сразу."""
+    keys, prefixes = panel_watch(name)
+    return state.touched_since(since, keys, prefixes) or \
+        state.touched_since(since, ("",))
 
 
 def wait_for_panel(name, since, timeout):
@@ -639,32 +711,43 @@ def panel_svg(name):
     # она что-то пропустила, отвечаем сразу. Больше - демон перезапускался
     # и считает заново с нуля: тоже отвечаем сразу, иначе страница ждала
     # бы версии, до которой счётчик дойдёт нескоро.
-    if since is not None and since == state.version:
-        if _WAITERS.acquire(blocking=False):
-            try:
-                wait_for_panel(name, since, _refresh_every())
-            finally:
-                _WAITERS.release()
+    base_headers = {"Access-Control-Allow-Origin": "*",
+                    "Access-Control-Expose-Headers": "X-Panel-Version"}
+    # Ждём, если страница видела текущую версию или с её версии не
+    # менялось ничего из того, что панель показывает сразу: датчик CO2 в
+    # спальне не повод слать прихожей всю картинку заново. Версия больше
+    # текущей - демон перезапускался, отвечаем сразу.
+    if since is not None and since <= state.version and (
+            since == state.version or not panel_changed(name, since)):
+        sem = _waiters()
+        if not sem.acquire(blocking=False):
+            # Мест для ждущих нет. Картинку не рисуем и не шлём: страница
+            # и так показывает текущую версию. Короткий ответ - и она
+            # спросит снова через пару секунд.
+            headers = dict(base_headers)
+            headers.update({"X-Panel-Version": str(since),
+                            "Cache-Control": "no-store"})
+            return Response(status=204, headers=headers)
+        try:
+            wait_for_panel(name, since, _refresh_every())
+        finally:
+            sem.release()
 
-    with state.lock:
-        version = state.version
-    headers = {"X-Panel-Version": str(version),
-               "Access-Control-Allow-Origin": "*",
-               "Access-Control-Expose-Headers": "X-Panel-Version"}
+    svg, version = cached_panel(name, cols)
+    headers = dict(base_headers)
+    headers["X-Panel-Version"] = str(version)
     if since is not None:
         headers["Cache-Control"] = "no-store"
-        return Response(cached_panel(name, cols, version),
-                        mimetype="image/svg+xml", headers=headers)
+        return Response(svg, mimetype="image/svg+xml", headers=headers)
 
-    # v2 в ключе: после смены формата страницы старые записи в кэше браузера
+    # v3 в ключе: после смены формата страницы старые записи в кэше браузера
     # не должны совпадать с новыми
-    etag = '"v2-%s-%s-%d"' % (name, cols or "d", version)
+    etag = '"v3-%s-%s-%d-%d"' % (name, cols or "d", version, hash(svg) & 0xffffffff)
     if request.headers.get("If-None-Match") == etag:
         return Response(status=304, headers={"ETag": etag})
     headers.update({"ETag": etag,
                     "Cache-Control": "no-cache, must-revalidate"})
-    return Response(cached_panel(name, cols, version),
-                    mimetype="image/svg+xml", headers=headers)
+    return Response(svg, mimetype="image/svg+xml", headers=headers)
 
 
 def panel_tiles(panel_conf):
@@ -1144,6 +1227,6 @@ def main():
     try:
         from waitress import serve
         serve(app, host=host, port=port,
-              threads=int(http.get("threads", 12)), _quiet=True)
+              threads=int(http.get("threads", 16)), _quiet=True)
     except ImportError:
         app.run(host=host, port=port, threaded=True)

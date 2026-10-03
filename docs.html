@@ -115,6 +115,9 @@ http:
   host: 127.0.0.1
   port: 8088
   refresh: 10          # период автообновления .html-обёртки, секунд
+  # threads: 16        # потоков waitress
+  # waiters: 10        # сколько экранов одновременно ждут изменений
+  # min_render: 1      # панель перерисовывается не чаще раза в N секунд
 
 history:
   source: auto         # auto | sqlite | rpc

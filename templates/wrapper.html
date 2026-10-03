@@ -2448,10 +2448,13 @@ function poll(){
     .then(function(r){
       if(!r.ok) throw new Error('HTTP ' + r.status);
       noteVersion(r);
-      return r.text();
+      // 204 - на сервере нет места для ждущих (открыто много экранов).
+      // Картинка у нас и так текущая: спросим снова чуть позже.
+      return r.status === 204 ? null : r.text();
     })
     .then(function(svg){
       pollBusy = false; pollAbort = null; pollFails = 0;
+      if (svg === null) { schedule(q !== Q() ? 0 : 2000); return; }
       if (svg.indexOf('<svg') >= 0) {
         remember(q, svg);
         // Панель обновляется и под открытым окном: замена точечная и

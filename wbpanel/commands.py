@@ -183,6 +183,7 @@ CMD_ATTRS = [
     # тревоги и цвет воды у крана.
     ("leak_rows", "data-leak-rows"), ("reset", "data-reset"),
     ("alarm", "data-alarm"), ("water", "data-water"),
+    ("agenda", "data-agenda"),
 ]
 
 

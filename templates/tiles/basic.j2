@@ -126,6 +126,43 @@
   {% endif %}
 {% endmacro %}
 
+{#- ---- расписание ----
+    Шапка как у списка: значок, «Сегодня», дата справа. Строки: цветная
+    точка календаря, время, название. Идущее сейчас - время оранжевым и
+    словом «сейчас», прошедшее - бледным. На мелкой плитке - одна строка
+    про ближайшее событие. -#}
+{% macro tile_agenda(t) %}
+  {{ base.plate(t) }}
+  {% if t.compact_agenda %}
+  {{ base.icon_c(t, t.icon or 'calendar', 24) }}
+  {{ base.caption(t, t.status) }}
+  {% else %}
+  <use href="#{{ uid }}ic-{{ t.icon or 'calendar' }}" xlink:href="#{{ uid }}ic-{{ t.icon or 'calendar' }}"
+       x="16" y="{{ 15 * fs }}" width="{{ 26 * fs }}" height="{{ 26 * fs }}"/>
+  <text x="{{ 16 + 34 * fs }}" y="{{ 35 * fs }}" class="name">{{ t.title }}</text>
+  {% if t.date %}
+  <text x="{{ t.w - 20 }}" y="{{ 35 * fs }}" class="ag-date" font-size="13.5" text-anchor="end">{{ t.date }}</text>
+  {% endif %}
+  {% for r in t.rows %}
+  {% if r.kind == 'ev' %}
+  <g class="{{ 'ag-past' if r.state == 'past' }}">
+    <circle cx="24" cy="{{ r.dot_y }}" r="4" fill="{{ r.color }}"/>
+    <text x="34" y="{{ r.y }}" font-size="{{ 12 if r.small else t.size }}"
+          class="ag-time {{ 'small' if r.small }} {{ 'ag-now' if r.state == 'now' }}">{{ r.time }}</text>
+    <text x="{{ t.text_x }}" y="{{ r.y }}" font-size="{{ t.size }}" class="ag-txt">{{ r.text }}</text>
+  </g>
+  {% elif r.kind == 'sep' %}
+  <text x="20" y="{{ r.y }}" font-size="12.5" class="ag-sep">{{ r.text|upper }}</text>
+  {% else %}
+  <text x="20" y="{{ r.y }}" font-size="{{ t.size }}" class="ag-empty">{{ r.text }}</text>
+  {% endif %}
+  {% endfor %}
+  {% if t.more %}
+  <text x="34" y="{{ t.more_y }}" font-size="{{ t.size * 0.9 }}" class="li-more">ещё {{ t.more }}…</text>
+  {% endif %}
+  {% endif %}
+{% endmacro %}
+
 {#- ---- протечка ----
     В покое - обычная плитка с каплей и «Сухо». При тревоге подложка
     красная, текст и значок белые (класс onlight делает ровно это для

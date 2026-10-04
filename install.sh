@@ -90,7 +90,8 @@ fi
 echo "==> зависимости"
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    python3-paho-mqtt python3-jinja2 python3-yaml python3-flask python3-waitress
+    python3-paho-mqtt python3-jinja2 python3-yaml python3-flask python3-waitress \
+    python3-dateutil
 
 echo "==> данные"
 # Файл списков. Юнит пускает демон писать только сюда (ReadWritePaths).

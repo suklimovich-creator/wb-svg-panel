@@ -29,6 +29,7 @@ from .render import resolve_css_vars
 from . import cameras
 from .lists import ListError, lists
 from .water import water
+from .calendars import calendars
 from . import checkup
 import html
 import threading
@@ -632,6 +633,10 @@ def panel_watch(name):
                 prefixes.add(str(tile["service"]).rstrip("/") + "/")
             if tile.get("type") == "list" and tile.get("list"):
                 keys.add("list:%s" % tile["list"])
+            if tile.get("type") == "agenda":
+                # Новая загрузка календаря будит панель, как пункт списка.
+                for cal in calendars.pick(tile.get("calendars")):
+                    keys.add("calendar:%s" % cal)
             if tile.get("type") == "header":
                 sources.append(tile)
     for src in sources:
@@ -1145,6 +1150,8 @@ def main():
     # Раздел water читают плитки и чипы протечки, в том числе при подписке,
     # то есть до первой отрисовки.
     water.configure(config)
+    # Календари: события забирает свой поток, отрисовка читает готовое.
+    calendars.configure(config, state)
     state.set_watched(config.used_channels(), config.service_prefixes())
 
     jinja = Environment(
@@ -1236,6 +1243,8 @@ def main():
     stop = threading.Event()
     threading.Thread(target=history.prefetch_loop, args=(config, stop),
                      daemon=True, name="history").start()
+    threading.Thread(target=calendars.loop, args=(stop,),
+                     daemon=True, name="calendar").start()
 
     def watch_config(stop_event):
         """Появились новые сторонние топики в конфиге - подписываемся на лету."""

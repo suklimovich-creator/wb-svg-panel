@@ -127,6 +127,7 @@
   {% elif t.kind == 'scene' %}{{ basic.tile_scene(t) }}
   {% elif t.kind == 'camera' %}{{ basic.tile_camera(t) }}
   {% elif t.kind == 'list' %}{{ basic.tile_list(t) }}
+  {% elif t.kind == 'agenda' %}{{ basic.tile_agenda(t) }}
   {% elif t.kind == 'leak' %}{{ basic.tile_leak(t) }}
   {% elif t.kind == 'valve' %}{{ basic.tile_valve(t) }}
   {#- Телевизор рисуется как обычный выключатель: значок, обводка по

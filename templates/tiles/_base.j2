@@ -175,6 +175,14 @@
   .onlight .lk, .onlight .lk-more { fill: #FFFFFF; }
   .onlight .lk-dry { stroke: rgba(255,255,255,.8); }
   .onlight .lk-wet { fill: #FFFFFF; }
+  .ag-txt    { fill: var(--ink); font-weight: 450; }
+  .ag-time   { fill: var(--ink); font-weight: 600; }
+  .ag-time.small { fill: var(--ink-dim); font-weight: 500; }
+  .ag-now    { fill: var(--active); }
+  .ag-past   { opacity: .42; }
+  .ag-sep    { fill: var(--ink-dim); font-weight: 600; }
+  .ag-empty  { fill: var(--ink-dim); }
+  .ag-date   { fill: var(--ink-dim); font-weight: 500; }
   .li        { fill: var(--ink); font-weight: 450; }
   .li-dot    { fill: var(--ink-dim); }
   .li-more   { fill: var(--ink-dim); font-weight: 450; }
@@ -257,6 +265,11 @@
     <path class="icon" d="M9.5 6.5h10M9.5 12h10M9.5 17.5h10"/>
     <path class="icon" d="M4 6.4l1.3 1.3 2.2-2.4M4 11.9l1.3 1.3 2.2-2.4"/>
     <circle class="icon" cx="5.4" cy="17.5" r="1.2"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-calendar" viewBox="0 0 24 24">
+    <rect class="icon" x="3.5" y="5" width="17" height="15.5" rx="3"/>
+    <path class="icon" d="M3.5 10h17M8 3v4M16 3v4"/>
+    <circle class="icon" cx="8.5" cy="14.5" r=".9"/>
   </symbol>
   <symbol id="{{ uid }}ic-cart" viewBox="0 0 24 24">
     <path class="icon" d="M3 4.5h2.4l2.3 10.2h10.1l2-7.2H6.4"/>

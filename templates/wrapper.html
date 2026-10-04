@@ -19,7 +19,10 @@
            -webkit-tap-highlight-color:transparent;
            font:15px -apple-system,'Segoe UI',Inter,system-ui,sans-serif}
  body{padding:10px;box-sizing:border-box;min-height:100vh}
- #host{color:#fff;margin:0 auto;max-width:1400px}
+ /* Сверху полоса под кнопки «← Панели» и колонки. Раньше они висели прямо
+    над шапкой панели и закрывали чипы справа - нажатие по чипу протечки
+    уходило в выбор колонок. */
+ #host{color:#fff;margin:0 auto;max-width:1400px;padding-top:44px}
  /* размер задаётся ШИРИНОЙ: высота подстроится по пропорции сама */
  #host svg{display:block;width:100%;height:auto}
  /* Длинное нажатие в мобильных браузерах выделяет текст и показывает
@@ -53,6 +56,9 @@
  #cols b{display:inline-block;padding:6px 9px;border-radius:9px;color:#fff;
          cursor:pointer;font-weight:600}
  #cols b.on{background:#E09B2D;color:#1B1B1F}
+ /* Свёрнутый выбор - одна кнопка с текущим значением: на прокрученной
+    панели под ней скрывается меньше. Раскрывается по нажатию. */
+ #cols b.cur{background:none;color:#fff;padding:6px 10px}
  #err{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
       background:#C4553B;color:#fff;padding:7px 14px;border-radius:9px;
       font-size:13px;display:none;z-index:30}
@@ -283,6 +289,25 @@
  #ov .lst .lnote{color:rgba(255,255,255,.4);font-size:12.5px;margin:10px 4px 0}
  /* Окна воды: та же карточка, что у списка. Строка датчика - имя, время и
     состояние; кнопка крана одна и крупная, чтобы не промахнуться мимо. */
+ /* Окно расписания: время слева узкой колонкой, название и место
+    правее. Идущее сейчас подсвечено, прошедшее бледное. */
+ #ov .lst.agw .lhead{margin-top:10px}
+ #ov .lst.agw .lhead:first-child{margin-top:2px}
+ #ov .lst .agrow{display:flex;align-items:flex-start;min-height:44px;
+          border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:10px 14px;
+          box-sizing:border-box}
+ #ov .lst .agrow i{flex:0 0 10px;height:10px;border-radius:50%;margin:6px 12px 0 0}
+ #ov .lst .agrow .agtime{flex:0 0 78px;color:#fff;font-size:15px;font-weight:600;
+          line-height:1.4}
+ #ov .lst .agrow .agend{font-size:12.5px;font-weight:500;color:rgba(255,255,255,.5)}
+ #ov .lst .agrow .agtxt{flex:1;min-width:0}
+ #ov .lst .agrow .agname{color:#fff;font-size:16px;line-height:1.35;word-wrap:break-word}
+ #ov .lst .agrow .agloc{color:rgba(255,255,255,.5);font-size:13px;margin-top:2px}
+ #ov .lst .agrow.past{opacity:.45}
+ #ov .lst .agrow.now{background:rgba(224,155,45,.22)}
+ #ov .lst .agrow.now .agtime{color:#E09B2D}
+ #ov .lst .agrow.day .agtime{font-size:13px;font-weight:500;color:rgba(255,255,255,.6)}
+ #ov .lst .agempty{color:rgba(255,255,255,.45);padding:10px 6px}
  #ov .lst .wrow > * + *{margin-left:10px}
  #ov .lst .wrow{display:flex;align-items:center;min-height:48px;
           border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:0 14px}
@@ -434,19 +459,35 @@ function fixBack(){
   }
 }
 
+/* Выбор колонок свёрнут в одну кнопку «3 ▾»: полный ряд из девяти
+   вариантов шириной в треть экрана закрывал шапку и чипы. Нажатие
+   раскрывает ряд, выбор или пять секунд без выбора - сворачивают. */
+var colsOpen = false, colsTimer = null;
 function drawCols(){
   fixBack();
   var box = document.getElementById('cols'), html = '';
-  var opts = ['', '2', '3', '4', '5', '6', '7', '8', '9'];
-  for (var i = 0; i < opts.length; i++) {
-    var v = opts[i];
-    html += '<b data-v="' + v + '"' + (v === COLS ? ' class="on"' : '') + '>'
-          + (v === '' ? 'авто' : v) + '</b>';
+  if (!colsOpen) {
+    html = '<b class="cur" data-open="1">' + (COLS === '' ? 'авто' : COLS)
+         + ' кол. ▾</b>';
+  } else {
+    var opts = ['', '2', '3', '4', '5', '6', '7', '8', '9'];
+    for (var i = 0; i < opts.length; i++) {
+      var v = opts[i];
+      html += '<b data-v="' + v + '"' + (v === COLS ? ' class="on"' : '') + '>'
+            + (v === '' ? 'авто' : v) + '</b>';
+    }
   }
   box.innerHTML = html;
   var btns = box.getElementsByTagName('b');
   for (var j = 0; j < btns.length; j++) {
     btns[j].onclick = function(){
+      clearTimeout(colsTimer);
+      if (this.getAttribute('data-open')) {
+        colsOpen = true; drawCols();
+        colsTimer = setTimeout(function(){ colsOpen = false; drawCols(); }, 5000);
+        return;
+      }
+      colsOpen = false;
       saveCols(this.getAttribute('data-v'));
       drawCols();
       refresh();
@@ -1442,6 +1483,8 @@ function bind(root){
         // нажатием. Оба открывают окно; перекрыть воду - кнопкой в нём.
         else if(this.getAttribute('data-pad') === 'leak') openPad(this);
         else if(this.getAttribute('data-pad') === 'valve') openPad(this);
+        // Расписание: смотреть, а не переключать - сразу окно.
+        else if(this.getAttribute('data-pad') === 'agenda') openPad(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -2200,6 +2243,62 @@ function padLeak(node){
   ovCleanup = function(){ clearInterval(timer); };
 }
 
+/* ---------- расписание ----------
+   Сегодня и завтра целиком. Данные - в атрибуте плитки, его обновляет
+   ждущий запрос; окно перерисовывается раз в 10 с, чтобы «сейчас»
+   переезжало на следующее событие без переоткрытия. Перерисовываем, только
+   если строки поменялись: иначе прокрутка длинного дня прыгала бы. */
+function padAgenda(node){
+  var box = el('div','lst agw');
+  var body = el('div');
+  box.appendChild(body);
+  var last = null;
+  function draw(){
+    node = freshTile(node);
+    var raw = node.getAttribute('data-agenda') || '';
+    if (raw === last) return;
+    last = raw;
+    body.innerHTML = '';
+    var any = false, cnt = 0;
+    raw.split(';').forEach(function(item){
+      if(!item) return;
+      var p = item.split('|');
+      if (p[0] === 'D') {
+        if (any && !cnt) body.appendChild(el('div','agempty','Ничего не запланировано'));
+        var h = el('div','lhead');
+        var label = p[1] || '';
+        h.appendChild(el('div','lttl', label.charAt(0).toUpperCase() + label.slice(1)));
+        body.appendChild(h);
+        any = true; cnt = 0;
+        return;
+      }
+      cnt += 1;
+      var st = p[5] || 'next';
+      var r = el('div', 'agrow ' + st);
+      var dot = el('i'); dot.style.background = p[3] || '#3B8FD4';
+      r.appendChild(dot);
+      // «14:00–15:00» в узкой колонке переносился посередине: начало
+      // крупно, конец мелко строкой ниже.
+      var span = (p[1] || '').split('–');
+      var tm = el('div','agtime', st === 'now' ? 'сейчас' : span[0]);
+      if (st === 'now') tm.appendChild(el('div','agend', p[1]));
+      else if (span[1]) tm.appendChild(el('div','agend', 'до ' + span[1]));
+      r.appendChild(tm);
+      var t = el('div','agtxt');
+      t.appendChild(el('div','agname', p[2]));
+      if (p[4]) t.appendChild(el('div','agloc', p[4]));
+      r.appendChild(t);
+      body.appendChild(r);
+    });
+    if (any && !cnt) body.appendChild(el('div','agempty','Ничего не запланировано'));
+    if (!any) body.appendChild(el('div','agempty','Календарь ещё не загружен'));
+  }
+  draw();
+  var timer = setInterval(draw, 10000);
+  openOv([box]);
+  ovCleanup = function(){ clearInterval(timer); };
+}
+
 function padValve(node){
   var box = el('div','lst');
   var head = el('div','lhead'), ttl = el('div','lttl', node.getAttribute('data-title') || 'Кран');
@@ -2260,6 +2359,7 @@ function openPad(node){
   else if(pad==='list') padList(node);
   else if(pad==='leak') padLeak(node);
   else if(pad==='valve') padValve(node);
+  else if(pad==='agenda') padAgenda(node);
 }
 
 /* ---------- обновление ---------- */

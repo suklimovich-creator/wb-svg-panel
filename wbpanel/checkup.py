@@ -47,6 +47,37 @@ def _check_lists(config):
                      "sh install.sh"}]
 
 
+def _check_calendars():
+    """Календари: ссылка, загрузка, развёртка повторов."""
+    from . import calendars as mod
+    cals = mod.calendars
+    out = []
+    defs = cals.defs()
+    for name, conf in defs.items():
+        row = {"level": ERROR, "panel": "Календари", "tile": name, "kind": "agenda"}
+        if not (conf.get("ical") or conf.get("url")):
+            out.append(dict(row, text="не задана ссылка ical",
+                            hint="Google: настройки календаря → Интеграция "
+                                 "календаря → Закрытый адрес в формате iCal"))
+            continue
+        st = cals.status(name)
+        if st["error"] and not st["ok"]:
+            out.append(dict(row, level=WARNING,
+                            text="не загружается: %s" % st["error"],
+                            hint="плитка покажет «нет связи с календарём»"))
+        elif st["error"]:
+            out.append(dict(row, level=WARNING,
+                            text="последняя загрузка не удалась: %s" % st["error"],
+                            hint="показывается то, что пришло раньше"))
+    if defs and mod.rrulestr is None:
+        out.append({"level": WARNING, "panel": "Календари", "tile": "повторы",
+                    "kind": "agenda",
+                    "text": "нет python3-dateutil: повторяющиеся события "
+                            "видны только в первый раз",
+                    "hint": "apt-get install python3-dateutil (или sh install.sh)"})
+    return out
+
+
 def check_config(config, state, history=None):
     """
     Пройти по всем панелям и собрать всё, что выглядит неправильно.
@@ -84,6 +115,7 @@ def check_config(config, state, history=None):
                                        known, logged, interactive))
 
     out.extend(_check_lists(config))
+    out.extend(_check_calendars())
 
     rank = {ERROR: 0, WARNING: 1}
     out.sort(key=lambda p: (rank.get(p["level"], 9), p["panel"]))

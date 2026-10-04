@@ -301,6 +301,14 @@ class History:
 
     # ---- обновление кэша (фоновый поток) ----
     def refresh(self, channel, span, points):
+        from . import stats
+        t0 = time.time()
+        try:
+            self._refresh(channel, span, points)
+        finally:
+            stats.took("history", time.time() - t0)
+
+    def _refresh(self, channel, span, points):
         if self.pick_mode() == "sqlite":
             series = self.sqlite.values(channel, span, points)
             if not series and self.sqlite.error:

@@ -911,6 +911,9 @@ Cloud второй пароль не спрашивается: облако уж
 <tr><td><code>/channels</code></td><td>Все каналы контроллера с фильтром</td></tr>
 <tr><td><code>/channels?format=text</code></td><td>То же для консоли</td></tr>
 <tr><td><code>/healthz</code></td><td>Состояние демона в JSON</td></tr>
+<tr><td><code>/stats</code></td><td>Счётчики нагрузки в JSON: отрисовки, ответы, запросы к истории,
+    процессор по потокам. Читать глазами неудобно — для этого
+    <code>python3 tools/watch-load.py</code></td></tr>
 <tr><td><code>/api/publish</code></td><td>POST <code>{"topic":…,"value":…}</code>
   — публикация в MQTT, только разрешённые топики</td></tr>
 <tr><td><code>/&lt;имя&gt;.svg?flat=0</code></td><td>Картинка с CSS-переменными

@@ -187,9 +187,12 @@ class Camera(object):
         if frame and self.cache and now - frame[0] < self.cache:
             return frame[1], frame[2]
 
+        from . import stats
+        t0 = time.time()
         resp = self.open(self.snapshot_path)
         try:
             data = resp.read()
+            stats.took("camera", time.time() - t0)
             ctype = resp.headers.get("Content-Type") or "image/jpeg"
         finally:
             resp.close()

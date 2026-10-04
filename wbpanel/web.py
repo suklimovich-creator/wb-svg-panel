@@ -21,6 +21,7 @@ from .history import History
 from .geometry import cells, parse_duration, text_width
 from .status import status_channels, status_entries
 from . import assemble
+from . import stats
 from .registry import channels_of, writable_of
 from .assemble import (build_tile, cmd_attrs, prepare,
                        resolve_sections, xml_escape)
@@ -315,6 +316,7 @@ def api_publish():
 
     mqtt_client.publish(topic, value)
     log.info("публикация %s = %s", topic, value)
+    stats.inc("publish")
     return Response('{"ok":true}', mimetype="application/json")
 
 
@@ -575,7 +577,8 @@ def cached_panel(name, cols):
         # Версию берём ДО отрисовки: то, что поменяется во время неё,
         # страница увидит в следующем ответе, а не потеряет.
         ver = state.version
-        svg = render_panel(name, cols=cols)
+        with stats.timer("render"):
+            svg = render_panel(name, cols=cols)
         if flat:
             panel_conf = config.panels.get(name) or {}
             svg = resolve_css_vars(
@@ -727,26 +730,35 @@ def panel_svg(name):
             headers = dict(base_headers)
             headers.update({"X-Panel-Version": str(since),
                             "Cache-Control": "no-store"})
+            stats.inc("http.204")
             return Response(status=204, headers=headers)
+        stats.inc("http.waiting")
         try:
-            wait_for_panel(name, since, _refresh_every())
+            with stats.timer("http.waited"):
+                wait_for_panel(name, since, _refresh_every())
         finally:
             sem.release()
+            stats.inc("http.waiting", -1)
 
     svg, version = cached_panel(name, cols)
     headers = dict(base_headers)
     headers["X-Panel-Version"] = str(version)
     if since is not None:
         headers["Cache-Control"] = "no-store"
+        stats.inc("http.svg")
+        stats.inc("http.bytes", len(svg))
         return Response(svg, mimetype="image/svg+xml", headers=headers)
 
     # v3 в ключе: после смены формата страницы старые записи в кэше браузера
     # не должны совпадать с новыми
     etag = '"v3-%s-%s-%d-%d"' % (name, cols or "d", version, hash(svg) & 0xffffffff)
     if request.headers.get("If-None-Match") == etag:
+        stats.inc("http.304")
         return Response(status=304, headers={"ETag": etag})
     headers.update({"ETag": etag,
                     "Cache-Control": "no-cache, must-revalidate"})
+    stats.inc("http.svg")
+    stats.inc("http.bytes", len(svg))
     return Response(svg, mimetype="image/svg+xml", headers=headers)
 
 
@@ -1085,6 +1097,21 @@ def check_page():
     return Response(page, mimetype="text/html; charset=utf-8")
 
 
+@app.route("/stats")
+def stats_page():
+    """
+    Счётчики демона для tools/watch-load.py: сколько отрисовок, ответов,
+    запросов к истории и сколько процессора съел каждый поток. Значения
+    накопительные с запуска - смотреть надо разницу между двумя чтениями.
+    """
+    body = stats.snapshot()
+    body["version"] = state.version
+    body["channels"] = len(state.values)
+    return Response(json.dumps(body, ensure_ascii=False),
+                    mimetype="application/json",
+                    headers={"Cache-Control": "no-store"})
+
+
 @app.route("/healthz")
 def healthz():
     with state.lock:
@@ -1193,6 +1220,7 @@ def main():
             pass
         else:
             state.on_message(msg.topic, payload)
+        stats.inc("mqtt")
 
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
@@ -1201,6 +1229,9 @@ def main():
     client.connect_async(mqtt_conf.get("host", "localhost"),
                          int(mqtt_conf.get("port", 1883)), 60)
     client.loop_start()
+    # Поток paho безымянный (Thread-N): назовём, чтобы /stats говорил «mqtt».
+    if getattr(client, "_thread", None) is not None:
+        client._thread.name = "mqtt"
 
     stop = threading.Event()
     threading.Thread(target=history.prefetch_loop, args=(config, stop),

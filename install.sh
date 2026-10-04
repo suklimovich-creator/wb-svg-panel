@@ -150,10 +150,27 @@ systemctl reload nginx
 
 echo
 echo "==> проверка"
-sleep 2
+# Демон на WB7 поднимается секунд пять: импорты, конфиг, подписки. Раньше
+# здесь ждали две секунды и пугали «Connection refused», хотя через миг он
+# уже отвечал. Ждём до 30 с и говорим, сколько понадобилось.
+UP=0
+i=0
+while [ "$i" -lt 30 ]; do
+    if curl -fsS --max-time 2 localhost:8088/healthz >/dev/null 2>&1; then
+        UP=1
+        break
+    fi
+    i=$((i + 1))
+    sleep 1
+done
 systemctl --no-pager --lines=0 status wb-svg-panel || true
 echo
-curl -fsS localhost:8088/healthz && echo
+if [ "$UP" = "1" ]; then
+    echo "    демон отвечает (через ${i} с)"
+    curl -fsS localhost:8088/healthz && echo
+else
+    echo "    демон не ответил за 30 с — смотрите:  journalctl -u wb-svg-panel -n 50 --no-pager"
+fi
 echo
 echo "Проверка, что /panel/ отдаёт именно панель, а не веб-интерфейс:"
 BODY=$(curl -s --max-time 5 http://127.0.0.1/panel/healthz)

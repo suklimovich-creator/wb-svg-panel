@@ -415,9 +415,14 @@ class Calendars(object):
         changed = False
         now = time.time()
         for name, conf in self.defs().items():
+            url = str(conf.get("ical") or conf.get("url") or "")
             with self.lock:
                 d = self.data.setdefault(name, {"seq": 0, "next": 0})
-                due = force or now >= d.get("next", 0)
+                # Ссылку в конфиге поправили - забираем сразу, не дожидаясь
+                # срока: после ошибки следующая попытка была бы только через
+                # пять минут.
+                due = force or now >= d.get("next", 0) or d.get("url") != url
+                d["url"] = url
             if not due:
                 continue
             every = parse_duration(conf.get("refresh", DEFAULT_REFRESH)) or 900
@@ -441,6 +446,10 @@ class Calendars(object):
             except Exception as exc:                # noqa: BLE001
                 # Ссылку в журнал не пишем: это доступ к расписанию.
                 msg = str(exc).split("\n")[0][:200]
+                if "404" in msg:
+                    # Чаще всего - общедоступный адрес у закрытого
+                    # календаря. Нужен «Закрытый адрес в формате iCal».
+                    msg += " - нужен «Закрытый адрес в формате iCal» (…/private-…/basic.ics)"
                 with self.lock:
                     first = d.get("error") != msg
                     d.update({"error": msg, "next": now + min(every, 300)})

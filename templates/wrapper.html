@@ -239,10 +239,14 @@
  #ov .lst{width:520px;max-width:94vw;box-sizing:border-box;text-align:left;
           margin:40px auto 7px;background:#1C1C20;border-radius:22px;
           padding:16px 12px 14px}
- #ov .lst .lhead{display:flex;align-items:baseline;gap:10px;margin:2px 6px 12px}
+ /* Промежутки - отступами, а не gap: gap во флексе браузеры знают только
+    с 2020 года (Chrome 84), на старом планшете элементы слипались. */
+ #ov .lst .lhead{display:flex;align-items:baseline;margin:2px 6px 12px}
+ #ov .lst .lhead > * + *{margin-left:10px}
  #ov .lst .lttl{color:#fff;font-size:20px;font-weight:600}
  #ov .lst .lcnt{color:rgba(255,255,255,.5);font-size:15px}
- #ov .lst .ladd{display:flex;gap:8px;margin-bottom:12px}
+ #ov .lst .ladd{display:flex;margin-bottom:12px}
+ #ov .lst .ladd > * + *{margin-left:8px}
  #ov .lst input{flex:1;min-width:0;font:16px -apple-system,'Segoe UI',Inter,system-ui,sans-serif;
           padding:12px 14px;border-radius:14px;border:1.5px solid rgba(255,255,255,.18);
           background:rgba(255,255,255,.07);color:#fff;outline:none;
@@ -251,7 +255,8 @@
  #ov .lst .lgo{flex:0 0 auto;padding:0 18px;border-radius:14px;background:#E09B2D;
           color:#1B1B1F;font-weight:600;font-size:15px;display:flex;align-items:center;
           cursor:pointer;touch-action:manipulation}
- #ov .lst .lrow{display:flex;align-items:center;gap:6px;min-height:52px;
+ #ov .lst .lrow > * + *{margin-left:6px}
+ #ov .lst .lrow{display:flex;align-items:center;min-height:52px;
           border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:0 4px}
  #ov .lst .lchk{flex:0 0 44px;height:44px;display:flex;align-items:center;
           justify-content:center;cursor:pointer;touch-action:manipulation}
@@ -259,7 +264,7 @@
           border:2px solid rgba(255,255,255,.45);display:block}
  #ov .lst .done .lchk i{background:#E09B2D;border-color:#E09B2D}
  #ov .lst .ltxt{flex:1;min-width:0;color:#fff;font-size:16px;line-height:1.3;
-          padding:8px 2px;overflow-wrap:anywhere;cursor:text}
+          padding:8px 2px;word-wrap:break-word;overflow-wrap:anywhere;cursor:text}
  #ov .lst .done .ltxt{color:rgba(255,255,255,.45);text-decoration:line-through}
  #ov .lst .lbtn{flex:0 0 40px;height:44px;display:flex;align-items:center;
           justify-content:center;color:rgba(255,255,255,.55);font-size:17px;
@@ -268,8 +273,8 @@
  #ov .lst .lbtn.off{opacity:.2;pointer-events:none}
  #ov .lst .lbtn.ask{flex-basis:auto;padding:0 10px;color:#FFD8CE;
           background:rgba(196,85,59,.35);font-size:14px;font-weight:600}
- #ov .lst .lfoot{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
- #ov .lst .lfoot span{padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;
+ #ov .lst .lfoot{display:flex;flex-wrap:wrap;margin-top:14px}
+ #ov .lst .lfoot span{margin:0 8px 8px 0;padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;
           border:2px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);cursor:pointer}
  #ov .lst .lempty{color:rgba(255,255,255,.45);text-align:center;padding:18px 0}
  #ov .lst .lwarn{background:#C4553B;color:#fff;border-radius:12px;padding:10px 12px;
@@ -278,7 +283,8 @@
  #ov .lst .lnote{color:rgba(255,255,255,.4);font-size:12.5px;margin:10px 4px 0}
  /* Окна воды: та же карточка, что у списка. Строка датчика - имя, время и
     состояние; кнопка крана одна и крупная, чтобы не промахнуться мимо. */
- #ov .lst .wrow{display:flex;align-items:center;gap:10px;min-height:48px;
+ #ov .lst .wrow > * + *{margin-left:10px}
+ #ov .lst .wrow{display:flex;align-items:center;min-height:48px;
           border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:0 14px}
  #ov .lst .wrow .wname{flex:1;color:#fff;font-size:16px}
  #ov .lst .wrow .wwhen{color:rgba(255,255,255,.45);font-size:13px}
@@ -477,6 +483,29 @@ var lastScroll = 0, lastDown = 0, shieldUntil = 0, fingerDown = false;
 document.addEventListener('scroll', function(){ lastScroll = Date.now(); },
                           {capture:true, passive:true});
 
+/* Старые браузеры без PointerEvent (Android WebView до Chrome 55). Там
+   плитки слушают и касания, и мышь, а браузер после каждого касания
+   досылает «мышиные» mousedown/mouseup в ту же точку. Нажатие
+   отрабатывало дважды: выключатель щёлкал туда и обратно, окно
+   протечки или списка открывалось и тут же закрывалось - запоздалый
+   mousedown приходился уже на фон окна. Мышиные события сразу после
+   касания глушим здесь, на перехвате, раньше всех остальных
+   обработчиков. click не трогаем: на нём живут кнопки окон. */
+if (!window.PointerEvent) {
+  var lastTouchAt = 0;
+  ['touchstart', 'touchend', 'touchcancel'].forEach(function(n){
+    document.addEventListener(n, function(){ lastTouchAt = Date.now(); }, true);
+  });
+  ['mousedown', 'mouseup', 'mousemove'].forEach(function(n){
+    document.addEventListener(n, function(e){
+      if (Date.now() - lastTouchAt < 800) {
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        e.stopPropagation();
+      }
+    }, true);
+  });
+}
+
 /* Можно ли считать касание, начатое в t0, нажатием. */
 function tapOk(t0){
   t0 = t0 || lastDown || Date.now();
@@ -565,6 +594,8 @@ function openOv(nodes){
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
   nodes.forEach(function(n){ ov.appendChild(n); });
   ov.classList.add('open'); paused=true;
+  // Фон окна закрывает только касание, начатое на нём уже после открытия.
+  ovDownBg = false;
   // Нажатие по плитке, которое открыло окно, своё отработало: его таймер
   // долгого нажатия не должен сработать уже поверх окна.
   if(press){ clearTimeout(press.timer); press = null; }

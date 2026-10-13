@@ -49,8 +49,8 @@
 {% set use_shadows = shadows and theme in ('light', 'autumn', 'retro', 'noir') %}
 {#- Сила теней: у светлой - чуть-чуть, у неё есть контур; у остальных
     контура почти нет, тень и отделяет плитку от фона. -#}
-{% set sh_amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.14}.get(theme, 0) %}
-{% set sh_key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.08}.get(theme, 0) %}
+{% set sh_amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.24}.get(theme, 0) %}
+{% set sh_key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.14}.get(theme, 0) %}
 {% if use_shadows %}
   <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="0" y="0"
           width="{{ width }}" height="{{ height + 40 }}">

@@ -59,6 +59,8 @@
     --inv-stroke:  var(--stroke);
     --inv-accent:  var(--active);
     --chip-on-ink: var(--ink);
+    --section:     var(--tile);
+    --section-op:  .35;
   }
   /* ---- тёмная тема ------------------------------------------------------ */
   .dark {
@@ -82,6 +84,8 @@
        включённой. У графита свои, построже. */
     --sheen:       rgba(255,255,255,.065);
     --sheen-on:    rgba(255,174,40,.30);
+    --section:     #2C2C31;
+    --section-op:  .8;
   }
 
   /* ---- графит: тёмная тема построже -------------------------------------
@@ -107,6 +111,8 @@
     --fabric:      #6E6A60;
     --sheen:       rgba(255,255,255,.075);
     --sheen-on:    rgba(242,162,58,.34);
+    --section:     #232427;
+    --section-op:  1;
   }
   .sheen     { pointer-events: none; }
 
@@ -143,6 +149,8 @@
     --inv-dim:     rgba(255,244,228,.80);
     --inv-stroke:  #F3D59B;
     --inv-accent:  #F2B54E;
+    --section:     #FFFFFF;
+    --section-op:  .75;
   }
 
   /* ---- ретро: кремовая бумага, тёмно-синий, терракота, шалфей --------- */
@@ -170,6 +178,8 @@
     --inv-dim:     rgba(246,238,223,.72);
     --inv-stroke:  #F6EEDF;
     --inv-accent:  #E8894E;
+    --section:     #FBF6EC;
+    --section-op:  .9;
   }
 
   /* ---- нуар: тёплый серо-бежевый, графит, сепия --------------------- */
@@ -185,8 +195,8 @@
     --active-soft-edge: rgba(42,38,35,.6);
     --active-ink:       #F2EDE4;
     --ink:         #1E1C1A;
-    --ink-dim:     #7A7268;
-    --ink-faint:   rgba(30,28,26,.32);
+    --ink-dim:     #6A635A;
+    --ink-faint:   rgba(30,28,26,.50);
     --stroke:      #34302C;
     --window:      #C9C2B7;
     --fabric:      #EEE8DE;
@@ -198,6 +208,8 @@
     --inv-stroke:  #E9E1D4;
     --inv-accent:  #CDB898;
     --chip-on-ink: #F2EDE4;
+    --section:     #D8CFC1;
+    --section-op:  1;
   }
 
   /* ---- тёмная карточка (inv) ----------------------------------------
@@ -232,7 +244,9 @@
   .h1-sub { font-size: calc(13px * var(--fs)); font-weight: 500; fill: var(--ink-faint); }
   .h2     { font-size: calc(18px * var(--fs)); font-weight: 650; letter-spacing: -.3px; fill: var(--ink); }
   /* подложка заголовка раздела: подсказывает, что по строке можно нажать */
-  .section-plate { fill: var(--tile); opacity: .35; }
+  /* Полоса раздела (заголовок в гармошке). Цвет и плотность - из темы:
+     при общей прозрачности .35 в нуаре и графите полоса сливалась с фоном. */
+  .section-plate { fill: var(--section); opacity: var(--section-op); }
   /* стрелка у заголовка раздела: вниз - раскрыт, вправо - свёрнут */
   .fold-arrow { fill: none; stroke: var(--ink-dim);
                 stroke-width: calc(2px * var(--fs));

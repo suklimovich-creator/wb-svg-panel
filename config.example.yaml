@@ -7,7 +7,14 @@
 #
 # Конфиг перечитывается сам, как только меняется файл: правите — жмёте F5.
 
-theme: light           # light | dark
+theme: light           # light | autumn | retro | noir | dark | graphite | auto
+# theme: auto - днём одна тема, ночью другая:
+# theme_auto:
+#   day: autumn
+#   night: graphite
+#   day_from: sunrise-30m        # или "07:00"
+#   night_from: sunset+30m       # или "21:00"
+#   location: {lat: 55.75, lon: 37.62}
 
 # Нажатия на плитки. По умолчанию выключены — панель только показывает.
 # При interactive: true страница <имя>.html вешает обработчик на плитки
@@ -103,7 +110,9 @@ panels:
             color: "#3B93C4"
             digits: 0
 
-      # Пороги перекрашивают кривую, когда значение выше заданного.
+      # Пороги перекрашивают кривую, когда значение выше заданного, и
+      # рисуются полосами зон за ней; у числа - слово зоны («душно»).
+      # Для CO2 и VOC датчика WB-MSW зоны есть и без thresholds.
       - type: chart
         title: "Воздух"
         icon: co2
@@ -206,6 +215,10 @@ panels:
     title: "Гостиная"
     hidden: true
     cols: 4
+    # Чипы в шапке. air - появляется, только когда воздух вышел из нормы:
+    # оранжевый «душно», красный «проветрить»; нажатие - график с зонами.
+    status:
+      - air: "wb-msw-v4_11/CO2"
     tiles:
 
       # --- лента с яркостью и цветовой температурой -------------------------
@@ -296,5 +309,5 @@ panels:
         title: "Кухня"
 
 # Доступные иконки:
-#   blind bulb co2 curtain door drop fan heat leaf moon motion next power
-#   snow socket strip sun swing tap thermo tv wind window
+#   blind bulb cloud co2 curtain door drop fan heat leaf moon motion next
+#   power snow socket strip sun swing tap thermo tv voc wind window

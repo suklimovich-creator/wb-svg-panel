@@ -78,6 +78,26 @@ def _check_calendars():
     return out
 
 
+def _check_themes(config):
+    """Имена тем у панелей и расписание theme_auto."""
+    from .const import THEMES
+    from . import themes
+    out = []
+    row = {"level": WARNING, "panel": "Оформление", "kind": "theme"}
+    places = [("theme", config.get("theme"))] + [
+        ("панель %s" % n, (p or {}).get("theme")) for n, p in (config.panels or {}).items()]
+    for where, name in places:
+        if name and name != "auto" and name not in THEMES:
+            out.append(dict(row, tile=where,
+                            text="темы %r нет" % name,
+                            hint="есть: auto, " + ", ".join(THEMES)))
+    uses_auto = any(name == "auto" for _w, name in places)
+    if uses_auto or config.get("theme_auto"):
+        for text in themes.problems(config):
+            out.append(dict(row, tile="theme_auto", text=text, hint=None))
+    return out
+
+
 def check_config(config, state, history=None):
     """
     Пройти по всем панелям и собрать всё, что выглядит неправильно.
@@ -116,6 +136,7 @@ def check_config(config, state, history=None):
 
     out.extend(_check_lists(config))
     out.extend(_check_calendars())
+    out.extend(_check_themes(config))
 
     rank = {ERROR: 0, WARNING: 1}
     out.sort(key=lambda p: (rank.get(p["level"], 9), p["panel"]))

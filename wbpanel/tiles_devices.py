@@ -357,8 +357,13 @@ class Thermostat(Tile):
 
         # Знак градуса не должен участвовать в центрировании, иначе число
         # визуально уезжает влево. Считаем ширину числа и ставим «°» за ним.
-        target_num = (_fmt(target, int(ctx.opt("digits", 0)))
-                      if target is not None else "--")
+        # Разрядность - из шага уставки, как у кнопок и пульта: при шаге
+        # 0.1 уставка 22.5 на плитке была «22», а в пульте «22.5». Поле
+        # digits по-прежнему сильнее.
+        digits = ctx.opt("digits")
+        if digits is None:
+            digits = self._scale(ctx, None)[3]
+        target_num = (_fmt(target, int(digits)) if target is not None else "--")
         # Кегль растёт вместе с плиткой, значит и смещение знака тоже.
         big = 30.0 * float(ctx.opt("fs", 1.0))
         deg_dx = text_width(target_num, big) / 2.0 + 1.0 * float(ctx.opt("fs", 1.0))

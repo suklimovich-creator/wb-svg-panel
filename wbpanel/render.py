@@ -4,7 +4,7 @@
 """
 
 import re
-from .const import log
+from .const import DARK_THEMES, log
 
 
 # ==========================================================================
@@ -82,8 +82,12 @@ def resolve_css_vars(svg, theme="light", fs=1.0):
             break
 
     values = _css_vars(style, "svg")
-    if theme == "dark":
+    # Тёмные темы (graphite) - палитра .dark и свои поправки поверх;
+    # светлые (autumn, retro, noir) - поправки поверх общей светлой.
+    if theme in DARK_THEMES:
         values.update(_css_vars(style, ".dark"))
+    if theme not in ("light", "dark"):
+        values.update(_css_vars(style, "." + str(theme)))
     values["--fs"] = str(fs)
 
     def replace(match):

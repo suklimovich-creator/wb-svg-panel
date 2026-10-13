@@ -32,8 +32,8 @@
   .dial.live .fill { stroke: var(--active); opacity: .95; }
   /* Уставка ниже фактической - прибору предстоит охлаждать. Тёплый цвет
      тут сбивает: одинаковая дуга не должна означать разные вещи. */
-  .dial.cool .fill { stroke: #3B8FD4; }
-  .dial.cool .mark.target { stroke: #3B8FD4; }
+  .dial.cool .fill { stroke: var(--cool); }
+  .dial.cool .mark.target { stroke: var(--cool); }
   .dial .mark  { stroke: var(--ink); stroke-width: calc(2.4px * var(--fs)); stroke-linecap: round;
                  opacity: .70; }
   .dial .mark-dot { fill: var(--ink); opacity: .70; }

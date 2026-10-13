@@ -368,6 +368,39 @@ function readCols(){
 }
 var COLS = readCols();
 
+/* Тема - тоже выбор устройства: на стене в коридоре тёмная, на телефоне
+   светлая. Пусто - как в конфиге. Уезжает на сервер параметром theme,
+   ему же отдаётся картинка раскрытой плитки и графика. */
+var THEME_STORE = 'wb-panel-theme';
+var THEMES = [['', 'как в конфиге'], ['light', 'светлая'], ['autumn', 'осень'],
+              ['retro', 'ретро'], ['noir', 'нуар'], ['dark', 'тёмная'],
+              ['graphite', 'графит']];
+var THEME = (function(){
+  var m = location.search.match(/[?&]theme=([\w-]+)/);
+  if (m) return m[1];
+  try { return localStorage.getItem(THEME_STORE) || ''; } catch(e) { return ''; }
+})();
+function saveTheme(v){
+  THEME = v;
+  try { v ? localStorage.setItem(THEME_STORE, v) : localStorage.removeItem(THEME_STORE); } catch(e) {}
+}
+function themeQ(){ return THEME ? '&theme=' + THEME : ''; }
+/* Поля страницы вокруг панели - в цвет низа её фона: у светлых тем
+   чёрная рамка вокруг выглядела чужой. Тему узнаём по классу корня. */
+var PAGE_BG = {light: '#E6E6E9', autumn: '#D8D3CA', retro: '#E7DBC6',
+               noir: '#E5E1DA', dark: '#101012', graphite: '#0B0C0D'};
+var pageBgNow = '';
+function pageBg(root){
+  root = root || host.querySelector('svg');
+  var cls = (root && root.getAttribute && root.getAttribute('class')) || '';
+  var name = cls.indexOf('graphite') >= 0 ? 'graphite' : cls.split(' ')[0];
+  var bg = PAGE_BG[name];
+  if (!bg || bg === pageBgNow) return;
+  pageBgNow = bg;
+  document.documentElement.style.background = bg;
+  document.body.style.background = bg;
+}
+
 /* Кнопка «назад». Если пришли с другой панели по плитке-ссылке, вернуться
    логичнее туда, а не в общий список: человек проваливался в комнату,
    а не начинал обход заново. Имя панели передаётся параметром from.
@@ -438,6 +471,7 @@ function toggleSection(node){
 function Q(){
   var parts = [];
   if (COLS) parts.push('cols=' + COLS);
+  if (THEME) parts.push('theme=' + THEME);
   if (ACCORDION) {
     if (OPENED) parts.push('open=' + encodeURIComponent(OPENED));
   } else if (FOLDED.length) {
@@ -462,19 +496,29 @@ function fixBack(){
 /* Выбор колонок свёрнут в одну кнопку «3 ▾»: полный ряд из девяти
    вариантов шириной в треть экрана закрывал шапку и чипы. Нажатие
    раскрывает ряд, выбор или пять секунд без выбора - сворачивают. */
-var colsOpen = false, colsTimer = null;
+var colsOpen = '', colsTimer = null;   // '' - свёрнуто, 'cols' или 'theme'
+function themeName(v){
+  for (var i = 0; i < THEMES.length; i++) if (THEMES[i][0] === v) return THEMES[i][1];
+  return v;
+}
 function drawCols(){
   fixBack();
   var box = document.getElementById('cols'), html = '';
   if (!colsOpen) {
-    html = '<b class="cur" data-open="1">' + (COLS === '' ? 'авто' : COLS)
-         + ' кол. ▾</b>';
-  } else {
+    html = '<b class="cur" data-open="cols">' + (COLS === '' ? 'авто' : COLS)
+         + ' кол. ▾</b><b class="cur" data-open="theme">'
+         + (THEME ? themeName(THEME) : 'тема') + ' ▾</b>';
+  } else if (colsOpen === 'cols') {
     var opts = ['', '2', '3', '4', '5', '6', '7', '8', '9'];
     for (var i = 0; i < opts.length; i++) {
       var v = opts[i];
       html += '<b data-v="' + v + '"' + (v === COLS ? ' class="on"' : '') + '>'
             + (v === '' ? 'авто' : v) + '</b>';
+    }
+  } else {
+    for (var k = 0; k < THEMES.length; k++) {
+      html += '<b data-t="' + THEMES[k][0] + '"' + (THEMES[k][0] === THEME ? ' class="on"' : '')
+            + '>' + THEMES[k][1] + '</b>';
     }
   }
   box.innerHTML = html;
@@ -482,13 +526,15 @@ function drawCols(){
   for (var j = 0; j < btns.length; j++) {
     btns[j].onclick = function(){
       clearTimeout(colsTimer);
-      if (this.getAttribute('data-open')) {
-        colsOpen = true; drawCols();
-        colsTimer = setTimeout(function(){ colsOpen = false; drawCols(); }, 5000);
+      var open = this.getAttribute('data-open');
+      if (open) {
+        colsOpen = open; drawCols();
+        colsTimer = setTimeout(function(){ colsOpen = ''; drawCols(); }, 5000);
         return;
       }
-      colsOpen = false;
-      saveCols(this.getAttribute('data-v'));
+      colsOpen = '';
+      if (this.hasAttribute('data-t')) saveTheme(this.getAttribute('data-t'));
+      else saveCols(this.getAttribute('data-v'));
       drawCols();
       refresh();
       restartPoll();
@@ -768,7 +814,7 @@ function chartOv(node){
     return 'chart.svg?channel=' + encodeURIComponent(channel) +
            '&range=' + range + '&w=' + w + '&h=' + h +
            '&unit=' + encodeURIComponent(unit) +
-           '&title=' + encodeURIComponent(title) + '&t=' + Date.now();
+           '&title=' + encodeURIComponent(title) + themeQ() + '&t=' + Date.now();
   }
   function load(){
     fetch(url(), {cache:'no-store'})
@@ -805,7 +851,7 @@ function expand(node){
   // пустые поля по бокам вдобавок к рамке карточки.
   var w = Math.min(Math.max(window.innerWidth - 40, 280), 1600);
   var h = Math.min(Math.round(window.innerHeight * 0.62), 900);
-  var url = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h;
+  var url = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h + themeQ();
   var card = el('div','card wide');
   card.textContent = '…';
   var hint = el('div','hint','Нажмите вне карточки, чтобы закрыть');
@@ -1139,7 +1185,7 @@ function padCurtain(node, axis){
   var i = node.getAttribute('data-i');
   var w = Math.min(Math.round(window.innerWidth * 0.90), 1400);
   var h = Math.min(Math.round(window.innerHeight * 0.62), 900);
-  var url = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h;
+  var url = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h + themeQ();
 
   var card = el('div','card'); card.textContent = '…';
   var wrap = el('div'); wrap.id = 'crtwrap';
@@ -2494,6 +2540,7 @@ function applySvg(svg, seq){
   shownSeq = seq; pendingSvg = null;
   var root = parseSvg(svg);
   if (!patch(root)) full(svg, root);
+  pageBg(root);
   host.classList.remove('wait');
   err.style.display = 'none';
 }

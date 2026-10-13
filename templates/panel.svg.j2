@@ -17,7 +17,7 @@
   лежит рядом с panel.py, после разделения больше не работает.
 -#}
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     class="{{ theme }}" style="--fs:{{ fs | default(1) }}" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}"
+     class="{{ 'dark graphite' if theme == 'graphite' else theme }}" style="--fs:{{ fs | default(1) }}" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}"
      font-family="-apple-system, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif">
 
 {#- Плитки живут в templates/tiles/. Импорт с контекстом: макросам нужны
@@ -42,11 +42,31 @@
 <defs>
 {{ base.defs() }}
 
+{#- Тени для светлых тем (light, autumn, retro, noir): два размытия на всю панель - чёткое
+    у края и широкое мягкое. Именно на панель, а не на плитку: двадцать
+    фильтров старый планшет тянет плохо, два - терпимо. shadows: false в
+    конфиге выключает. -#}
+{% set use_shadows = shadows and theme in ('light', 'autumn', 'retro', 'noir') %}
+{#- Сила теней: у светлой - чуть-чуть, у неё есть контур; у остальных
+    контура почти нет, тень и отделяет плитку от фона. -#}
+{% set sh_amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.14}.get(theme, 0) %}
+{% set sh_key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.08}.get(theme, 0) %}
+{% if use_shadows %}
+  <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="0" y="0"
+          width="{{ width }}" height="{{ height + 40 }}">
+    <feGaussianBlur stdDeviation="1.4"/>
+  </filter>
+  <filter id="{{ uid }}sh-amb" filterUnits="userSpaceOnUse" x="0" y="0"
+          width="{{ width }}" height="{{ height + 40 }}">
+    <feGaussianBlur stdDeviation="10"/>
+  </filter>
+{% endif %}
 {% for t in tiles %}
-  {#- обрезаем ЧУТЬ внутрь контура: рамка рисуется поверх и раньше
-      съедала первую и последнюю точку графика -#}
+  {#- Обрезка - ровно по средней линии рамки, и рамка рисуется поверх:
+      заливка уходит под неё без зазора. Раньше обрезали на точку внутрь,
+      и между заливкой и рамкой светилась полоска подложки. -#}
   <clipPath id="{{ uid }}clip{{ t.i }}">
-    <rect x="2" y="2" width="{{ t.w - 4 }}" height="{{ t.h - 4 }}" rx="{{ rx - 1 }}"/>
+    <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
   </clipPath>
 {% endfor %}
 </defs>
@@ -110,8 +130,26 @@
 </g>
 {% endfor %}
 
+{#- Слой теней - под всеми плитками разом. Ширина размытой тени чуть
+    меньше плитки: тень выглядывает снизу, а не обводит со всех сторон. -#}
+{% if use_shadows %}
+{% set plated = tiles | rejectattr('kind', 'equalto', 'header') | list %}
+<g class="shadows" style="fill:var(--shadow)">
+  <g filter="url(#{{ uid }}sh-amb)" opacity="{{ sh_amb }}">
+  {% for t in plated %}
+    <rect x="{{ t.x + 8 }}" y="{{ t.y + 10 }}" width="{{ t.w - 16 }}" height="{{ t.h - 6 }}" rx="{{ rx }}"/>
+  {% endfor %}
+  </g>
+  <g filter="url(#{{ uid }}sh-key)" opacity="{{ sh_key }}">
+  {% for t in plated %}
+    <rect x="{{ t.x + 1 }}" y="{{ t.y + 2.5 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
+  {% endfor %}
+  </g>
+</g>
+{% endif %}
+
 {% for t in tiles %}
-<g transform="translate({{ t.x }},{{ t.y }})" class="{{ 'offline' if t.offline }}"{{ t.attrs|safe }}>
+<g transform="translate({{ t.x }},{{ t.y }})" class="{{ 'offline' if t.offline }}{{ ' tile-on' if t.on }}{{ ' inv' if t.inv }}"{{ t.attrs|safe }}>
   {% if   t.kind == 'chart'   %}{{ chart.tile_chart(t) }}
   {% elif t.kind == 'switch'  %}{{ basic.tile_switch(t) }}
   {% elif t.kind == 'curtain' %}{{ devices.tile_curtain(t) }}

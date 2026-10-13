@@ -18,6 +18,11 @@
     <line x1="{{ tk.x }}" y1="0" x2="{{ tk.x }}" y2="{{ t.h }}"
           class="tick{{ ' major' if tk.major }}"/>
     {% endfor %}
+    {#- Зоны: бледные полосы за линией - норма, душно, проветрить. -#}
+    {% for b in t.bands or [] %}
+    <rect x="0" y="{{ b.y }}" width="{{ t.w }}" height="{{ b.h }}"
+          fill="{{ b.color }}" class="zone"/>
+    {% endfor %}
     {% for hl in t.hlines %}
     <line x1="0" y1="{{ hl.y }}" x2="{{ t.w }}" y2="{{ hl.y }}"
           class="hline{{ ' edge' if hl.edge }}"/>
@@ -69,9 +74,23 @@
       презентационного атрибута, и .badge с его fill: var(--ink) молча
       перекрашивал первую строку в чёрное. У .badge2 объявления fill нет,
       оттого вторая строка красилась, а первая нет. -#}
-  <text x="{{ t.w - 20 }}" y="{{ 41 + loop.index0 * 23 }}" text-anchor="end"
+  <text x="{{ t.w - 20 }}" y="{{ s.badge_y }}" text-anchor="end"
         class="{{ 'badge' if loop.first else 'badge2' }}"
-        style="fill:{{ s.text_color }}">{{ s.value }} {{ s.unit }}</text>
+        style="fill:{{ s.text_color }}">{% if s.prefix %}<tspan class="bname">{{ s.prefix }}</tspan> {% endif %}{{ s.value }} {{ s.unit }}</text>
+  {% if s.word and s.has_value and not t.compact %}
+  <text x="{{ s.word_x }}" y="{{ s.badge_y }}" text-anchor="end"
+        class="zword" style="fill:{{ s.word_color }}">{{ s.word }}</text>
+  {% endif %}
+  {% endfor %}
+  {#- На весь экран - пояснение к зонам, строкой на каждый ряд. -#}
+  {% for lg in t.legend or [] %}
+  <text x="20" y="{{ lg.y }}" class="legend">
+    <tspan class="lname">{{ lg.name }}:</tspan>
+    {% for p in lg.parts %}<tspan dx="8" style="fill:{{ p.color }}">●</tspan><tspan dx="4">{{ p.text }}</tspan>{% endfor %}
+  </text>
+  {% for line in lg.about %}
+  <text x="20" y="{{ lg.about_y[loop.index0] }}" class="lnote">{{ line }}</text>
+  {% endfor %}
   {% endfor %}
   {% if not t.series or not t.series[0].geom %}
   <text x="20" y="{{ t.h / 2 }}" class="status">нет истории</text>

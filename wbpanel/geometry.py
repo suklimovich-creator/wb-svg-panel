@@ -167,14 +167,18 @@ def smooth_path(points, width, height, band=BAND, pad_x=3.0,
         return y_bot - (v - lo) / (hi - lo) * (y_bot - y_top)
 
     xy = [(px(t), py(v)) for t, v in points]
-    d = "M %.1f,%.1f" % xy[0]
+    # Время ложится в pad_x от краёв (там же часовые деления), а сама линия
+    # и заливка доводятся горизонтально до краёв плитки: иначе между
+    # заливкой и рамкой оставался светлый просвет в три точки.
+    d = "M 0,%.1f L %.1f,%.1f" % (xy[0][1], xy[0][0], xy[0][1])
     for i in range(1, len(xy)):
         x0, y0 = xy[i - 1]
         x1, y1 = xy[i]
         mx = (x0 + x1) / 2.0
         d += " C %.1f,%.1f %.1f,%.1f %.1f,%.1f" % (mx, y0, mx, y1, x1, y1)
+    d += " L %.1f,%.1f" % (width, xy[-1][1])
     # заливка замыкается по нижней кромке плитки, а не по низу графика
-    area = d + " L %.1f,%.1f L %.1f,%.1f Z" % (xy[-1][0], height, xy[0][0], height)
+    area = d + " L %.1f,%.1f L 0,%.1f Z" % (width, height, height)
     return {"line": d, "area": area, "lo": lo, "hi": hi,
             "last": xy[-1], "first": xy[0]}
 
@@ -239,7 +243,7 @@ def label_color(hex_color, theme="light"):
     белый - серый, а не чужой цвет.
     """
     lum = luma(hex_color)
-    if theme == "dark":
+    if theme in ("dark", "graphite"):   # const.DARK_THEMES
         floor = LABEL_LUMA["dark"]
         if lum >= floor:
             return hex_color

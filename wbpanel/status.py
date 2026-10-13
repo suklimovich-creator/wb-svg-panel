@@ -49,7 +49,8 @@ def status_entries(panel_conf):
     for entry in (panel_conf or {}).get("status", []) or []:
         if isinstance(entry, dict) and (entry.get("channel")
                                         or entry.get("value_channel")
-                                        or "leak" in entry):
+                                        or "leak" in entry
+                                        or entry.get("air")):
             out.append(entry)
     return out
 
@@ -72,7 +73,33 @@ def status_channels(entry):
     if "leak" in entry:
         from .water import water
         out.update(water.channels(water.pick_sensors(entry.get("leak"))))
+    if entry.get("air"):
+        out.add(str(entry["air"]))
     return out
+
+
+def air_chip(entry, state):
+    """
+    Чип воздуха: появляется, когда воздух вышел из нормы.
+
+        status:
+          - air: "wb-msw-v4_149/CO2"
+
+    Душно - оранжевый «обрати внимание», пора проветрить - красный. Число -
+    текущее значение, нажатие - график канала с зонами. Пороги те же, что
+    у графика: thresholds у записи или по умолчанию для известного канала.
+    """
+    from . import air
+    st = air.chip_state(entry, state)
+    if not st:
+        return None
+    value = "%d" % round(st["value"])
+    return {"icon": st["icon"], "badge": None, "value": value,
+            "chart": st["channel"], "chart_title": "%s · %s" % (st["title"], st["word"]),
+            "unit": entry.get("value_unit", ""),
+            "active": not st["alarm"], "badge_color": None,
+            "alarm": bool(st["alarm"]), "attrs": "",
+            "w": chip_width(value)}
 
 
 def leak_chip(entry, state):
@@ -191,6 +218,11 @@ def build_status(panel_conf, state, now=None):
             if chip:
                 chips.append(chip)
             continue
+        if entry.get("air"):
+            chip = air_chip(entry, state)
+            if chip:
+                chips.append(chip)
+            continue
         key = entry.get("channel")
         raw = state.snapshot(key)["raw"] if key else None
         icon = entry.get("icon", "power")
@@ -257,9 +289,23 @@ def build_status(panel_conf, state, now=None):
     return chips
 
 
-def place_chips(chips, right_edge, y, gap=12):
-    """Разложить чипы справа налево от правого края."""
-    total = sum(c["w"] for c in chips) + gap * (len(chips) - 1 if chips else 0)
+def place_chips(chips, right_edge, y, gap=12, left=None):
+    """
+    Разложить чипы справа налево от правого края.
+
+    left - докуда можно (конец заголовка). Не влезают - уходят лишние:
+    сначала спокойные с конца, тревожные (протечка, «проветрить») -
+    последними. Наезд на заголовок хуже пропавшего чипа.
+    """
+    chips = list(chips)
+
+    def width():
+        return sum(c["w"] for c in chips) + gap * (len(chips) - 1 if chips else 0)
+    if left is not None:
+        while chips and right_edge - width() < left:
+            calm = [c for c in chips if not c.get("alarm")]
+            chips.remove((calm or chips)[-1])
+    total = width()
     x = right_edge - total
     for c in chips:
         c["x"], c["y"] = round(x, 1), y

@@ -17,6 +17,7 @@ import math
 import re
 import time
 
+from . import air
 from .const import BAND, log
 from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
                        grid_bounds, hour_ticks, label_color, label_digits, nice_step,
@@ -28,6 +29,79 @@ from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
                     build_wheel, forecast_channels, louver_glyph, parse_iso_hour,
                     parse_series, wmo_icon)
 
+def _wrap(text, width, size, lines):
+    """Текст по словам в несколько строк шириной width; лишнее - «…»."""
+    out, cur = [], ""
+    for word in str(text or "").split():
+        probe = (cur + " " + word).strip()
+        if cur and text_width(probe, size, 0.6) > width:
+            out.append(cur)
+            cur = word
+            if len(out) == lines:
+                break
+        else:
+            cur = probe
+    else:
+        if cur:
+            out.append(cur)
+        return out[:lines]
+    out[-1] = out[-1].rstrip(" ,.") + "…"
+    return out[:lines]
+
+
+def _zone_parts(zs):
+    """Зоны словами: «норма до 1000», «душно 1000–1500», «проветрить от 1500»."""
+    parts = []
+    for i, (above, zcolor, zword) in enumerate(zs):
+        nxt = zs[i + 1][0] if i + 1 < len(zs) else None
+        if above is None and nxt is not None:
+            rng = "до %s" % _fmt(nxt, 0)
+        elif nxt is None and above is not None:
+            rng = "от %s" % _fmt(above, 0)
+        elif above is not None:
+            rng = "%s–%s" % (_fmt(above, 0), _fmt(nxt, 0))
+        else:
+            rng = ""
+        parts.append({"color": zcolor, "text": ("%s %s" % (zword, rng)).strip()})
+    return parts
+
+
+def _legend(specs, tile, fs):
+    """
+    Пояснение на весь экран: строка зон и пара строк о величине на каждый
+    ряд с зонами. Встаёт под шапку с числами; места мало - без пояснений.
+    """
+    out = []
+    for spec in specs:
+        zs = air.zones(spec, base_color=air.GOOD)
+        if not zs:
+            continue
+        kind = air.KINDS.get(air.kind_of(spec["channel"]) or "") or {}
+        out.append({"name": spec.get("label") or kind.get("title") or spec.get("unit") or "",
+                    "parts": _zone_parts(zs),
+                    "about": _wrap(air.about(spec), tile["inner_w"] - 40, 7.5 * fs, 2)})
+    if not out:
+        return []
+    room = float(tile["chart_h"]) * 0.62
+    for with_about in (True, False):
+        y = 41 + 23 * fs * (len(specs) - 1) + 24 * fs
+        for lg in out:
+            lg["y"] = round(y, 1)
+            lg["about_y"] = []
+            y += 13 * fs
+            if with_about:
+                for _line in lg["about"]:
+                    lg["about_y"].append(round(y, 1))
+                    y += 10.5 * fs
+            y += 7 * fs
+            lg["end"] = y - 7 * fs - 9 * fs
+        if out[-1]["end"] <= room:
+            break
+        for lg in out:
+            lg["about"] = []
+    return out
+
+
 def build_chart(tile, state, history):
     # Подписи значений красятся под подложку, а она зависит от темы:
     # на светлой цвет линии темнеет, на тёмной светлеет.
@@ -35,6 +109,15 @@ def build_chart(tile, state, history):
     span = parse_duration(tile.get("range", "24h"))
     points = int(tile.get("points", 90))
     specs = [s for s in (tile.get("series", []) or []) if s.get("channel")]
+
+    # На весь экран под шапкой - пояснение к зонам. Раскладываем его
+    # заранее: кривая опускается ровно настолько, чтобы не налезать.
+    fs_val = float(tile.get("fs", 1) or 1)
+    legend = _legend(specs, tile, fs_val) if fs_val >= 1.6 else []
+    band = BAND
+    if legend:
+        bottom = legend[-1]["end"] + 18 * fs_val
+        band = (min(max(BAND[0], bottom / float(tile["chart_h"])), 0.62), BAND[1])
 
     # 1. сначала забираем все ряды, чтобы посчитать общую сетку
     fetched = []
@@ -72,16 +155,25 @@ def build_chart(tile, state, history):
         if data and not ticks:
             ticks = hour_ticks(data[0][0], data[-1][0], tile["inner_w"], pad_x=3.0)
         raw = to_float(snap["raw"])
-        geom = smooth_path(data, tile["inner_w"], tile["chart_h"], lo=lo, hi=hi)
+        geom = smooth_path(data, tile["inner_w"], tile["chart_h"], band=band, lo=lo, hi=hi)
         color = spec.get("color", ["#E08A2D", "#3B93C4", "#8E8E93"][idx % 3])
         # Пороги: цвет линии по текущему значению. Задаются от меньшего к
-        # большему, побеждает последний подошедший.
-        for rule in (spec.get("thresholds") or []):
+        # большему, побеждает последний подошедший. Только у графика с
+        # одной линией: у двух рядов обе краснели вместе, и было не понять,
+        # где CO2, а где VOC. Там состояние говорят слово и полосы зон,
+        # а линия держит свой цвет.
+        multi = len(specs) > 1
+        for rule in ([] if multi else (spec.get("thresholds") or [])):
             try:
                 if raw is not None and raw >= float(rule["above"]):
                     color = rule.get("color", color)
             except (KeyError, TypeError, ValueError):
                 continue
+        # Зоны качества воздуха (и любые пороги): что значит это число.
+        zs = air.zones(spec, base_color=air.GOOD)
+        lvl = air.level(zs, raw)
+        word = zs[lvl][2] if lvl is not None else ""
+        word_color = label_color(zs[lvl][1], theme) if lvl is not None else ""
         series_out.append({
             "color": color,
             "text_color": spec.get("text_color") or label_color(color, theme),
@@ -92,17 +184,61 @@ def build_chart(tile, state, history):
             "geom": geom,
             "step": gstep,
             "npoints": len(data),
+            "zones": zs,
+            "word": word,
+            "word_color": word_color,
+            "about": air.about(spec),
+            "name": spec.get("label") or (air.KINDS.get(air.kind_of(spec["channel"]) or "")
+                                          or {}).get("title") or "",
         })
+        # Рядов несколько - перед числом его имя тем же цветом, что линия:
+        # «CO2 1240 ppm», «VOC 140». Иначе число к линии не привязать.
+        series_out[-1]["prefix"] = series_out[-1]["name"] if multi else ""
 
     # 3. сами линии: одинаковые доли высоты для всех рядов
     hlines = []
     if any(s["geom"] for s in series_out):
-        y_top = tile["chart_h"] * BAND[0]
-        y_bot = tile["chart_h"] * BAND[1]
+        y_top = tile["chart_h"] * band[0]
+        y_bot = tile["chart_h"] * band[1]
         for i in range(divisions + 1):
             f = i / float(divisions)
             hlines.append({"y": round(y_bot - f * (y_bot - y_top), 1),
                            "f": f, "edge": i in (0, divisions)})
+
+    # 3а. Полосы зон за линией - у первого ряда, у которого они есть: у
+    #     двух рядов шкалы разные, и две раскладки полос спорили бы. Только
+    #     в полосе самой кривой: шапку со значком и числами не красим.
+    bands = []
+    for s in series_out:
+        if not s["zones"] or not s["geom"]:
+            continue
+        lo, hi = s["geom"]["lo"], s["geom"]["hi"]
+        y_top = tile["chart_h"] * band[0]
+        y_bot = tile["chart_h"] * band[1]
+
+        def py(v, lo=lo, hi=hi, y_top=y_top, y_bot=y_bot):
+            return y_bot - (v - lo) / (hi - lo) * (y_bot - y_top)
+        for i, (above, zcolor, zword) in enumerate(s["zones"]):
+            low = y_bot if above is None else max(y_top, min(y_bot, py(above)))
+            nxt = s["zones"][i + 1][0] if i + 1 < len(s["zones"]) else None
+            high = y_top if nxt is None else max(y_top, min(y_bot, py(nxt)))
+            if low - high < 0.5:
+                continue
+            bands.append({"y": round(high, 1), "h": round(low - high, 1),
+                          "color": zcolor, "word": zword})
+        break
+
+    # Слово зоны - левее числа в шапке: «душно   1240 ppm». Ширину числа
+    # оцениваем с запасом: впритык слово сливалось с цифрами. Не влезает
+    # между значком и числом - не пишем: число и цвет полосы скажут сами.
+    for idx, s in enumerate(series_out):
+        s["badge_y"] = round(41 + idx * 23 * fs_val, 1)
+        size = (17.0 if idx == 0 else 14.0) * fs_val
+        right = tile["inner_w"] - 20 - text_width(
+            "%s %s %s" % (s["prefix"], s["value"], s["unit"]), size, 0.62) * 1.08 - 12 * fs_val
+        s["word_x"] = round(right, 1)
+        if s["word"] and right - text_width(s["word"], 12.5 * fs_val, 0.62) < 56 * fs_val:
+            s["word"] = ""
 
     # 4. подписи: без них не понять, что шкала растянута под сами данные -
     #    провал на полградуса выглядит как обвал
@@ -176,6 +312,7 @@ def build_chart(tile, state, history):
     line_w = round(2.4 * max(fs, 1.0) ** 0.45, 2)
 
     return {"series": series_out, "ticks": ticks, "hlines": hlines,
+            "bands": bands, "legend": legend,
             "times": times, "scale_note": note, "line_w": line_w,
             "title_dx": round(20 + text_width(tile.get("title", ""), 15) + 9, 1),
             "grid_labels": bool(tile.get("grid_labels", False)),

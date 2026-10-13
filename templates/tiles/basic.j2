@@ -91,6 +91,7 @@
     <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}"
           fill="url(#{{ uid }}scrim)"/>
   </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
   {% if not t.src %}
   {{ base.icon_c(t, t.icon or 'camera', 24) }}
   {% endif %}
@@ -171,6 +172,7 @@
 {% macro tile_leak(t) %}
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
         class="plate {{ 'alarm' if t.alarm }}"/>
+  {% if not t.alarm %}{{ base.sheen(t) }}{% endif %}
   <g class="{{ 'onlight' if t.alarm }}">
     {% if t.alarm %}
     {#- Значок рисуется прямо здесь, а не через use: селекторы не проникают
@@ -219,6 +221,7 @@
 {% macro tile_valve(t) %}
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
         class="plate {{ 'closed' if t.closed }}"/>
+  {{ base.sheen(t) }}
   {{ base.icon_c(t, t.icon or 'tap', 24) }}
   {% if not t.compact and t.h >= 117 %}
   <circle cx="{{ t.w - 26 }}" cy="29" r="7" fill="{{ t.water_color }}"/>

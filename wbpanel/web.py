@@ -14,7 +14,7 @@ import paho.mqtt.client as mqtt
 from flask import Flask, Response, abort, request
 from jinja2 import Environment, FileSystemLoader
 from .const import (BASE_DIR, CONFIG_PATH, DB_PATH, GAP, HEADER, PAD,
-                    RX, TEMPLATE_DIRS, TILE, font_scale, log)
+                    RX, TEMPLATE_DIRS, THEMES, TILE, font_scale, log)
 from .config import Config
 from .state import MqttRpc, WbState, make_client, state, to_float
 from .history import History
@@ -31,6 +31,8 @@ from .lists import ListError, lists
 from .water import water
 from .calendars import calendars
 from . import checkup
+from . import themes
+from . import __version__
 import html
 import threading
 from collections import OrderedDict
@@ -53,6 +55,20 @@ history = None
 jinja = None
 
 
+def panel_theme(panel_conf=None):
+    """
+    Тема для этого ответа: ?theme= из адреса (выбор на устройстве - у
+    телефона и планшета на стене он свой), иначе тема панели, иначе общая.
+    Неизвестное имя в адресе молча игнорируется.
+    """
+    asked = request.args.get("theme") if request else None
+    if asked in THEMES:
+        return asked
+    # theme: auto - по расписанию theme_auto (день/ночь, восход/закат).
+    return themes.resolve((panel_conf or {}).get("theme", config.get("theme", "light")),
+                          config)
+
+
 def render_panel(name, cols=None):
     config.reload()
     state.set_watched(config.used_channels(), config.service_prefixes())
@@ -66,6 +82,9 @@ def render_panel(name, cols=None):
     closed = [p for p in (request.args.get("closed") or "").split(",") if p]
     opened = request.args.get("open") or None
 
+    theme = panel_theme(panel_conf)
+    # Тема нужна и сборке: подписи графиков красятся под цвет подложки.
+    panel_conf = dict(panel_conf, theme=theme)
     tiles, width, height, headers, top_chips = prepare(
         panel_conf, state, history, cols=cols, all_panels=config.panels,
         name=name, closed=closed, opened=opened)
@@ -84,7 +103,8 @@ def render_panel(name, cols=None):
         width=width,
         height=height,
         rx=RX,
-        theme=panel_conf.get("theme", config.get("theme", "dark")),
+        theme=theme,
+        shadows=bool(panel_conf.get("shadows", config.get("shadows", True))),
         title=panel_conf.get("title", ""),
         updated=time.strftime("%H:%M"),
         connected=state.connected,
@@ -539,7 +559,8 @@ def _panel_args(name, cols):
     closed = tuple(p for p in (request.args.get("closed") or "").split(",") if p)
     opened = request.args.get("open") or None
     flat = request.args.get("flat") not in ("0", "false", "no")
-    return closed, opened, flat
+    theme = request.args.get("theme") if request.args.get("theme") in THEMES else None
+    return closed, opened, flat, theme
 
 
 def panel_version(name):
@@ -560,8 +581,11 @@ def cached_panel(name, cols):
     её старой версией: страница увидит, что отстала, и спросит снова через
     секунду. Так пачка изменений даёт одну отрисовку, а не десять.
     """
-    closed, opened, flat = _panel_args(name, cols)
-    base = (name, cols, closed, opened, flat, getattr(config, "_mtime", 0))
+    closed, opened, flat, _asked = _panel_args(name, cols)
+    # В ключе - тема, которая получится на самом деле: у theme: auto она
+    # меняется на закате, и кэш не должен отдать дневную картинку ночью.
+    theme = panel_theme(config.panels.get(name) or {})
+    base = (name, cols, closed, opened, flat, theme, getattr(config, "_mtime", 0))
     bucket = int(time.time() // _refresh_every())
     with _RENDER_LOCK:
         now = time.time()
@@ -582,8 +606,7 @@ def cached_panel(name, cols):
             svg = render_panel(name, cols=cols)
         if flat:
             panel_conf = config.panels.get(name) or {}
-            svg = resolve_css_vars(
-                svg, panel_conf.get("theme", config.get("theme", "light")), 1.0)
+            svg = resolve_css_vars(svg, panel_theme(panel_conf), 1.0)
         _RENDERED[base] = {"svg": svg, "ver": ver, "rv": rv,
                            "bucket": bucket, "t": now}
         _RENDERED.move_to_end(base)
@@ -598,7 +621,7 @@ _WATCH = {}
 SLOW_TILES = ("chart", "forecast")
 
 #: Поля чипа строки состояния, при которых он считается медленным.
-SLOW_STATUS = ("above", "below")
+SLOW_STATUS = ("above", "below", "air")
 
 
 def panel_watch(name):
@@ -798,6 +821,8 @@ def tile_svg(name, index):
 
     interactive = bool(panel_conf.get("interactive",
                        config.get("interactive", False)))
+    theme = panel_theme(panel_conf)
+    panel_conf = dict(panel_conf, theme=theme)
     tile = build_tile(tiles[index], 0, PAD, PAD, width, height,
                       panel_conf, state, history, interactive)
     scale = font_scale(height)
@@ -806,11 +831,11 @@ def tile_svg(name, index):
         fs=scale,
         tiles=[tile], headers=[],
         width=width + PAD * 2, height=height + PAD * 2,
-        rx=RX, theme=panel_conf.get("theme", config.get("theme", "light")),
+        rx=RX, theme=theme, shadows=True,
         title="", updated=time.strftime("%H:%M"), connected=state.connected)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(
-            svg, panel_conf.get("theme", config.get("theme", "light")), scale)
+            svg, theme, scale)
     return Response(svg, mimetype="image/svg+xml",
                     headers={"Cache-Control": "no-store"})
 
@@ -882,8 +907,9 @@ def chart_svg():
                     "unit": request.args.get("unit") or "",
                     "digits": int(request.args.get("digits") or 0)}],
     }
-    theme = config.get("theme", "light")
-    tile = build_tile(conf, 0, PAD, PAD, width, height, {}, state, history, False)
+    theme = panel_theme()
+    tile = build_tile(conf, 0, PAD, PAD, width, height, {"theme": theme},
+                      state, history, False)
     scale = font_scale(height)
     svg = jinja.get_template("panel.svg.j2").render(
         uid="c-", fs=scale, tiles=[tile], headers=[],
@@ -1120,7 +1146,8 @@ def stats_page():
 @app.route("/healthz")
 def healthz():
     with state.lock:
-        body = {"mqtt": state.connected, "channels": len(state.values),
+        body = {"app": __version__,
+                "mqtt": state.connected, "channels": len(state.values),
                 "version": state.version, "panels": sorted(config.panels),
                 "hidden": sorted(n for n, p in config.panels.items()
                                  if (p or {}).get("hidden")),

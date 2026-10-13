@@ -8,7 +8,7 @@ import time
 from .commands import cmd_attrs, xml_escape
 from .commands import build as build_command
 from .const import BAND, CELL, GAP, HEADER, PAD, RX, SECTION, TILE, font_scale, log
-from .const import STALE_AFTER
+from .const import INV_SKIP, STALE_AFTER, THEME_STYLE
 from .geometry import _fmt, cells, layout, text_width
 from .status import build_status, place_chips
 from .registry import resolve_type
@@ -175,7 +175,13 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     conf["fs"] = font_scale(ph)
     # Тема нужна графику: подписи значений красятся под цвет подложки, а
     # она разная. CSS-переменная тут не подходит - цвет у каждой серии свой.
-    conf["theme"] = (config.get("theme", "light") if config else "light")
+    conf["theme"] = (panel_conf or {}).get("theme") or (
+        config.get("theme", "light") if config else "light")
+    style = THEME_STYLE.get(conf["theme"], {})
+    inv_kind = conf.get("type") in style.get("inv_kinds", ())
+    if inv_kind:
+        # Тёмная карточка графика: подписи считаем как для тёмной темы.
+        conf["theme"] = "dark"
 
     # Все типы идут одним путём через реестр. Историю принимает только
     # график, остальные её просто не спрашивают.
@@ -185,6 +191,11 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
 
     if not tile["compact"] and ph < LOW_H:
         _fit_low(tile, pw, conf["fs"])
+
+    # Тёмная карточка (класс inv): у типа - всегда, у включённой плитки -
+    # если тема так делает.
+    tile["inv"] = tile["kind"] not in INV_SKIP and (
+        inv_kind or bool(style.get("inv_on") and tile.get("on")))
 
     # Служебные поля реестра до шаблона доходить не должны.
     zones = tile.pop("_zones", None) or []
@@ -299,7 +310,8 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             # полосе раздела: базовая линия текста ниже его середины на
             # половину роста прописных, отсюда -2 вместо +4.
             hd["chips"] = place_chips(
-                build_status(status_src, state), right_edge, y_cursor - 2)
+                build_status(status_src, state), right_edge, y_cursor - 2,
+                left=hd["arrow_x"] + 24)
             # До первого чипа минус просвет, иначе до края строки
             first = min([c["x"] for c in hd["chips"]] or [right_edge + 8])
             hd["tap_w"] = max(60, first - 12 - hd["tap_x"])
@@ -354,6 +366,10 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
     # Статусы самой панели - в шапке, левее часов: справа стоит время,
     # и наезжать на него нельзя.
     # Заголовок панели: базовая линия на 44, значит середина чипа на 38.
+    title = str(panel_conf.get("title") or "")
+    # Без связи справа ещё «· нет связи с MQTT» - чипы отходят левее.
+    clock_w = 62 if state.connected else 62 + text_width("  · нет связи с MQTT", 13)
     top_chips = place_chips(build_status(panel_conf, state),
-                            width - PAD - 62, 20)
+                            width - PAD - clock_w, 20,
+                            left=PAD + text_width(title, 26) * 1.1 + 14 if title else None)
     return out, width, height, headers, top_chips

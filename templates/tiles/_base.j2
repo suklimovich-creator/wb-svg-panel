@@ -44,6 +44,21 @@
     --stroke:      #6E6E75;   /* иконки */
     --window:      #B4BCC7;   /* «улица» за шторой */
     --fabric:      #F0ECE5;   /* ткань */
+    /* Подложка включённой плитки. В светлой и тёмной та же, что у
+       выключенной - там о включении говорит рамка; ретро и мягкая
+       подкрашивают саму плитку. */
+    --tile-on:     var(--tile);
+    --shadow:      #34343C;
+    /* Охлаждение - на дуге термостата и в режимах. */
+    --cool:        #3B8FD4;
+    /* Тёмная карточка (класс inv). В темах без неё класс не ставится,
+       значения здесь - чтобы плоская подстановка не оставила пустот. */
+    --inv-tile:    var(--tile);
+    --inv-ink:     var(--ink);
+    --inv-dim:     var(--ink-dim);
+    --inv-stroke:  var(--stroke);
+    --inv-accent:  var(--active);
+    --chip-on-ink: var(--ink);
   }
   /* ---- тёмная тема ------------------------------------------------------ */
   .dark {
@@ -63,7 +78,154 @@
     --stroke:      #C6C6CC;
     --window:      #39404A;
     --fabric:      #7B7568;
+    /* Отсвет плиток из левого верхнего угла: белёсый у всех, тёплый у
+       включённой. У графита свои, построже. */
+    --sheen:       rgba(255,255,255,.065);
+    --sheen-on:    rgba(255,174,40,.30);
   }
+
+  /* ---- графит: тёмная тема построже -------------------------------------
+     Поверх тёмной: почти чёрный фон, плитки угольные с тонким контуром,
+     у каждой мягкий отсвет из левого верхнего угла, у включённой - тёплый
+     янтарный. Рамка включённой тоньше: о состоянии говорит отсвет. */
+  .graphite {
+    --bg-top:      #151618;
+    --bg-bottom:   #0B0C0D;
+    --tile:        #1C1D20;
+    --edge:        rgba(255,255,255,.07);
+    --edge-w:      1;
+    --active:      #F2A23A;
+    --active-w:    2;
+    --active-soft:      #34281A;
+    --active-soft-edge: rgba(242,162,58,.30);
+    --active-ink:       #F6B455;
+    --ink:         #F2F2F4;
+    --ink-dim:     rgba(255,255,255,.50);
+    --ink-faint:   rgba(255,255,255,.26);
+    --stroke:      #B8B9BF;
+    --window:      #2F353D;
+    --fabric:      #6E6A60;
+    --sheen:       rgba(255,255,255,.075);
+    --sheen-on:    rgba(242,162,58,.34);
+  }
+  .sheen     { pointer-events: none; }
+
+  /* ==== светлые темы с тёмной карточкой ===============================
+     Устроены одинаково: светлый фон, светлые карточки с тенью, а
+     включённая плитка - тёмная карточка со светлым текстом (класс inv).
+     Цвета каждой темы взяты одним набором, как на палитре: фон, карточка,
+     тёмная карточка, чернила и два акцента - для светлой карточки и для
+     тёмной. Подбирались по контрасту: акцент на тёмной карточке светлее
+     того, что на светлой. */
+
+  /* ---- осень: белые карточки на тёплом сером, коньячный и охра ------- */
+  .autumn {
+    --bg-top:      #E2DED7;
+    --bg-bottom:   #D8D3CA;
+    --tile:        #FFFFFF;
+    --edge:        rgba(70,45,20,.06);
+    --edge-w:      1;
+    --active:      #D2691E;
+    --active-w:    0;
+    --active-soft:      #F7E3C2;
+    --active-soft-edge: rgba(210,105,30,.35);
+    --active-ink:       #9A4A12;
+    --ink:         #1F1B17;
+    --ink-dim:     #8A8177;
+    --ink-faint:   rgba(31,27,23,.30);
+    --stroke:      #4A423A;
+    --window:      #CFC7BC;
+    --fabric:      #F6F1EA;
+    --shadow:      #4A3420;
+    --cool:        #4F7C8A;
+    --inv-tile:    #8A4A20;
+    --inv-ink:     #FFF4E4;
+    --inv-dim:     rgba(255,244,228,.80);
+    --inv-stroke:  #F3D59B;
+    --inv-accent:  #F2B54E;
+  }
+
+  /* ---- ретро: кремовая бумага, тёмно-синий, терракота, шалфей --------- */
+  .retro {
+    --bg-top:      #EFE6D6;
+    --bg-bottom:   #E7DBC6;
+    --tile:        #FBF6EC;
+    --edge:        rgba(90,64,38,.08);
+    --edge-w:      1;
+    --active:      #C9622F;
+    --active-w:    0;
+    --active-soft:      #F3D3BD;
+    --active-soft-edge: rgba(201,98,47,.40);
+    --active-ink:       #A24A26;
+    --ink:         #2B3344;
+    --ink-dim:     #8C7F6C;
+    --ink-faint:   rgba(70,52,32,.34);
+    --stroke:      #3E4757;
+    --window:      #C7CFCB;
+    --fabric:      #F6EFE2;
+    --shadow:      #5A4026;
+    --cool:        #5E8C6A;
+    --inv-tile:    #2F3A4F;
+    --inv-ink:     #F6EEDF;
+    --inv-dim:     rgba(246,238,223,.72);
+    --inv-stroke:  #F6EEDF;
+    --inv-accent:  #E8894E;
+  }
+
+  /* ---- нуар: тёплый серо-бежевый, графит, сепия --------------------- */
+  .noir {
+    --bg-top:      #EFECE7;
+    --bg-bottom:   #E5E1DA;
+    --tile:        #E2DBD0;
+    --edge:        rgba(40,34,28,.07);
+    --edge-w:      1;
+    --active:      #2A2623;
+    --active-w:    0;
+    --active-soft:      #2A2623;
+    --active-soft-edge: rgba(42,38,35,.6);
+    --active-ink:       #F2EDE4;
+    --ink:         #1E1C1A;
+    --ink-dim:     #7A7268;
+    --ink-faint:   rgba(30,28,26,.32);
+    --stroke:      #34302C;
+    --window:      #C9C2B7;
+    --fabric:      #EEE8DE;
+    --shadow:      #2A2420;
+    --cool:        #5F7280;
+    --inv-tile:    #262321;
+    --inv-ink:     #F2EDE4;
+    --inv-dim:     rgba(242,237,228,.68);
+    --inv-stroke:  #E9E1D4;
+    --inv-accent:  #CDB898;
+    --chip-on-ink: #F2EDE4;
+  }
+
+  /* ---- тёмная карточка (inv) ----------------------------------------
+     Значки красятся через currentColor (см. .icon): color на группе
+     доходит и внутрь symbol, куда селекторы не проникают. */
+  .inv              { color: var(--inv-stroke); }
+  .inv .plate, .inv .plate.on { fill: var(--inv-tile); stroke: var(--inv-tile); stroke-width: 0; }
+  .inv .rim, .inv .rim.on     { stroke: var(--inv-tile); stroke-width: 0; }
+  .inv text         { fill: var(--inv-ink); }
+  .inv .status, .inv .dial-mode, .inv .dial-sub, .inv .tag, .inv .axis,
+  .inv .span, .inv .li-more, .inv .ag-date, .inv .ag-sep, .inv .ag-empty,
+  .inv .lnote, .inv .siderow, .inv .wlab { fill: var(--inv-dim); }
+  .inv .wlab.near, .inv .siderow.on { fill: var(--inv-ink); }
+  .inv .tick, .inv .hline, .inv .wtick, .inv .dial .track,
+  .inv .dial .mark  { stroke: var(--inv-ink); }
+  .inv .mark-dot    { fill: var(--inv-ink); }
+  .inv .dial .fill  { stroke: var(--inv-ink); }
+  .inv .dial.live .fill, .inv .dial .mark.target, .inv .warc,
+  .inv .goal        { stroke: var(--inv-accent); }
+  .inv .dial.cool .fill, .inv .dial.cool .mark.target { stroke: var(--inv-stroke); }
+  .inv .fanbars rect { fill: var(--inv-ink); }
+  .inv .fanbars.live rect.on { fill: var(--inv-accent); }
+  .inv .wnotch      { stroke: var(--inv-dim); }
+  .inv .ag-now      { fill: var(--inv-accent); }
+  .shadows   { pointer-events: none; }
+  /* Сетка графика на угольном фоне читается вдвое ярче, чем на сером. */
+  .graphite .tick, .graphite .hline { opacity: .07; }
+  .graphite .tick.major { opacity: .12; }
 
   /* ---- типографика ------------------------------------------------------ */
   .h1     { font-size: calc(26px * var(--fs)); font-weight: 700; letter-spacing: -.6px; fill: var(--ink); }
@@ -90,20 +252,26 @@
   .status { font-size: calc(13.5px * var(--fs)); font-weight: 400; fill: var(--ink-dim); }
   .badge  { font-size: calc(17px * var(--fs));   font-weight: 500; fill: var(--ink); }
   .badge2 { font-size: calc(14px * var(--fs));   font-weight: 500; }
+  /* Имя ряда перед числом в шапке графика: того же кегля - мельче
+     прописные CO2 и VOC выглядели строчными, - но плотнее и бледнее. */
+  .bname  { font-weight: 650; opacity: .75; }
   .tag    { font-size: calc(11px * var(--fs));   font-weight: 600; fill: var(--ink-faint); letter-spacing: .4px; }
 
   /* ---- плитки ----------------------------------------------------------- */
   .plate     { fill: var(--tile); stroke: var(--edge); stroke-width: var(--edge-w); }
-  .plate.on  { stroke: var(--active); stroke-width: var(--active-w); }
+  .plate.on  { fill: var(--tile-on); stroke: var(--active); stroke-width: var(--active-w); }
   /* только рамка, без заливки - рисуется ПОВЕРХ графика или подсветки */
   .rim       { fill: none; stroke: var(--edge); stroke-width: var(--edge-w); }
   .rim.on    { stroke: var(--active); stroke-width: var(--active-w); }
-  .icon      { fill: none; stroke: var(--stroke); stroke-width: calc(1.8px * var(--fs));
+  /* Толщина значков без fs: значок - symbol, его линия и так растёт
+     вместе с размером. С fs на весь экран она умножалась дважды, и
+     облако на графике заплывало в кляксу. */
+  .icon      { fill: none; stroke: currentColor; stroke-width: 1.8px;
                stroke-linecap: round; stroke-linejoin: round; }
-  .icon-fill { fill: var(--stroke); }
+  .icon-fill { fill: currentColor; }
   /* Фигурки человечков состоят из отдельных конечностей и при общей
      толщине выглядят жиже предметных значков - им нужна прибавка. */
-  .icon-figure { stroke-width: calc(2px * var(--fs)); }
+  .icon-figure { stroke-width: 2px; }
   /* Просвет под бейджем режима: без него линии корпуса просвечивают
      сквозь значок режима и всё сливается. Цвет задаётся атрибутом -
      он равен заливке чипа, а она зависит от того, активен чип или нет. */
@@ -113,6 +281,9 @@
   .chip.on   { fill: var(--active-soft); stroke: var(--active-soft-edge); }
   .chip.alarm { fill: #C4553B; stroke: #C4553B; }
   .chip-val  { font-size: calc(14px * var(--fs)); font-weight: 500; fill: var(--ink); }
+  /* Число на включённом чипе: в нуаре чип чёрный, и тёмная цифра на нём
+     пропадала. Своя переменная - в остальных темах она равна --ink. */
+  .chip.on ~ .chip-val { fill: var(--chip-on-ink); }
   /* Значки состояния красятся через currentColor, а не классом.
      Содержимое элемента use лежит в теневом дереве, и селекторы документа
      туда не достают: правило вида «.active .icon» на символ не подействует.
@@ -120,10 +291,10 @@
      знак «меньше» обрывает разбор XML, и librsvg молча вернёт ошибку.
      currentColor же наследуется всегда и переживает подстановку
      переменных перед отдачей SVG. */
-  .sicon      { fill: none; stroke: currentColor; stroke-width: calc(1.8px * var(--fs));
+  .sicon      { fill: none; stroke: currentColor; stroke-width: 1.8px;
                 stroke-linecap: round; stroke-linejoin: round; }
   .sicon-fill { fill: currentColor; stroke: none; }
-  .sicon-figure { stroke-width: calc(2px * var(--fs)); }
+  .sicon-figure { stroke-width: 2px; }
   /* Класс on ставится только на прямоугольники подложки, рамки и чипа,
      а у них нет потомков, так что эти два правила внутри панели не
      срабатывают. Живой механизм подсветки - .onlight на группе ниже.
@@ -138,6 +309,10 @@
   .onlight .status                { fill: rgba(255,255,255,.72); }
   .onlight .icon                  { stroke: #FFFFFF; }
   .onlight .icon-fill             { fill: #FFFFFF; }
+  /* Значки - currentColor: цвет задаётся группе и наследуется внутрь
+     symbol. Классы на группе (.onlight, .inv) так и перекрашивают значок. */
+  svg               { color: var(--stroke); }
+  .onlight          { color: #FFFFFF; }
   .axis      { font-size: calc(9.5px * var(--fs)); font-weight: 500; fill: var(--ink);
                opacity: .55; }
   .span      { font-size: calc(12px * var(--fs)); font-weight: 500; fill: var(--ink-dim); }
@@ -175,6 +350,11 @@
   .onlight .lk, .onlight .lk-more { fill: #FFFFFF; }
   .onlight .lk-dry { stroke: rgba(255,255,255,.8); }
   .onlight .lk-wet { fill: #FFFFFF; }
+  .zone      { opacity: .11; }
+  .zword     { font-size: calc(12.5px * var(--fs)); font-weight: 600; }
+  .legend    { font-size: calc(9px * var(--fs)); font-weight: 500; fill: var(--ink); }
+  .legend .lname { font-weight: 650; }
+  .lnote     { font-size: calc(7.5px * var(--fs)); fill: var(--ink-dim); }
   .ag-txt    { fill: var(--ink); font-weight: 450; }
   .ag-time   { fill: var(--ink); font-weight: 600; }
   .ag-time.small { fill: var(--ink-dim); font-weight: 500; }
@@ -200,6 +380,20 @@
     Выпускается всегда целиком: имя значка приходит из конфига,
     и заранее неизвестно, какие понадобятся. -#}
 {% macro defs() %}
+  {% if theme in ('dark', 'graphite') %}
+  {#- Отсвет плиток тёмных тем: радиальный из левого верхнего угла. Цвет -
+      переменной, чтобы плоская подстановка для старых браузеров его
+      развернула. -#}
+  <radialGradient id="{{ uid }}sheen" cx="0" cy="0" r="1.15">
+    <stop offset="0" stop-color="var(--sheen)"/>
+    <stop offset="1" stop-color="var(--sheen)" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="{{ uid }}sheen-on" cx="0" cy="0" r="1.25">
+    <stop offset="0" stop-color="var(--sheen-on)"/>
+    <stop offset=".55" stop-color="var(--sheen-on)" stop-opacity=".25"/>
+    <stop offset="1" stop-color="var(--sheen-on)" stop-opacity="0"/>
+  </radialGradient>
+  {% endif %}
   <linearGradient id="{{ uid }}bg" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="var(--bg-top)"/>
     <stop offset="1" stop-color="var(--bg-bottom)"/>
@@ -300,10 +494,22 @@
   <symbol id="{{ uid }}ic-drop" viewBox="0 0 24 24">
     <path class="icon" d="M12 3.2s5.4 6 5.4 9.5a5.4 5.4 0 1 1-10.8 0C6.6 9.2 12 3.2 12 3.2z"/>
   </symbol>
-  <symbol id="{{ uid }}ic-co2" viewBox="0 0 24 24">
-    <path class="icon" d="M6.6 17.5a3.9 3.9 0 0 1-.5-7.8 5.3 5.3 0 0 1 10.2-1.2 3.6 3.6 0 0 1 1.2 7z"/>
-    <path class="icon" d="M9.4 20.6h6.4"/>
+  {#- CO2 - сама формула, как на бытовых датчиках. Облако, которое было
+      здесь, читалось как погода «облачно», а молекула O=C=O на мелком
+      размере - как звено цепи. VOC - колба: летучие вещества - химия.
+      Оба рисуются дважды: ic-co2 серым для плиток и ic-co2-s через
+      currentColor для чипа - на красном чипе «проветрить» значок белый. -#}
+  {% for sfx, fill, line in (('', 'icon-fill', 'icon'), ('-s', 'sicon-fill', 'sicon')) %}
+  <symbol id="{{ uid }}ic-co2{{ sfx }}" viewBox="0 0 24 24">
+    <text class="{{ fill }}" x="1.2" y="15.6" font-size="11.5" font-weight="700"
+          letter-spacing="-.3">CO</text>
+    <text class="{{ fill }}" x="17.4" y="19.6" font-size="7.5" font-weight="700">2</text>
   </symbol>
+  <symbol id="{{ uid }}ic-voc{{ sfx }}" viewBox="0 0 24 24">
+    <path class="{{ line }}" d="M9.6 3.4h4.8M10.4 3.4v5.8L5.2 18.2a1.6 1.6 0 0 0 1.4 2.4h10.8a1.6 1.6 0 0 0 1.4-2.4l-5.2-9V3.4"/>
+    <path class="{{ line }}" d="M7.6 14.6h8.8"/>
+  </symbol>
+  {% endfor %}
   <symbol id="{{ uid }}ic-leaf" viewBox="0 0 24 24">
     <path class="icon" d="M20 4c0 8.3-4.2 12.8-9.6 12.8A5.4 5.4 0 0 1 5 11.4C5 6.4 11.6 4.6 20 4z"/>
     <path class="icon" d="M4.2 20.2C6.6 15.4 10.4 11.6 15.4 9"/>
@@ -511,6 +717,20 @@
 {% macro plate(t) %}
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
         class="plate {{ 'on' if t.on }}"/>
+  {{ sheen(t, t.on) }}
+{% endmacro %}
+
+{#- Тени плиток рисуются не здесь, а одним слоем под всеми плитками в
+    panel.svg.j2 (shadow_layer): размытие одно на панель, а не на плитку. -#}
+{% macro shadow(t) %}{% endmacro %}
+
+{#- Отсвет поверх подложки - в тёмных темах (dark, graphite). Рамку не трогает:
+    отступ в полторы точки внутрь. -#}
+{% macro sheen(t, on=False) %}
+  {% if theme in ('dark', 'graphite') %}
+  <rect x="1.5" y="1.5" width="{{ t.w - 3 }}" height="{{ t.h - 3 }}" rx="{{ rx - 0.5 }}"
+        fill="url(#{{ uid }}sheen{{ '-on' if on }})" class="sheen"/>
+  {% endif %}
 {% endmacro %}
 
 {#- Значок устройства с бейджем режима в правом нижнем углу.
@@ -542,6 +762,8 @@
 {% macro chip(name, value=None, badge=None, active=False, w=None, badge_color=None,
               chart=None, chart_title=None, unit=None, alarm=False, attrs='') %}
   {% set icon_size = 26 %}
+  {#- Значки воздуха у чипа - свои, через currentColor (см. ic-co2-s). -#}
+  {% set name = name ~ '-s' if name in ('co2', 'voc') else name %}
   {#- Поля разные для двух случаев. Со значком и числом: 10 слева, 6 между,
       12 справа - цифры прямоугольные и липнут к краю сильнее, чем
       скруглённый значок. Без числа значок просто центрируется: поля 10 и 4
@@ -588,8 +810,12 @@
        x="16" y="{{ (t.h - size - 3) / 2 }}"
        width="{{ size + 3 }}" height="{{ size + 3 }}"/>
   {% else %}
+  {#- На весь экран (fs > 1) значок растёт вместе с текстом. Толщина
+      линии уже умножена на fs в .icon, и при прежних 27 единицах контур
+      заплывал в кляксу. -#}
+  {% set sz = ((size + 3) * (fs | float)) | round(1) %}
   <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"
-       x="18" y="17" width="{{ size + 3 }}" height="{{ size + 3 }}"/>
+       x="18" y="17" width="{{ sz }}" height="{{ sz }}"/>
   {% endif %}
 {% endmacro %}
 

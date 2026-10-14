@@ -40,7 +40,7 @@ FAN_BARS = {"low": 1, "medium": 2, "high": 3}
 # Положения жалюзи по порядку на значке. Горизонтальные номера моста идут
 # не слева направо - порядок проверен на живом устройстве (см. tiles.py).
 SWING_V = ("upper", "position_2", "position_3", "position_4", "bottom")
-SWING_H = ("position_4", "position_5", "position_1", "position_6", "position_7")
+SWING_H = ("position_7", "position_6", "position_1", "position_5", "position_4")
 # наклон лопасти на значке, градусы
 FAN5 = (-34, -17, 0, 17, 34)
 

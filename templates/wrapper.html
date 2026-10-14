@@ -674,7 +674,17 @@ function pub(topic, value){
    уборки: при закрытии окна её надо позвать, иначе таймер продолжит
    тикать в пустоту. */
 var ovCleanup = null;
+/* Открытое окно - шаг в истории браузера. Жест «назад» на iPhone и
+   кнопка «назад» на Android закрывают окно, а не уводят со страницы:
+   раньше выход из пульта во весь экран приводил к списку панелей. */
+var ovHist = false, ovReload = false;
+window.addEventListener('popstate', function(){
+  if (ovReload) { location.reload(); return; }
+  if (ovHist) { ovHist = false; if (ov.classList.contains('open')) closeOv(); }
+});
 function closeOv(){ ov.classList.remove('open'); paused=false;
+  // свой шаг истории убираем сами, popstate при этом окно уже не трогает
+  if(ovHist){ ovHist = false; ovReload = appReload; history.back(); if(appReload) return; }
   if(appReload){ location.reload(); return; }
   if(ovCleanup){ ovCleanup(); ovCleanup = null; }
   var k=ov.querySelector('.card,#pad,#lvl,#crtwrap,.ttl,.hint');
@@ -686,6 +696,16 @@ function closeOv(){ ov.classList.remove('open'); paused=false;
     if (!ov.classList.contains('open')) host.classList.remove('shield');
   }, SHIELD_MS);
   refresh(); }
+/* Кнопка «назад» пульта во весь экран стоит там же, где ссылка
+   «← Панели» страницы. Окно закрывалось по отпусканию пальца, а
+   следом браузер присылал click - уже в ссылку под ним, и вместо
+   панели открывался список панелей. Клики мимо окна в первые мгновения
+   после закрытия гасим. */
+document.addEventListener('click', function(e){
+  if (Date.now() < shieldUntil && !ov.contains(e.target)) {
+    e.preventDefault(); e.stopPropagation();
+  }
+}, true);
 /* Закрывает только касание, которое и началось на фоне. Иначе жест,
    начатый на пульте и отпущенный мимо карточки, - потянули дугу
    термостата за край - закрывал окно вместе с недоведённой уставкой. */
@@ -700,6 +720,9 @@ function openOv(nodes){
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
   nodes.forEach(function(n){ ov.appendChild(n); });
   ov.classList.add('open'); paused=true;
+  if(!ovHist && window.history && history.pushState){
+    try { history.pushState({ov: 1}, ''); ovHist = true; } catch(e) {}
+  }
   // Фон окна закрывает только касание, начатое на нём уже после открытия.
   ovDownBg = false;
   // Нажатие по плитке, которое открыло окно, своё отработало: его таймер
@@ -1458,11 +1481,12 @@ function acControls(node, changed){
   }
   if(node.getAttribute('data-ac-swing-h')){
     parts.push(el('div','hint','Жалюзи влево-вправо'));
-    // кнопки идут слева направо, как реальные положения: 4·5·1·6·7
+    // кнопки идут слева направо, как реальные положения глазами
+    // человека перед блоком: 7·6·1·5·4 (в 1.16.1 перевёрнуто)
     parts.push(acChooser(node, [['auto','Качание', lvIcon('h', -1)],
-                        ['position_4','Лево', lvIcon('h', 0)], ['position_5','Лево-центр', lvIcon('h', 1)],
-                        ['position_1','Центр', lvIcon('h', 2)], ['position_6','Центр-право', lvIcon('h', 3)],
-                        ['position_7','Право', lvIcon('h', 4)]],
+                        ['position_7','Лево', lvIcon('h', 0)], ['position_6','Лево-центр', lvIcon('h', 1)],
+                        ['position_1','Центр', lvIcon('h', 2)], ['position_5','Центр-право', lvIcon('h', 3)],
+                        ['position_4','Право', lvIcon('h', 4)]],
                        'data-ac-swing-h', node.getAttribute('data-ac-swing-h-now'), changed));
   }
   parts.push(powerRow(node).el);

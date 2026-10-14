@@ -29,6 +29,47 @@
   /* Выключенный: бледнее, но не до исчезновения - на белой карточке
      при .45 шкала пропадала совсем. */
   .wheel.off   { opacity: .62; }
+
+  /* ---- колесо кондиционера (с 1.15) ---------------------------------
+     Цвета - из --ac-* палитры темы. Выключенный - серый диск. */
+  .acd-disk          { fill: var(--ac-disk); }
+  .acd.off .acd-disk { fill: var(--ac-off); }
+  .acd-seg           { fill: none; stroke: var(--ac-seg-cool); stroke-linecap: round; }
+  .acd.heat .acd-seg { stroke: var(--ac-seg-heat); }
+  .acd-to            { stroke: var(--ink); stroke-linecap: round; opacity: .5; }
+  .acd-ti            { stroke: var(--ac-ink); stroke-linecap: round; opacity: .5; }
+  .acd-to.mj, .acd-ti.mj { opacity: .9; }
+  .acd.off .acd-ti   { stroke: var(--ac-off-ink); }
+  .acd-lab           { fill: var(--ac-dim); font-weight: 600; }
+  .acd.off .acd-lab  { fill: var(--ac-off-dim); }
+  .acd-mi            { stroke: var(--ac-ink); stroke-linecap: round; }
+  .acd.off .acd-mi   { stroke: var(--ac-off-ink); }
+  .acd-mo            { stroke: var(--ink); stroke-linecap: round; }
+  .acd-cm            { stroke: var(--ac-seg-cool); stroke-linecap: round; }
+  .acd.heat .acd-cm  { stroke: var(--ac-seg-heat); }
+  .acd.off .acd-cm   { stroke: var(--ink-dim); }
+  .acd-num           { fill: var(--ac-ink); font-weight: 650; letter-spacing: -1px; }
+  .acd.off .acd-num  { fill: var(--ac-off-ink); }
+  .acd-deg           { font-weight: 500; }
+  .acd-word          { fill: var(--ac-ink); font-weight: 650; }
+  .acd.off .acd-word { fill: var(--ac-off-dim); }
+  .acd-ic            { color: var(--ac-ink); }
+  .acd.off .acd-ic   { color: var(--ac-off-dim); }
+  .acd-bar           { fill: var(--ac-dim); }
+  .acd-bar.on        { fill: var(--ac-ink); }
+  .acd-fan           { fill: var(--ac-ink); font-weight: 650; }
+  .acd-hid           { display: none; }
+  .acd-now           { fill: var(--ink-dim); font-weight: 500; }
+  .acd-cur           { fill: var(--ink); font-weight: 650; letter-spacing: -1px; }
+  .acd-name          { fill: var(--ink); font-weight: 500; }
+  /* значки жалюзи: веер лопастей и стрелка качания */
+  .acl-bg            { fill: var(--ac-pill); }
+  .acl.swing .acl-bg { fill: var(--ac-pill-on); }
+  .acl-b             { stroke: var(--ink-dim); stroke-linecap: round; opacity: .55; }
+  .acl-b.act         { stroke: var(--ink); opacity: 1; }
+  .acl.swing .acl-b  { stroke: var(--ac-pill-ink); opacity: 1; }
+  .acl-a             { fill: none; stroke: var(--ink-dim); stroke-linecap: round; }
+  .acl.swing .acl-a  { stroke: var(--ac-pill-ink); }
 {% endmacro %}
 
 {#- ---- кондиционер ----
@@ -36,8 +77,12 @@
     приглушённые. Отдельной цифры под дугой нет, она дублировала. Внизу
     фактическая температура и режим работы. -#}
 {% macro tile_ac(t) %}
+  {% if t.disk and not t.compact and t.h >= 150 %}
+  {{ disk(t) }}
+  {% else %}
   {{ base.plate(t) }}
-  {% if t.wheel and not t.compact %}
+  {#- В половинную высоту дуга не помещается: там плитка как у прочих. -#}
+  {% if t.wheel and not t.compact and t.h >= base.LOW %}
     <g class="wheel {{ 'off' if not t.on }}">
       {% for lb in t.wheel.labels %}
       <text x="{{ lb.x }}" y="{{ lb.y }}" text-anchor="middle"
@@ -82,16 +127,93 @@
     {% endif %}
   {% else %}
     {{ base.icon_c(t, t.icon, 24) }}
-    {% if t.current and not t.compact %}
+    {% if t.current and not t.compact and t.h >= base.LOW %}
     <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.current }}</text>
     {% endif %}
-    {% if t.compact %}
+    {% if t.h < base.LOW and not t.compact %}
+    {#- половинная: всё в подписи справа от значка, см. _fit_low -#}
+    {% elif t.compact %}
     <text x="{{ t.w / 2 }}" y="{{ '%.0f'|format(t.h * 0.62) }}" class="mid"
           text-anchor="middle">{{ t.target }}</text>
     {% else %}
     <text x="20" y="{{ t.h - 62 }}" class="big">{{ t.target }}</text>
     {% endif %}
-    {{ base.caption(t, t.status) }}
+    {{ base.caption(t, '' if t.h < base.LOW else t.status) }}
+  {% endif %}
   {% endif %}
 {% endmacro %}
 
+
+
+{#- ---- кондиционер: залитое колесо ----
+    Диск больше плитки, видна только его часть. Уставка - большая цифра у
+    своей риски, факт - снаружи, внизу слева над названием. Данные для
+    пульта лежат в data-атрибутах группы: он крутит шкалу при
+    перетаскивании, не перерисовывая плитку. -#}
+{% macro disk(t) %}
+  {% set d = t.disk %}
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="plate"/>
+  {{ base.sheen(t, False) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+  <g class="acd {{ d.kind }}{{ ' off' if not t.on }}" data-cx="{{ d.cx }}" data-cy="{{ d.cy }}"
+     data-r="{{ d.r }}" data-rr="{{ d.rr }}" data-dpd="{{ d.dpd }}" data-asp="{{ d.a_sp }}"
+     data-val="{{ d.value }}" data-lo="{{ d.lo }}" data-hi="{{ d.hi }}"
+     data-cur="{{ d.cur if d.cur is not none else '' }}" data-box="{{ d.box|join(',') }}"
+     data-labr="{{ d.lab_r }}" data-w="{{ t.w }}" data-h="{{ t.h }}" data-fs="{{ fs }}"
+     data-on="{{ '1' if t.on else '0' }}">
+    <circle cx="{{ d.cx }}" cy="{{ d.cy }}" r="{{ d.r }}" class="acd-disk"/>
+    <path d="{{ d.seg or 'M 0,0' }}" class="acd-seg{{ ' acd-hid' if not d.seg }}" stroke-width="{{ d.seg_w }}"/>
+    <g class="acd-scale">
+      {% for k in d.ticks %}
+      <g class="acd-tk{{ ' acd-hid' if k.hide }}" data-t="{{ k.t }}">
+      <line x1="{{ k.ox1 }}" y1="{{ k.oy1 }}" x2="{{ k.ox2 }}" y2="{{ k.oy2 }}" class="acd-to{{ ' mj' if k.major }}"
+            stroke-width="{{ d.tk_w if k.major else d.tk_w2 }}"/>
+      <line x1="{{ k.ix1 }}" y1="{{ k.iy1 }}" x2="{{ k.ix2 }}" y2="{{ k.iy2 }}" class="acd-ti{{ ' mj' if k.major }}"
+            stroke-width="{{ d.tk_w if k.major else d.tk_w2 }}"/>
+      </g>
+      {% endfor %}
+      {% for l in d.labels %}
+      <text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ d.lab_size }}" text-anchor="middle" data-t="{{ l.t }}"
+            class="acd-lab{{ ' acd-hid' if l.hide }}" transform="rotate({{ l.rot }} {{ l.x }} {{ l.ry }})">{{ l.text }}</text>
+      {% endfor %}
+      {% if d.cur_mark %}
+      <line x1="{{ d.cur_mark.x1 }}" y1="{{ d.cur_mark.y1 }}" x2="{{ d.cur_mark.x2 }}" y2="{{ d.cur_mark.y2 }}"
+            class="acd-cm" stroke-width="{{ d.cur_mark.w }}"/>
+      {% endif %}
+    </g>
+    <line x1="{{ d.mark.x1 }}" y1="{{ d.mark.y1 }}" x2="{{ d.mark.x2 }}" y2="{{ d.mark.y2 }}"
+          class="acd-mi" stroke-width="{{ d.mark.wi }}"/>
+    <line x1="{{ d.mark.x2 }}" y1="{{ d.mark.y2 }}" x2="{{ d.mark.x3 }}" y2="{{ d.mark.y3 }}"
+          class="acd-mo" stroke-width="{{ d.mark.wo }}"/>
+    <text x="{{ d.num.x }}" y="{{ d.num.y }}" font-size="{{ d.num.size }}" text-anchor="middle"
+          class="acd-num"><tspan class="acd-v">{{ d.num.text }}</tspan><tspan class="acd-deg"
+          font-size="{{ d.num.deg }}" dy="{{ d.num.dy }}">°</tspan></text>
+    {% set m = d.mode %}
+    <g class="acd-ic"><use href="#{{ uid }}ic-{{ m.icon }}" xlink:href="#{{ uid }}ic-{{ m.icon }}"
+         x="{{ m.ix }}" y="{{ m.iy }}" width="{{ m.isize }}" height="{{ m.isize }}"/></g>
+    <text x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" text-anchor="end" class="acd-word">{{ m.word }}</text>
+    {% for b in m.bars %}
+    <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" rx="1.4" class="acd-bar{{ ' on' if b.on }}"/>
+    {% endfor %}
+    {% if m.fan_text %}
+    <text x="{{ m.fan_x }}" y="{{ m.fan_y }}" font-size="{{ m.size * 0.95 }}" text-anchor="end" class="acd-fan">{{ m.fan_text }}</text>
+    {% endif %}
+  </g>
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
+  {% for ic in d.icons %}
+  <g class="acl{{ ' swing' if ic.swing and t.on }}">
+    <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.r }}" class="acl-bg"/>
+    {% for b in ic.blades %}
+    <line x1="{{ b.x1 }}" y1="{{ b.y1 }}" x2="{{ b.x2 }}" y2="{{ b.y2 }}" stroke-width="{{ b.w }}"
+          class="acl-b{{ ' act' if b.act and t.on }}"/>
+    {% endfor %}
+    <path d="{{ ic.arrow }}" class="acl-a" stroke-width="{{ ic.sw }}"/>
+  </g>
+  {% endfor %}
+  {% set n = d.now %}
+  <text x="{{ n.lx }}" y="{{ n.ly }}" font-size="{{ n.lsize }}" text-anchor="middle" class="acd-now">сейчас</text>
+  <text x="{{ n.x }}" y="{{ n.y }}" font-size="{{ n.size }}" text-anchor="middle" class="acd-cur">{{ n.text }}<tspan
+        class="acd-deg" font-size="{{ n.deg }}" dy="{{ n.dy }}">°</tspan></text>
+  <text x="20" y="{{ d.title_y }}" font-size="{{ d.title_size }}" class="acd-name">{{ t.title }}</text>
+{% endmacro %}

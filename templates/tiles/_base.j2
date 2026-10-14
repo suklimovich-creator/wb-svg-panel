@@ -61,6 +61,20 @@
     --chip-on-ink: var(--ink);
     --section:     var(--tile);
     --section-op:  .35;
+    /* Колесо кондиционера: залитый диск, его чернила, полоски-таблетки
+       и яркий отрезок «сейчас - уставка» снаружи обода. Отрезок лежит на
+       плитке, а не на диске, поэтому цвета подобраны под подложку. */
+    --ac-disk:     #2F2F34;
+    --ac-ink:      #F4F4F6;
+    --ac-dim:      rgba(244,244,246,.62);
+    --ac-off:      #C8C8CC;
+    --ac-off-ink:  #3A3A3E;
+    --ac-off-dim:  #6E6E75;
+    --ac-pill:     #CACACE;
+    --ac-pill-on:  #2F2F34;
+    --ac-pill-ink: #F4F4F6;
+    --ac-seg-cool: #2D86D6;
+    --ac-seg-heat: #E0661A;
   }
   /* ---- тёмная тема ------------------------------------------------------ */
   .dark {
@@ -86,6 +100,17 @@
     --sheen-on:    rgba(255,174,40,.30);
     --section:     #2C2C31;
     --section-op:  .8;
+    --ac-disk:     #FFAE28;
+    --ac-ink:      #1A1408;
+    --ac-dim:      rgba(26,20,8,.62);
+    --ac-off:      #3A3B40;
+    --ac-off-ink:  #C6C6CC;
+    --ac-off-dim:  rgba(255,255,255,.45);
+    --ac-pill:     #3A3A40;
+    --ac-pill-on:  #FFAE28;
+    --ac-pill-ink: #1A1408;
+    --ac-seg-cool: #6CC4FF;
+    --ac-seg-heat: #FF9A3D;
   }
 
   /* ---- графит: тёмная тема построже -------------------------------------
@@ -113,6 +138,12 @@
     --sheen-on:    rgba(242,162,58,.34);
     --section:     #232427;
     --section-op:  1;
+    --ac-disk:     #F2A23A;
+    --ac-ink:      #17130D;
+    --ac-dim:      rgba(23,19,13,.62);
+    --ac-pill:     #27282C;
+    --ac-pill-on:  #F2A23A;
+    --ac-pill-ink: #17130D;
   }
   .sheen     { pointer-events: none; }
 
@@ -151,6 +182,12 @@
     --inv-accent:  #F2B54E;
     --section:     #FFFFFF;
     --section-op:  .75;
+    --ac-disk:     #8A4A20;
+    --ac-ink:      #FFF4E4;
+    --ac-dim:      rgba(255,244,228,.72);
+    --ac-pill:     #F1ECE5;
+    --ac-pill-on:  #8A4A20;
+    --ac-pill-ink: #FFF4E4;
   }
 
   /* ---- ретро: кремовая бумага, тёмно-синий, терракота, шалфей --------- */
@@ -180,6 +217,12 @@
     --inv-accent:  #E8894E;
     --section:     #FBF6EC;
     --section-op:  .9;
+    --ac-disk:     #2F3A4F;
+    --ac-ink:      #F6EEDF;
+    --ac-dim:      rgba(246,238,223,.62);
+    --ac-pill:     #EFE5D4;
+    --ac-pill-on:  #2F3A4F;
+    --ac-pill-ink: #F6EEDF;
   }
 
   /* ---- нуар: тёплый серо-бежевый, графит, сепия --------------------- */
@@ -210,6 +253,12 @@
     --chip-on-ink: #F2EDE4;
     --section:     #D8CFC1;
     --section-op:  1;
+    --ac-disk:     #262321;
+    --ac-ink:      #F2EDE4;
+    --ac-dim:      rgba(242,237,228,.62);
+    --ac-pill:     #D3CABC;
+    --ac-pill-on:  #262321;
+    --ac-pill-ink: #F2EDE4;
   }
 
   /* ---- тёмная карточка (inv) ----------------------------------------

@@ -22,6 +22,7 @@ from .const import BAND, log
 from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
                        grid_bounds, hour_ticks, label_color, label_digits, nice_step,
                        parse_duration, smooth_path, text_width)
+from .ac_disk import build_disk
 from .registry import Tile, Zone, tile
 from .state import is_on, to_float
 from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
@@ -575,8 +576,9 @@ def build_ac(tile, state):
     lo = float(tile.get("temp_min", 16))
     hi = float(tile.get("temp_max", 30))
 
-    swing = (val("swing_mode")["raw"] or "").strip()
-    swing_h = (val("swing_h_mode")["raw"] or "").strip()
+    swing_snap, swing_h_snap = val("swing_mode"), val("swing_h_mode")
+    swing = (swing_snap["raw"] or "").strip()
+    swing_h = (swing_h_snap["raw"] or "").strip()
     swinging = swing not in ("", "off", "0") or swing_h not in ("", "off", "0")
     louver = louver_glyph(swing, AC_SWING_DEG, vertical=True) if on else None
     louver_h = louver_glyph(swing_h, AC_SWING_H_DEG, vertical=False) if on else None
@@ -600,6 +602,9 @@ def build_ac(tile, state):
         "target": ("%s°" % target_num) if tgt is not None else "--",
         "current": ("%s°" % _fmt(cur, 1)) if cur is not None else "",
         "short": ("%s°" % _fmt(cur, 1)) if cur is not None else "",
+        # половинная плитка: одной строкой «сейчас → уставка»
+        "short_min": (("%s° → %s°" % (_fmt(cur, 1), target_num)) if cur is not None
+                      else "→ %s°" % target_num) if on else "выкл",
         "status": (" · ".join(bits) if on else "Выключен"),
         "mode_ru": AC_MODE_RU.get(mode, mode),
         "swinging": swinging,
@@ -610,6 +615,19 @@ def build_ac(tile, state):
         "lo": lo, "hi": hi,
         "wheel": build_wheel(tile.get("inner_w") or 170,
                              tile.get("chart_h") or 170, lo, hi, tgt),
+        # Залитое колесо (с 1.15). Старая дуга остаётся для плиток, куда
+        # колесо не помещается: половинной высоты и мелких.
+        # Кегль колеса - по меньшей стороне: на высокой плитке fs считается
+        # от высоты, и цифры в узкую ширину не влезали.
+        "disk": build_disk(tile.get("inner_w") or 170, tile.get("chart_h") or 170,
+                           min(float(tile.get("fs") or 1),
+                               max(1.0, (tile.get("inner_w") or 170) / 170.0)),
+                           mode, on, tgt, cur, lo, hi,
+                           fan=fan, quiet=quiet,
+                           swing=swing if swing_snap["known"] else None,
+                           swing_h=swing_h if swing_h_snap["known"] else None,
+                           pad=tile.get("view") == "pad",
+                           step=float(tile.get("step", 1) or 1)),
         "enabled": on,
         "reach": None,
         "snaps": snaps,

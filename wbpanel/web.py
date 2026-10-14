@@ -823,7 +823,12 @@ def tile_svg(name, index):
                        config.get("interactive", False)))
     theme = panel_theme(panel_conf)
     panel_conf = dict(panel_conf, theme=theme)
-    tile = build_tile(tiles[index], 0, PAD, PAD, width, height,
+    conf = tiles[index]
+    # Пульт кондиционера берёт колесо отсюда же, но в своём виде: без
+    # значков жалюзи (они кнопками под колесом) и с цифрами крупнее.
+    if request.args.get("view") == "pad":
+        conf = dict(conf, view="pad")
+    tile = build_tile(conf, 0, PAD, PAD, width, height,
                       panel_conf, state, history, interactive)
     scale = font_scale(height)
     svg = jinja.get_template(panel_conf.get("template", "panel.svg.j2")).render(
@@ -831,7 +836,7 @@ def tile_svg(name, index):
         fs=scale,
         tiles=[tile], headers=[],
         width=width + PAD * 2, height=height + PAD * 2,
-        rx=RX, theme=theme, shadows=True,
+        rx=RX, theme=theme, shadows=True, bare=conf.get("view") == "pad",
         title="", updated=time.strftime("%H:%M"), connected=state.connected)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(

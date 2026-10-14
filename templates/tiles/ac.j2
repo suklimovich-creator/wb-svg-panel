@@ -464,13 +464,13 @@
         <rect x="{{ c.x }}" y="{{ s.ch_y }}" width="{{ c.w }}" height="{{ s.ch_pill }}" rx="{{ s.ch_pill / 2 }}"
               class="acs-pill{{ ' on' if c.on }}"/>
         {% if c.key == 'auto' %}
-        <text x="{{ c.tx }}" y="{{ s.ch_y + s.ch_pill * 0.36 }}" font-size="{{ c.isize }}" text-anchor="middle"
+        <text x="{{ c.tx }}" y="{{ s.ch_iy }}" font-size="{{ c.isize }}" text-anchor="middle"
               dominant-baseline="central" class="acs-pill-t{{ ' on' if c.on }}" font-weight="750">A</text>
         {% else %}
         <g class="acs-pill-ic{{ ' on' if c.on }}"><use href="#{{ uid }}ic-{{ c.icon }}" xlink:href="#{{ uid }}ic-{{ c.icon }}"
-           x="{{ c.ix }}" y="{{ s.ch_y + s.ch_pill * 0.36 - c.isize / 2 }}" width="{{ c.isize }}" height="{{ c.isize }}"/></g>
+           x="{{ c.ix }}" y="{{ s.ch_iy - c.isize / 2 }}" width="{{ c.isize }}" height="{{ c.isize }}"/></g>
         {% endif %}
-        <text x="{{ c.tx }}" y="{{ s.ch_y + s.ch_pill * 0.82 }}" font-size="{{ s.ch_font }}" text-anchor="middle"
+        <text x="{{ c.tx }}" y="{{ s.ch_ty }}" font-size="{{ s.ch_font }}" text-anchor="middle"
               class="acs-pill-t{{ ' on' if c.on }}">{{ c.word }}</text>
       </g>
       {% endfor %}

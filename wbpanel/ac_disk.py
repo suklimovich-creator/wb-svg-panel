@@ -392,11 +392,11 @@ def gear_path(cx, cy, r, fs):
 #: и выровнены - «назад» и питание одного размера, 12 px от краёв.
 #: x, y, cx, cy - доли ширины и высоты экрана; r - доля меньшей стороны;
 #: размеры - в единицах плитки (умножаются на fs); sp - угол риски уставки
-#: в охлаждении и нагреве. ref и fs: на экране с меньшей стороной ref
-#: единица плитки равна fs пикселям.
+#: в охлаждении и нагреве. W×H - экран, на котором раскладку собирали;
+#: на нём единица плитки равна fs пикселям.
 SCREEN = {
     "portrait": {
-        "ref": 390.0, "fs": 2.0,
+        "W": 390.0, "H": 844.0, "fs": 2.0,
         "wheel": {"cx": 1.6824, "cy": -0.0126, "r": 1.4235, "dir": 1, "num": 32, "gap": 25, "lab": 10, "step": 30},
         "sp": {"cool": 138.8, "heat": 164.0},
         "mode": {"x": 0.928, "y": 0.058, "anchor": "end", "size": 14.5},
@@ -409,7 +409,7 @@ SCREEN = {
         "fan": {"r": 0.04},
     },
     "landscape": {
-        "ref": 390.0, "fs": 2.0,
+        "W": 844.0, "H": 390.0, "fs": 2.0,
         "wheel": {"cx": 0.0667, "cy": -1.4802, "r": 2.2211, "dir": -1, "num": 47, "gap": 25, "lab": 11, "step": 30},
         "sp": {"cool": 78.3, "heat": 58.9},
         "mode": {"x": 0.0806, "y": 0.163, "anchor": "start", "size": 15.5, "inline": True},
@@ -422,10 +422,10 @@ SCREEN = {
         "fan": {"r": 0.04},
     },
     "square": {
-        "ref": 600.0, "fs": 2.3,
+        "W": 600.0, "H": 600.0, "fs": 2.3,
         "wheel": {"cx": 1.3651, "cy": -0.2548, "r": 1.103, "dir": 1, "num": 41, "gap": 25, "lab": 10, "step": 38},
         # в нагреве риска чуть ниже, чем в конструкторе: цифра упиралась в режим
-        "sp": {"cool": 130.0, "heat": 150.0},
+        "sp": {"cool": 130.0, "heat": 143.0},
         "mode": {"x": 0.94, "y": 0.101, "anchor": "end", "size": 13.5},
         "now": {"x": 0.02, "y": 0.353, "anchor": "start", "size": 30},
         "name": {"x": 0.02, "y": 0.93, "anchor": "start", "size": 11},
@@ -449,10 +449,13 @@ MODES = (("cool", "холод"), ("heat", "тепло"), ("dry", "сушка"), 
 
 
 def screen_kind(w, h):
+    # Ближайшая по пропорциям раскладка: граница - среднее геометрическое
+    # соседних (стоя 0.46, квадрат 1, на боку 2.16). Планшет 4 : 3 и окно
+    # браузера 16 : 10 так попадают в квадрат и «на боку».
     ar = float(w) / float(h)
-    if ar < 0.8:
+    if ar < 0.68:
         return "portrait"
-    if ar > 1.25:
+    if ar > 1.47:
         return "landscape"
     return "square"
 
@@ -477,8 +480,30 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     """
     orient = screen_kind(w, h)
     L = SCREEN[orient]
-    M = float(min(w, h))
-    fs = L["fs"] * M / L["ref"]
+    # Раскладка собрана на экране W×H. На другом она масштабируется целиком
+    # (k - чтобы влезла), а каждый элемент держится за ближние края:
+    # левые - за левый, нижние - за нижний. Лишнее место уходит в середину,
+    # а не растаскивает элементы: на iPhone с панелями Safari экран ниже,
+    # чем в конструкторе, и колёса наезжали друг на друга.
+    k = min(w / L["W"], h / L["H"])
+    M = min(L["W"], L["H"]) * k
+    fs = L["fs"] * k
+
+    # Элемент посередине (доля 0.35-0.65) держится за середину экрана:
+    # на планшете 4 : 3 малое колесо у нижнего края иначе уезжало вправо
+    # вместе с большим и упиралось в его зубцы.
+    def _at(f, ref, size):
+        if f < 0.35:
+            return f * ref * k
+        if f > 0.65:
+            return size - (1.0 - f) * ref * k
+        return size / 2.0 + (f - 0.5) * ref * k
+
+    def X(f):
+        return _at(f, L["W"], w)
+
+    def Y(f):
+        return _at(f, L["H"], h)
     kind = layout_kind(mode, cur, tgt)
     other = "heat" if kind == "cool" else "cool"
     lo, hi = float(lo), float(hi)
@@ -487,7 +512,7 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     no_target = mode == "fan_only"
 
     wl = L["wheel"]
-    cx, cy, R = wl["cx"] * w, wl["cy"] * h, wl["r"] * M
+    cx, cy, R = X(wl["cx"]), Y(wl["cy"]), wl["r"] * M
     per_deg = wl["step"] * fs
     dpd = per_deg / R * 180.0 / math.pi * wl["dir"]
     a_sp = L["sp"][kind]
@@ -561,7 +586,7 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     # режим: слово и значок; нажатие открывает выбор
     md = L["mode"]
     ms = md["size"] * fs
-    mx, my = md["x"] * w, md["y"] * h
+    mx, my = X(md["x"]), Y(md["y"])
     word = MODE_WORD.get(mode, mode or "") if power else "выкл"
     icon = MODE_ICON.get(mode) or ("sun" if kind == "heat" else "snow")
     isz = ms * 1.35
@@ -572,6 +597,7 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     else:
         ix, wx = mx, mx + isz + ms * 0.45
         hit = (mx - 6, my - isz - 6, wx + word_w + 6, my + ms * 0.4)
+    mode_box = (hit[0], hit[1], hit[2], hit[3])
     mode_info = {"word": word, "icon": icon, "x": _r(wx), "y": _r(my), "size": _r(ms),
                  "anchor": md["anchor"], "ix": _r(ix), "iy": _r(my - isz * 0.8), "isize": _r(isz),
                  "inside": in_disk(mx, my),
@@ -581,6 +607,36 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     fx, fy, _, _ = _num_place(cx, cy, R, L["sp"][other], num_size, gap, "24")
     fr = L["fan"]["r"] * M
     rg = fr * 0.62
+    # Кольца не должны наезжать на слово режима и на свою цифру уставки
+    # (на квадрате место уставки нагрева - у самого режима): задевают -
+    # вентилятор отталкивается от того, что задел, и не уходит за экран.
+    outer = fr + 3 * rg + 4 * fs
+
+    def _push(x, y, b):
+        nx, ny = max(b[0], min(b[2], x)), max(b[1], min(b[3], y))
+        d = math.hypot(x - nx, y - ny)
+        if d >= outer:
+            return None
+        if d < 1e-6:
+            return (0.0, 1.0)
+        return ((x - nx) / d, (y - ny) / d)
+
+    # и на подписи шкалы: кольца целиком внутри, ближе к центру подписей
+    rim_in = R - 17 * fs - wl["lab"] * fs * 0.9 - outer
+
+    def _rim(x, y):
+        d = math.hypot(x - cx, y - cy)
+        if d <= rim_in or d < 1e-6:
+            return None
+        return ((cx - x) / d, (cy - y) / d)
+
+    for _ in range(160):
+        v = _push(fx, fy, mode_box) or _push(fx, fy, box) or _rim(fx, fy)
+        if not v:
+            break
+        fx, fy = fx + v[0] * 3 * fs, fy + v[1] * 3 * fs
+        fx = max(outer, min(w - outer, fx))
+        fy = max(outer, min(h - outer, fy))
     ring = FAN_RING.get(fan, 0)
     fstate = "quiet" if quiet else ("auto" if fan == "auto" or not ring else ring)
     blades = " ".join(
@@ -601,7 +657,7 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
         d = L[key]
         if value_now is None:
             return None
-        dx, dy, r = d["x"] * w, d["y"] * h, d["r"] * M
+        dx, dy, r = X(d["x"]), Y(d["y"]), d["r"] * M
         # «A» в центре должна быть видна целиком: колесо у края экрана
         # отодвигается ровно настолько, чтобы ступица не уходила за край
         # (и снизу не попадала в полосу жестов телефона)
@@ -641,28 +697,36 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
 
     def text_block(key):
         b = L[key]
-        x, y = b["x"] * w, b["y"] * h
+        x, y = X(b["x"]), Y(b["y"])
         return {"x": _r(x), "y": _r(y), "size": _r(b["size"] * fs), "anchor": b["anchor"],
                 "inside": in_disk(x, y)}
 
     def button(key):
         b = L[key]
-        return {"x": _r(b["x"] * w), "y": _r(b["y"] * h), "r": _r(b["size"] * fs)}
+        return {"x": _r(X(b["x"])), "y": _r(Y(b["y"])), "r": _r(b["size"] * fs)}
 
     now = text_block("now")
     now.update({"label_y": _r(now["y"] - now["size"] * 0.82), "label_size": _r(now["size"] * 0.3),
                 "deg": _r(now["size"] * 0.47), "dy": _r(-now["size"] * 0.44), "text": _num(cur, 1)})
 
     # выбор режима - шторка у верхнего края
-    ch_h = 26 * fs + 14
+    # Высота кнопки считается от значка и подписи: на планшете значок
+    # упирался в ширину кнопки, подпись - нет, и они наезжали друг на друга.
     cw = (w - 24 - 4 * 6) / 5.0
+    ch_isz = min(cw * .28, 16 * fs)
+    ch_font = min(12 * fs, cw * .2)
+    ch_pad = max(5.0, ch_isz * .22)
+    ch_pill = ch_pad * 2 + ch_isz + ch_font * 1.15
+    ch_h = ch_pill + 6
+    ch_iy = 12 + ch_pad + ch_isz / 2               # центр значка
+    ch_ty = 12 + ch_pad + ch_isz + ch_font * 0.95  # базовая линия подписи
     chooser = []
     for i, (key, nm) in enumerate(MODES):
         x = 12 + i * (cw + 6)
         chooser.append({"key": key, "word": nm, "icon": MODE_ICON.get(key) or "snow",
                         "x": _r(x), "w": _r(cw), "on": key == mode,
-                        "ix": _r(x + cw / 2 - min(cw * .28, 16 * fs) / 2),
-                        "isize": _r(min(cw * .28, 16 * fs)), "tx": _r(x + cw / 2)})
+                        "ix": _r(x + cw / 2 - ch_isz / 2),
+                        "isize": _r(ch_isz), "tx": _r(x + cw / 2)})
 
     return {
         "orient": orient, "kind": kind, "w": w, "h": h, "fs": _r(fs),
@@ -680,8 +744,8 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
         "hdial": dial("hdial", swing_h, SWING_H, DIAL_H),
         "now": now, "name": text_block("name"),
         "back": button("back"), "power": button("power"),
-        "chooser": chooser, "ch_h": _r(ch_h), "ch_y": 12, "ch_pill": _r(ch_h - 6),
-        "ch_font": _r(min(12 * fs, cw * .2)), "sh_blur": _r(5 * fs), "sh_key": _r(.7 * fs),
+        "chooser": chooser, "ch_h": _r(ch_h), "ch_y": 12, "ch_pill": _r(ch_pill),
+        "ch_iy": _r(ch_iy), "ch_ty": _r(ch_ty), "ch_font": _r(ch_font), "sh_blur": _r(5 * fs), "sh_key": _r(.7 * fs),
         "sh_dy": _r(5 * fs), "sh_dy2": _r(1.25 * fs),
     }
 

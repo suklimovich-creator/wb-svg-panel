@@ -743,7 +743,10 @@ def panel_svg(name):
     # и считает заново с нуля: тоже отвечаем сразу, иначе страница ждала
     # бы версии, до которой счётчик дойдёт нескоро.
     base_headers = {"Access-Control-Allow-Origin": "*",
-                    "Access-Control-Expose-Headers": "X-Panel-Version"}
+                    "Access-Control-Expose-Headers": "X-Panel-Version, X-Panel-App",
+                    # версия демона: страница со старыми скриптами
+                    # перезагрузится сама (см. APP в wrapper.html)
+                    "X-Panel-App": __version__}
     # Ждём, если страница видела текущую версию или с её версии не
     # менялось ничего из того, что панель показывает сразу: датчик CO2 в
     # спальне не повод слать прихожей всю картинку заново. Версия больше
@@ -949,10 +952,14 @@ def panel_html(name):
             ("__NAME__", html.escape(name)),
             ("__NAME_JS__", json.dumps(name)),
             ("__EVERY__", str(every)),
-            ("__INTERACTIVE__", "true" if interactive else "false")):
+            ("__INTERACTIVE__", "true" if interactive else "false"),
+            ("__APP_JS__", json.dumps(__version__))):
         html_page = html_page.replace(mark, value)
 
-    return Response(html_page, mimetype="text/html; charset=utf-8")
+    # страница не кэшируется: после обновления панели должны прийти
+    # новые скрипты, а не старые из кэша браузера
+    return Response(html_page, mimetype="text/html; charset=utf-8",
+                    headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 # какой тип плитки обычно подходит для типа канала Wiren Board

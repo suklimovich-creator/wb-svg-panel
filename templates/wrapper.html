@@ -355,6 +355,11 @@
 
 <script>
 var NAME = __NAME_JS__, EVERY = __EVERY__000;
+/* Версия демона, с которой отдана эта страница. Обновили панель на
+   контроллере - картинка уже новая, а скрипты страницы старые: пульты
+   рисовались новым сервером, а вели себя по-старому. Поэтому страница
+   сверяет версию с каждым ответом и перезагружается сама. */
+var APP = __APP_JS__, appReload = false;
 
 /* Запасной вход на 8080 не закрыт паролем: кто попал в домашнюю сеть, тот
    управляет светом и шторами. Годится, чтобы попробовать, но не как
@@ -670,6 +675,7 @@ function pub(topic, value){
    тикать в пустоту. */
 var ovCleanup = null;
 function closeOv(){ ov.classList.remove('open'); paused=false;
+  if(appReload){ location.reload(); return; }
   if(ovCleanup){ ovCleanup(); ovCleanup = null; }
   var k=ov.querySelector('.card,#pad,#lvl,#crtwrap,.ttl,.hint');
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
@@ -2890,6 +2896,11 @@ function flushPending(){
    изменится. Нет заголовка - старый сервер, работаем опросом. */
 var VER = null, LIVE = true;
 function noteVersion(r){
+  var app = r.headers && r.headers.get ? r.headers.get('X-Panel-App') : null;
+  if (app && APP && app !== APP) {
+    // под открытым окном не дёргаем - перезагрузимся, когда его закроют
+    if (ov.classList.contains('open')) appReload = true; else location.reload();
+  }
   var v = r.headers && r.headers.get ? r.headers.get('X-Panel-Version') : null;
   if (v === null || v === undefined || v === '') { LIVE = false; return; }
   VER = parseInt(v, 10);

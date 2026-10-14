@@ -193,6 +193,12 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
 
     lab_r = R - 17.0 * fs
     lab_size = 10.0 * fs
+    # Обод - зубцы с прямыми шапками и круглыми желобами (макеты 14.10,
+    # вариант 2). Шкала снаружи отступает на высоту зубца.
+    tooth_h = 6.0 * fs
+    teeth = slots_path(cx, cy, R, ang, lo - 2, hi + 2, 30.0 * fs, 7.0 * fs, tooth_h,
+                       1 if dpd > 0 else -1, (0, 0, w, h))
+    lift = tooth_h
 
     def label_hidden(lx, ly):
         m = 5.0 * fs
@@ -209,9 +215,9 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
         whole = abs(t - round(t)) < 0.01
         a = ang(t)
         ln = (8.0 if whole else 4.0) * fs
-        po, pi_, pm = pol(R + ln * 0.7, a), pol(R - ln, a), pol(R, a)
+        po, pi_, pm, pl = pol(R + lift + ln * 0.7, a), pol(R - ln, a), pol(R, a), pol(R + lift, a)
         ticks.append({"t": t, "major": whole,
-                      "ox1": _r(pm[0]), "oy1": _r(pm[1]), "ox2": _r(po[0]), "oy2": _r(po[1]),
+                      "ox1": _r(pl[0]), "oy1": _r(pl[1]), "ox2": _r(po[0]), "oy2": _r(po[1]),
                       "ix1": _r(pi_[0]), "iy1": _r(pi_[1]), "ix2": _r(pm[0]), "iy2": _r(pm[1]),
                       "hide": abs(t - value) < 0.01})
         if whole:
@@ -224,16 +230,16 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
                            "hide": abs(t - value) < 0.01 or label_hidden(lx, ly)})
 
     # Риска уставки: внутри длинная, указывает на цифру; снаружи - цветом плитки.
-    s1, s2, s3 = pol(R - gap + 6 * fs, a_sp), pol(R, a_sp), pol(R + 11 * fs, a_sp)
+    s1, s2, s3 = pol(R - gap + 6 * fs, a_sp), pol(R, a_sp), pol(R + 11 * fs + lift, a_sp)
     mark = {"x1": _r(s1[0]), "y1": _r(s1[1]), "x2": _r(s2[0]), "y2": _r(s2[1]),
             "x3": _r(s3[0]), "y3": _r(s3[1]), "wi": _r(3.6 * fs), "wo": _r(4.4 * fs)}
 
     seg, cur_mark = None, None
-    rr = R + 4.0 * fs
+    rr = R + 6.0 * fs + lift
     if cur is not None:
         cv = max(lo - 3, min(hi + 3, float(cur)))
         ac = ang(cv)
-        q1, q2 = pol(R - 2 * fs, ac), pol(R + 12 * fs, ac)
+        q1, q2 = pol(R - 2 * fs, ac), pol(R + 12 * fs + lift, ac)
         cur_mark = {"x1": _r(q1[0]), "y1": _r(q1[1]), "x2": _r(q2[0]), "y2": _r(q2[1]),
                     "w": _r(3.2 * fs)}
         if power and tgt is not None and abs(cv - value) > 0.05:
@@ -302,7 +308,7 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
             icons.append(louver_icon(w - (55 if swing_h is not None else 26) * fs, iy, "v", swing, fs))
 
     return {
-        "kind": kind,
+        "kind": kind, "teeth": teeth,
         "cx": _r(cx), "cy": _r(cy), "r": _r(R), "rr": _r(rr),
         "dpd": round(dpd, 5), "a_sp": round(a_sp, 4), "value": value,
         "lo": lo, "hi": hi, "cur": cur,
@@ -316,3 +322,371 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
         "title_size": _r(15.0 * fs * (1.25 if pad else 1.0)),
         "title_y": _r(h - 20.0 * fs),
     }
+
+
+def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None):
+    """
+    Обод с зубцами: прямые шапки на радиусе R + th, между ними круглые
+    желоба до R. Желоба - между делениями шкалы (на t + 0.25), деления
+    проходят над шапками. Многоугольник замыкается через центр колеса и
+    ложится поверх круга радиуса R.
+
+    bounds - (x0, y0, x1, y1): рисовать только видимое. Для пульта, где
+    шкала крутится, - None: весь диапазон, иначе при повороте из-за края
+    выезжал бы гладкий обод.
+    """
+    pts = []
+    hx = gw / 2.0
+    top = R + th
+
+    def lp(a, x, r):
+        a = math.radians(a + math.degrees(x / r) * sgn)
+        return cx + r * math.cos(a), cy + r * math.sin(a)
+
+    t = t0 + 0.25
+    while t <= t1 + 1e-6:
+        a = ang(t)
+        if bounds:
+            px, py = cx + R * math.cos(math.radians(a)), cy + R * math.sin(math.radians(a))
+            if not (bounds[0] - 80 < px < bounds[2] + 80 and bounds[1] - 80 < py < bounds[3] + 80):
+                t += 0.5
+                continue
+        pts.append(lp(a, -per_deg / 4.0, top))
+        pts.append(lp(a, -hx, top))
+        pts.append(lp(a, -hx, R + hx))
+        for j in range(1, 12):
+            f = math.pi * j / 12
+            pts.append(lp(a, -hx * math.cos(f), R + hx - hx * math.sin(f)))
+        pts.append(lp(a, hx, R + hx))
+        pts.append(lp(a, hx, top))
+        t += 0.5
+    if not pts:
+        return None
+    return "M %.1f,%.1f L " % (cx, cy) + " L ".join("%.1f,%.1f" % p for p in pts) + " Z"
+
+
+def gear_path(cx, cy, r, fs):
+    """Малое колесо жалюзи: тот же обод с желобами, по кругу."""
+    tw, tth = 7.0 * fs, 6.0 * fs
+    n = max(18, int(round(2 * math.pi * r / (16.0 * fs))))
+    hw = tw / 2.0 / r
+    pts = []
+    for k in range(n):
+        a0 = 2 * math.pi * k / n
+        pts.append((cx + r * math.cos(a0 - hw), cy + r * math.sin(a0 - hw)))
+        for f in range(9):
+            ff = math.pi * f / 8
+            x = -tw / 2 * math.cos(ff)
+            rad = (r - tth + tw / 2) - (tw / 2) * math.sin(ff)
+            aa = a0 + x / rad
+            pts.append((cx + rad * math.cos(aa), cy + rad * math.sin(aa)))
+        pts.append((cx + r * math.cos(a0 + hw), cy + r * math.sin(a0 + hw)))
+        am = a0 + math.pi / n
+        pts.append((cx + r * math.cos(am), cy + r * math.sin(am)))
+    return "M " + " L ".join("%.1f,%.1f" % p for p in pts) + " Z"
+
+
+# ---------------------------------------------------------------- пульт на весь экран
+
+#: Раскладки пульта на весь экран: собраны в конструкторе 14.10 («Вариант 5»)
+#: и выровнены - «назад» и питание одного размера, 12 px от краёв.
+#: x, y, cx, cy - доли ширины и высоты экрана; r - доля меньшей стороны;
+#: размеры - в единицах плитки (умножаются на fs); sp - угол риски уставки
+#: в охлаждении и нагреве. ref и fs: на экране с меньшей стороной ref
+#: единица плитки равна fs пикселям.
+SCREEN = {
+    "portrait": {
+        "ref": 390.0, "fs": 2.0,
+        "wheel": {"cx": 1.6824, "cy": -0.0126, "r": 1.4235, "dir": 1, "num": 32, "gap": 25, "lab": 10, "step": 30},
+        "sp": {"cool": 138.8, "heat": 164.0},
+        "mode": {"x": 0.928, "y": 0.058, "anchor": "end", "size": 14.5},
+        "now": {"x": 0.0308, "y": 0.449, "anchor": "start", "size": 30},
+        "name": {"x": 0.0308, "y": 0.365, "anchor": "start", "size": 11},
+        "back": {"x": 0.0872, "y": 0.0403, "size": 11},
+        "power": {"x": 0.0872, "y": 0.1066, "size": 11},
+        "vdial": {"x": 0.059, "y": 0.593, "r": 0.27, "dir": "right", "len": 0.6, "arrows": "out"},
+        "hdial": {"x": 0.698, "y": 0.818, "r": 0.27, "dir": "up", "len": 0.6, "arrows": "in"},
+        "fan": {"r": 0.04},
+    },
+    "landscape": {
+        "ref": 390.0, "fs": 2.0,
+        "wheel": {"cx": 0.0667, "cy": -1.4802, "r": 2.2211, "dir": -1, "num": 47, "gap": 25, "lab": 11, "step": 30},
+        "sp": {"cool": 78.3, "heat": 58.9},
+        "mode": {"x": 0.0806, "y": 0.163, "anchor": "start", "size": 15.5, "inline": True},
+        "now": {"x": 0.58, "y": 0.921, "anchor": "end", "size": 36},
+        "name": {"x": 0.0142, "y": 0.916, "anchor": "start", "size": 14},
+        "back": {"x": 0.0403, "y": 0.0872, "size": 11},
+        "power": {"x": 0.9597, "y": 0.0872, "size": 11},
+        "vdial": {"x": 0.982, "y": 0.478, "r": 0.22, "dir": "left", "len": 0.6, "arrows": "out"},
+        "hdial": {"x": 0.747, "y": 1.0, "r": 0.22, "dir": "up", "len": 0.6, "arrows": "in"},
+        "fan": {"r": 0.04},
+    },
+    "square": {
+        "ref": 600.0, "fs": 2.3,
+        "wheel": {"cx": 1.3651, "cy": -0.2548, "r": 1.103, "dir": 1, "num": 41, "gap": 25, "lab": 10, "step": 38},
+        # в нагреве риска чуть ниже, чем в конструкторе: цифра упиралась в режим
+        "sp": {"cool": 130.0, "heat": 150.0},
+        "mode": {"x": 0.94, "y": 0.101, "anchor": "end", "size": 13.5},
+        "now": {"x": 0.02, "y": 0.353, "anchor": "start", "size": 30},
+        "name": {"x": 0.02, "y": 0.93, "anchor": "start", "size": 11},
+        "back": {"x": 0.0622, "y": 0.0622, "size": 11},
+        "power": {"x": 0.1665, "y": 0.0622, "size": 11},
+        "vdial": {"x": 0.039, "y": 0.609, "r": 0.18, "dir": "right", "len": 0.6, "arrows": "out"},
+        "hdial": {"x": 0.538, "y": 0.963, "r": 0.18, "dir": "up", "len": 0.6, "arrows": "in"},
+        "fan": {"r": 0.04},
+    },
+}
+
+#: Скорости вентилятора по кольцам: первое кольцо - low, третье - high.
+FAN_RING = {"low": 1, "medium": 2, "high": 3}
+#: Сколько секунд на оборот пропеллера при такой скорости.
+FAN_SPIN = {1: 2.4, 2: 1.3, 3: 0.7, "auto": 1.3, "quiet": 3.2}
+#: Направления жалюзи на малых колёсах: наклон от оси колеса, градусы.
+DIAL_V = (-38, -19, 0, 19, 38)
+DIAL_H = (-42, -21, 0, 21, 42)
+DIAL_BASE = {"right": 0.0, "left": 180.0, "up": -90.0, "down": 90.0}
+MODES = (("cool", "холод"), ("heat", "тепло"), ("dry", "сушка"), ("fan_only", "обдув"), ("auto", "авто"))
+
+
+def screen_kind(w, h):
+    ar = float(w) / float(h)
+    if ar < 0.8:
+        return "portrait"
+    if ar > 1.25:
+        return "landscape"
+    return "square"
+
+
+def _num_place(cx, cy, R, a_sp, size, gap, text):
+    """Центр и рамка большой цифры: по радиусу внутрь от риски."""
+    bw = text_width(text, size, 0.6) + size * 0.25
+    bh = size * 0.72
+    ux, uy = -math.cos(math.radians(a_sp)), -math.sin(math.radians(a_sp))
+    ext = abs(ux) * bw / 2 + abs(uy) * bh / 2
+    px, py = cx + R * math.cos(math.radians(a_sp)), cy + R * math.sin(math.radians(a_sp))
+    return px + ux * (gap + ext), py + uy * (gap + ext), bw, bh
+
+
+def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
+                 swing=None, swing_h=None, step=1.0):
+    """
+    Пульт кондиционера на весь экран w×h: колесо уставки с зубчатым ободом,
+    вентилятор кольцами на месте уставки другого режима, два малых колеса
+    жалюзи, «назад» и питание. Раскладка - по форме экрана (SCREEN).
+    Всё в пикселях: шаблон только рисует, пульт крутит.
+    """
+    orient = screen_kind(w, h)
+    L = SCREEN[orient]
+    M = float(min(w, h))
+    fs = L["fs"] * M / L["ref"]
+    kind = layout_kind(mode, cur, tgt)
+    other = "heat" if kind == "cool" else "cool"
+    lo, hi = float(lo), float(hi)
+    value = tgt if tgt is not None else (lo + hi) / 2.0
+    value = max(lo, min(hi, float(value)))
+    no_target = mode == "fan_only"
+
+    wl = L["wheel"]
+    cx, cy, R = wl["cx"] * w, wl["cy"] * h, wl["r"] * M
+    per_deg = wl["step"] * fs
+    dpd = per_deg / R * 180.0 / math.pi * wl["dir"]
+    a_sp = L["sp"][kind]
+
+    def pol(r, a):
+        a = math.radians(a)
+        return cx + r * math.cos(a), cy + r * math.sin(a)
+
+    def ang(t):
+        return a_sp + (t - value) * dpd
+
+    tooth_h = 6.0 * fs
+    lift = tooth_h
+    teeth = slots_path(cx, cy, R, ang, lo - 3, hi + 3, per_deg, 7.0 * fs, tooth_h,
+                       1 if dpd > 0 else -1)
+
+    num_size = wl["num"] * fs
+    gap = wl["gap"] * fs
+    digits = 0 if float(step) >= 1 else 1
+    num_text = "—" if no_target else _num(tgt, digits)
+    if tgt is not None and digits and abs(tgt - round(tgt)) < 0.05:
+        num_text = _num(tgt, 0)
+    ncx, ncy, bw, bh = _num_place(cx, cy, R, a_sp, num_size, gap, "24")
+    box = (ncx - bw / 2 - 3 * fs, ncy - bh / 2 - 3 * fs, ncx + bw / 2 + 3 * fs, ncy + bh / 2 + 3 * fs)
+    lab_r = R - 17.0 * fs
+    lab_size = wl["lab"] * fs
+
+    def label_hidden(lx, ly):
+        m = 5.0 * fs
+        inbox = box[0] - m < lx < box[2] + m and box[1] - m < ly < box[3] + m
+        return inbox or not (9 < lx < w - 9 and 9 < ly < h - 9)
+
+    ticks, labels = [], []
+    n = int(round((hi - lo + 6) * 2))
+    for i in range(n + 1):
+        t = lo - 3 + i * 0.5
+        whole = abs(t - round(t)) < 0.01
+        a = ang(t)
+        ln = (8.0 if whole else 4.0) * fs
+        pl, po, pi_, pm = pol(R + lift, a), pol(R + lift + ln * 0.7, a), pol(R - ln, a), pol(R, a)
+        ticks.append({"t": t, "major": whole,
+                      "ox1": _r(pl[0]), "oy1": _r(pl[1]), "ox2": _r(po[0]), "oy2": _r(po[1]),
+                      "ix1": _r(pi_[0]), "iy1": _r(pi_[1]), "ix2": _r(pm[0]), "iy2": _r(pm[1]),
+                      "hide": (abs(t - value) < 0.01 and not no_target) or t < lo or t > hi})
+        if whole and lo <= t <= hi:
+            lx, ly = pol(lab_r, a)
+            rot = (a + 90.0 + 360.0) % 360.0
+            if 90.0 < rot <= 270.0:
+                rot -= 180.0
+            labels.append({"t": t, "text": "%d" % round(t), "x": _r(lx), "y": _r(ly), "rot": _r(rot),
+                           "hide": (abs(t - value) < 0.01 and not no_target) or label_hidden(lx, ly)})
+
+    s1, s2, s3 = pol(R - gap + 6 * fs, a_sp), pol(R, a_sp), pol(R + 11 * fs + lift, a_sp)
+    mark = {"x1": _r(s1[0]), "y1": _r(s1[1]), "x2": _r(s2[0]), "y2": _r(s2[1]),
+            "x3": _r(s3[0]), "y3": _r(s3[1]), "wi": _r(3.6 * fs), "wo": _r(4.4 * fs)}
+    rr = R + 6.0 * fs + lift
+    seg, cur_mark = None, None
+    if cur is not None and not no_target:
+        cv = max(lo - 3, min(hi + 3, float(cur)))
+        ac = ang(cv)
+        q1, q2 = pol(R - 2 * fs, ac), pol(R + 12 * fs + lift, ac)
+        cur_mark = {"x1": _r(q1[0]), "y1": _r(q1[1]), "x2": _r(q2[0]), "y2": _r(q2[1]), "w": _r(3.2 * fs)}
+        if power and abs(cv - value) > 0.05:
+            p0, p1 = pol(rr, ac), pol(rr, a_sp)
+            seg = "M %.1f,%.1f A %.1f,%.1f 0 0 %d %.1f,%.1f" % (
+                p0[0], p0[1], rr, rr, 1 if a_sp > ac else 0, p1[0], p1[1])
+
+    def in_disk(x, y):
+        return math.hypot(x - cx, y - cy) < R
+
+    # режим: слово и значок; нажатие открывает выбор
+    md = L["mode"]
+    ms = md["size"] * fs
+    mx, my = md["x"] * w, md["y"] * h
+    word = MODE_WORD.get(mode, mode or "") if power else "выкл"
+    icon = MODE_ICON.get(mode) or ("sun" if kind == "heat" else "snow")
+    isz = ms * 1.35
+    word_w = text_width(word, ms, 0.58)
+    if md["anchor"] == "end":
+        ix, wx = mx - isz, mx - isz - ms * 0.45
+        hit = (wx - word_w - 6, my - isz - 6, mx + 6, my + ms * 0.4)
+    else:
+        ix, wx = mx, mx + isz + ms * 0.45
+        hit = (mx - 6, my - isz - 6, wx + word_w + 6, my + ms * 0.4)
+    mode_info = {"word": word, "icon": icon, "x": _r(wx), "y": _r(my), "size": _r(ms),
+                 "anchor": md["anchor"], "ix": _r(ix), "iy": _r(my - isz * 0.8), "isize": _r(isz),
+                 "inside": in_disk(mx, my),
+                 "hit": [_r(v) for v in (hit[0], hit[1], hit[2] - hit[0], hit[3] - hit[1])]}
+
+    # вентилятор: на месте цифры уставки другого режима
+    fx, fy, _, _ = _num_place(cx, cy, R, L["sp"][other], num_size, gap, "24")
+    fr = L["fan"]["r"] * M
+    rg = fr * 0.62
+    ring = FAN_RING.get(fan, 0)
+    fstate = "quiet" if quiet else ("auto" if fan == "auto" or not ring else ring)
+    blades = " ".join(
+        "M 0,0 C %.1f,%.1f %.1f,%.1f %.1f,%.1f C %.1f,%.1f %.1f,%.1f 0,0 Z" % tuple(
+            v for p in [(fr * .18, -fr * .22), (fr * .62, -fr * .3), (fr * .72, -fr * .06),
+                        (fr * .6, fr * .14), (fr * .3, fr * .12)]
+            for v in _rot(p, k * 120))
+        for k in range(3))
+    fan_info = {"x": _r(fx), "y": _r(fy), "r": _r(fr), "rg": _r(rg), "inside": in_disk(fx, fy),
+                "rings": [{"r": _r(fr + i * rg), "i": i} for i in (1, 2, 3)],
+                "ring": ring if power and not quiet and fan != "auto" else 0,
+                "state": fstate, "blades": blades, "hub": _r(fr * 0.14), "hubw": _r(fr * 0.06),
+                "spin": FAN_SPIN.get(fstate, 1.3) if power else 0,
+                "badge": _r(fr * 0.48), "bx": _r(fx + fr * 0.85), "by": _r(fy + fr * 0.85),
+                "hit": _r(fr + 3 * rg + 8 * fs), "sw": _r(1.4 * fs), "sw_on": _r(2.6 * fs)}
+
+    def dial(key, value_now, order, degs):
+        d = L[key]
+        if value_now is None:
+            return None
+        dx, dy, r = d["x"] * w, d["y"] * h, d["r"] * M
+        # «A» в центре должна быть видна целиком: колесо у края экрана
+        # отодвигается ровно настолько, чтобы ступица не уходила за край
+        # (и снизу не попадала в полосу жестов телефона)
+        edge = r * 0.3 + 4 * fs
+        dx, dy = max(edge, min(w - edge, dx)), max(edge, min(h - edge, dy))
+        base = DIAL_BASE[d["dir"]]
+        mirror = -1 if d["dir"] in ("left", "down") else 1
+        auto = (value_now or "").strip() == "auto"
+        active = order.index(value_now) if value_now in order else (2 if not auto else None)
+        angs = [base + g * mirror for g in degs]
+        arrows = []
+        r1, r2 = r + 10 * fs, r + r * d["len"] * 0.9
+        for i, a in enumerate(angs):
+            A = math.radians(a)
+            x1, y1 = dx + r1 * math.cos(A), dy + r1 * math.sin(A)
+            x2, y2 = dx + r2 * math.cos(A), dy + r2 * math.sin(A)
+            if d["arrows"] == "in":
+                x1, y1, x2, y2 = x2, y2, x1, y1
+                A += math.pi
+            head = []
+            for sd in (-1, 1):
+                b = A + math.pi + sd * 0.55
+                head.append((x2 + 5 * fs * math.cos(b), y2 + 5 * fs * math.sin(b)))
+            arrows.append({"d": "M %.1f,%.1f L %.1f,%.1f M %.1f,%.1f L %.1f,%.1f L %.1f,%.1f" % (
+                x1, y1, x2, y2, head[0][0], head[0][1], x2, y2, head[1][0], head[1][1]),
+                "on": auto or i == active, "i": i})
+        hub = r * 0.3
+        pa = math.radians(angs[active if active is not None else 2])
+        return {"x": _r(dx), "y": _r(dy), "r": _r(r), "hub": _r(hub), "gear": gear_path(dx, dy, r, fs),
+                "auto": auto, "active": active if active is not None else -1,
+                "angs": [_r(a) for a in angs], "vals": list(order), "arrows": arrows,
+                "p1": _r(hub), "p2": _r(r - 6 * fs - 6),
+                "px1": _r(dx + math.cos(pa) * hub), "py1": _r(dy + math.sin(pa) * hub),
+                "px2": _r(dx + math.cos(pa) * (r - 6 * fs - 6)), "py2": _r(dy + math.sin(pa) * (r - 6 * fs - 6)),
+                "pw": _r(5 * fs), "aw": _r(2.2 * fs), "aw_on": _r(4 * fs), "rim": _r(1.6 * fs),
+                "hit": _r(r + r * d["len"] + 6 * fs), "font": _r(hub * 0.95)}
+
+    def text_block(key):
+        b = L[key]
+        x, y = b["x"] * w, b["y"] * h
+        return {"x": _r(x), "y": _r(y), "size": _r(b["size"] * fs), "anchor": b["anchor"],
+                "inside": in_disk(x, y)}
+
+    def button(key):
+        b = L[key]
+        return {"x": _r(b["x"] * w), "y": _r(b["y"] * h), "r": _r(b["size"] * fs)}
+
+    now = text_block("now")
+    now.update({"label_y": _r(now["y"] - now["size"] * 0.82), "label_size": _r(now["size"] * 0.3),
+                "deg": _r(now["size"] * 0.47), "dy": _r(-now["size"] * 0.44), "text": _num(cur, 1)})
+
+    # выбор режима - шторка у верхнего края
+    ch_h = 26 * fs + 14
+    cw = (w - 24 - 4 * 6) / 5.0
+    chooser = []
+    for i, (key, nm) in enumerate(MODES):
+        x = 12 + i * (cw + 6)
+        chooser.append({"key": key, "word": nm, "icon": MODE_ICON.get(key) or "snow",
+                        "x": _r(x), "w": _r(cw), "on": key == mode,
+                        "ix": _r(x + cw / 2 - min(cw * .28, 16 * fs) / 2),
+                        "isize": _r(min(cw * .28, 16 * fs)), "tx": _r(x + cw / 2)})
+
+    return {
+        "orient": orient, "kind": kind, "w": w, "h": h, "fs": _r(fs),
+        "cx": _r(cx), "cy": _r(cy), "r": _r(R), "rr": _r(rr), "teeth": teeth, "lift": _r(lift),
+        "dpd": round(dpd, 5), "a_sp": round(a_sp, 4), "value": value, "lo": lo, "hi": hi, "cur": cur,
+        "no_target": no_target,
+        "ticks": ticks, "labels": labels, "lab_size": _r(lab_size), "lab_r": _r(lab_r),
+        "tk_w": _r(1.6 * fs), "tk_w2": _r(1.1 * fs),
+        "mark": mark, "seg": seg, "seg_w": _r(6 * fs), "cur_mark": cur_mark,
+        "num": {"text": num_text, "x": _r(ncx), "y": _r(ncy + bh / 2), "size": _r(num_size),
+                "deg": _r(num_size * 0.47), "dy": _r(-num_size * 0.44)},
+        "box": [_r(b) for b in box],
+        "mode": mode_info, "fan": fan_info,
+        "vdial": dial("vdial", swing, SWING_V, DIAL_V),
+        "hdial": dial("hdial", swing_h, SWING_H, DIAL_H),
+        "now": now, "name": text_block("name"),
+        "back": button("back"), "power": button("power"),
+        "chooser": chooser, "ch_h": _r(ch_h), "ch_y": 12, "ch_pill": _r(ch_h - 6),
+        "ch_font": _r(min(12 * fs, cw * .2)), "sh_blur": _r(5 * fs), "sh_key": _r(.7 * fs),
+        "sh_dy": _r(5 * fs), "sh_dy2": _r(1.25 * fs),
+    }
+
+
+def _rot(p, deg):
+    a = math.radians(deg)
+    x, y = p
+    return (x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a))

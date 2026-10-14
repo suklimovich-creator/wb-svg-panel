@@ -245,6 +245,11 @@
  #ov .acbtn.ic svg{display:inline-block;max-width:none}
  /* колесо пульта: перетаскивание крутит шкалу, а не страницу */
  #ov .card.acpad{width:100%;max-width:440px;touch-action:none;user-select:none;cursor:grab}
+ /* пульт кондиционера на весь экран: без полей и подложки окна */
+ #ov.full{padding:0;overflow:hidden}
+ #ov.full > .acscreen{position:fixed;left:0;top:0;right:0;bottom:0;margin:0;
+            touch-action:none;color:#888;font-size:20px;line-height:100vh}
+ #ov .acscreen svg{display:block;width:100%;height:100%}
  /* Список на весь экран. Кнопки крупные, по 44 px: окно открывают ради
     галочек, и промах мимо строки дороже места на экране. */
  /* Своя подложка, а не прозрачный оверлей, как у пультов: строки текста
@@ -970,71 +975,98 @@ function padAC(node){
   return padArc(node);
 }
 
-/* ---------- пульт кондиционера: залитое колесо ----------
-   Картинку рисует сервер - та же плитка в виде pad, - а пульт только
-   крутит шкалу под неподвижной риской: поворот вокруг центра колеса,
-   число и отрезок «сейчас - уставка» обновляются на лету. Данные для
-   этого лежат в data-атрибутах группы .acd. */
+/* ---------- пульт кондиционера на весь экран (с 1.16) ----------
+   Картинку рисует сервер - плитка в виде pad во весь размер окна, своя
+   раскладка для телефона стоя, на боку и квадратной панели. Пульт только
+   разбирает жесты. Что под пальцем, решает точка касания (data-z):
+   колесо крутит уставку, кольца вентилятора - скорость, малые колёса -
+   жалюзи, «A» в их центре - качание. Шкала при повороте не
+   перерисовывается: крутится её группа, пропеллер вертит CSS. */
 function padDisk(node){
-  var W = Math.max(240, Math.min(window.innerWidth - 36, 420));
-  var H = Math.round(W * 1.12);
-  var card = el('div', 'card wide acpad');
-  card.textContent = '…';
-  var hint = el('div', 'hint', 'Поверните колесо, чтобы задать уставку');
-  var step = parseFloat(node.getAttribute('data-ac-step') || '1') || 1;
-  var parts = [card].concat(acControls(node, function(){ setTimeout(load, 1500); }), [hint]);
-  openOv(parts);
-  var url = 'tile/' + encodeURIComponent(NAME) + '/' + node.getAttribute('data-i')
-          + '.svg?w=' + W + '&h=' + H + '&view=pad' + themeQ();
-  var wired = false;
+  var wrap = el('div', 'acscreen');
+  wrap.textContent = '…';
+  openOv([wrap]);
+  ov.classList.add('full');
+  var stepV = parseFloat(node.getAttribute('data-ac-step') || '1') || 1;
+  var reloadT = null, busy = false, wired = false;
+  var G = null, D = null, pos = 0, temp = 0, gest = null;
+
+  function url(){
+    var w = Math.max(240, Math.round(window.innerWidth));
+    var h = Math.max(200, Math.round(window.innerHeight));
+    return 'tile/' + encodeURIComponent(NAME) + '/' + node.getAttribute('data-i')
+         + '.svg?w=' + w + '&h=' + h + '&view=pad' + themeQ();
+  }
   function load(){
-    fetch(url + '&t=' + Date.now(), {cache: 'no-store'})
+    if(busy){ schedule(800); return; }
+    fetch(url() + '&t=' + Date.now(), {cache: 'no-store'})
       .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
       .then(function(svg){
         if(svg.indexOf('<svg') < 0) throw new Error('пустой ответ');
-        card.innerHTML = svg;
-        var root = card.querySelector('svg');
-        if(root){ root.setAttribute('width', '100%'); root.removeAttribute('height'); }
-        wire(card.querySelector('.acd'));
+        if(busy){ schedule(800); return; }
+        wrap.innerHTML = svg;
+        var root = wrap.querySelector('svg');
+        if(root){ root.setAttribute('width', '100%'); root.setAttribute('height', '100%'); }
+        wire();
       })
-      .catch(function(e){ card.textContent = 'Не удалось: ' + e.message; });
+      .catch(function(e){ if(!G) wrap.textContent = 'Не удалось: ' + e.message; });
   }
+  function schedule(ms){ clearTimeout(reloadT); reloadT = setTimeout(load, ms || 1500); }
+  var onResize = function(){ schedule(250); };
+  window.addEventListener('resize', onResize);
+  ovCleanup = function(){
+    window.removeEventListener('resize', onResize);
+    clearTimeout(reloadT);
+    ov.classList.remove('full');
+  };
   load();
 
-  var g = null, D = null, pos = 0, temp = 0, startA = null, startPos = 0;
-  function num(a){ return parseFloat(g.getAttribute('data-' + a)); }
-  function wire(group){
-    if(!group) return;
-    g = group;
-    D = {cx: num('cx'), cy: num('cy'), r: num('r'), rr: num('rr'), dpd: num('dpd'),
-         asp: num('asp'), base: num('val'), lo: num('lo'), hi: num('hi'), cur: num('cur'),
-         labr: num('labr'), w: num('w'), h: num('h'), fs: num('fs') || 1,
-         on: g.getAttribute('data-on') === '1',
-         box: (g.getAttribute('data-box') || '0,0,0,0').split(',').map(parseFloat)};
+  function num(g, a){ return parseFloat(g.getAttribute('data-' + a)); }
+  function wire(){
+    G = wrap.querySelector('.acs');
+    if(!G) return;
+    D = {cx: num(G,'cx'), cy: num(G,'cy'), r: num(G,'r'), rr: num(G,'rr'), dpd: num(G,'dpd'),
+         asp: num(G,'asp'), base: num(G,'val'), lo: num(G,'lo'), hi: num(G,'hi'), cur: num(G,'cur'),
+         labr: num(G,'labr'), w: num(G,'w'), h: num(G,'h'), fs: num(G,'fs') || 1,
+         on: G.getAttribute('data-on') === '1', notarget: G.getAttribute('data-notarget') === '1',
+         box: (G.getAttribute('data-box') || '0,0,0,0').split(',').map(parseFloat)};
     pos = temp = D.base;
-    if(!wired){ drag(card, at, send, begin); wired = true; }
+    if(!wired){ drag(wrap, move, done, begin); wired = true; }
+  }
+  function local(ev){
+    var pt = evPoint(ev), m = G && G.getScreenCTM();
+    if(!m) return {x: 0, y: 0};
+    var sp = G.ownerSVGElement.createSVGPoint();
+    sp.x = pt.clientX; sp.y = pt.clientY;
+    return sp.matrixTransform(m.inverse());
   }
   function pol(r, a){ a = a * Math.PI / 180; return [D.cx + r * Math.cos(a), D.cy + r * Math.sin(a)]; }
-  function setCls(n, base, hid){ n.setAttribute('class', base + (hid ? ' acd-hid' : '')); }
+  function setCls(n, base, hid){ n.setAttribute('class', base + (hid ? ' acs-hid' : '')); }
+  function closest(n, sel){
+    while(n && n.nodeType === 1){ if(n.matches ? n.matches(sel) : n.msMatchesSelector(sel)) return n; n = n.parentNode; }
+    return null;
+  }
+
+  /* ---- колесо уставки ---- */
   function draw(){
-    if(!g) return;
     var rot = -(pos - D.base) * D.dpd;
-    g.querySelector('.acd-scale').setAttribute('transform',
+    G.querySelector('.acs-scale').setAttribute('transform',
         'rotate(' + rot.toFixed(3) + ' ' + D.cx + ' ' + D.cy + ')');
-    var b = D.box, m = 5 * D.fs, edge = 9 * D.fs, i;
-    var labs = g.querySelectorAll('.acd-lab');
+    var b = D.box, m = 5 * D.fs, i;
+    var labs = G.querySelectorAll('.acs-lab');
     for(i = 0; i < labs.length; i++){
       var t = parseFloat(labs[i].getAttribute('data-t'));
       var p = pol(D.labr, D.asp + (t - pos) * D.dpd);
-      var hid = Math.abs(t - temp) < 0.01
+      setCls(labs[i], 'acs-lab', Math.abs(t - temp) < 0.01
              || (p[0] > b[0] - m && p[0] < b[2] + m && p[1] > b[1] - m && p[1] < b[3] + m)
-             || !(p[0] > edge && p[0] < D.w - edge && p[1] > edge && p[1] < D.h - edge);
-      setCls(labs[i], 'acd-lab', hid);
+             || !(p[0] > 9 && p[0] < D.w - 9 && p[1] > 9 && p[1] < D.h - 9));
     }
-    var tks = g.querySelectorAll('.acd-tk');
-    for(i = 0; i < tks.length; i++)
-      setCls(tks[i], 'acd-tk', Math.abs(parseFloat(tks[i].getAttribute('data-t')) - temp) < 0.01);
-    var seg = g.querySelector('.acd-seg');
+    var tks = G.querySelectorAll('.acs-tk');
+    for(i = 0; i < tks.length; i++){
+      var tt = parseFloat(tks[i].getAttribute('data-t'));
+      setCls(tks[i], 'acs-tk', Math.abs(tt - temp) < 0.01 || tt < D.lo || tt > D.hi);
+    }
+    var seg = G.querySelector('.acs-seg');
     if(seg){
       var show = D.on && !isNaN(D.cur) && Math.abs(D.cur - temp) > 0.05;
       if(show){
@@ -1042,42 +1074,182 @@ function padDisk(node){
         seg.setAttribute('d', 'M ' + p0[0].toFixed(1) + ',' + p0[1].toFixed(1) + ' A ' + D.rr + ',' + D.rr
                          + ' 0 0 ' + (D.asp > a0 ? 1 : 0) + ' ' + p1[0].toFixed(1) + ',' + p1[1].toFixed(1));
       }
-      setCls(seg, 'acd-seg', !show);
+      setCls(seg, 'acs-seg', !show);
     }
-    var v = g.querySelector('.acd-v');
-    if(v) v.textContent = step < 1 && Math.abs(temp - Math.round(temp)) > 0.01 ? temp.toFixed(1) : String(Math.round(temp));
+    var v = G.querySelector('.acs-v');
+    if(v) v.textContent = stepV < 1 && Math.abs(temp - Math.round(temp)) > 0.01 ? temp.toFixed(1) : String(Math.round(temp));
   }
-  // угол пальца вокруг центра колеса, в координатах плитки
-  function angle(ev){
-    var pt = evPoint(ev), ctm = g.getScreenCTM();
-    if(!ctm) return null;
-    var sp = g.ownerSVGElement.createSVGPoint();
-    sp.x = pt.clientX; sp.y = pt.clientY;
-    var lp = sp.matrixTransform(ctm.inverse());
-    return Math.atan2(lp.y - D.cy, lp.x - D.cx) * 180 / Math.PI;
-  }
-  function begin(ev){ if(!g) return; startA = angle(ev); startPos = pos; }
-  function at(ev){
-    if(!g) return;
-    if(startA === null){ begin(ev); return; }
-    var a = angle(ev);
-    if(a === null) return;
-    var d = a - startA;
-    while(d > 180) d -= 360;
-    while(d < -180) d += 360;
-    // шкала едет за пальцем: повернули колесо на d - под риской другое деление
-    pos = Math.max(D.lo, Math.min(D.hi, startPos - d / D.dpd));
-    temp = Math.max(D.lo, Math.min(D.hi, Math.round(pos / step) * step));
-    draw();
-  }
-  function send(){
-    if(!g) return;
-    var moved = startA !== null && Math.abs(temp - startPos) > 0.001;
-    startA = null;
-    pos = temp;
-    draw();
+  function angle(p){ return Math.atan2(p.y - D.cy, p.x - D.cx) * 180 / Math.PI; }
+  function sendTarget(){
     var t = node.getAttribute('data-ac-target');
-    if(moved && t) pub(t, temp).catch(function(e){ flash('Не удалось: ' + e.message); });
+    if(t) pub(t, temp).catch(function(e){ flash('Не удалось: ' + e.message); });
+    schedule(1500);
+  }
+  function animateTo(t){
+    var from = pos, t0 = Date.now(), dur = 260;
+    temp = t;
+    (function stepA(){
+      var k = Math.min(1, (Date.now() - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      pos = from + (t - from) * e; draw();
+      if(k < 1) (window.requestAnimationFrame || setTimeout)(stepA, 16);
+      else { pos = t; draw(); sendTarget(); }
+    })();
+  }
+
+  /* ---- вентилятор ---- */
+  var FANS = ['low', 'medium', 'high'];
+  function fanRing(f, p){
+    var d = Math.sqrt(Math.pow(p.x - num(f,'fx'), 2) + Math.pow(p.y - num(f,'fy'), 2));
+    var fr = num(f,'fr'), rg = num(f,'rg');
+    if(d < fr * 1.1) return 0;
+    return Math.max(1, Math.min(3, Math.round((d - fr) / rg)));
+  }
+  function showFan(f, ring){
+    var rings = f.querySelectorAll('[data-ring]');
+    for(var i = 0; i < rings.length; i++){
+      var k = parseInt(rings[i].getAttribute('data-ring'), 10);
+      rings[i].setAttribute('class', 'acs-ring in' + (ring && k <= ring ? ' on' : '') + (!ring ? ' auto' : ''));
+      rings[i].setAttribute('stroke-width', f.getAttribute(k === ring ? 'data-swon' : 'data-sw'));
+    }
+  }
+  function setFan(f, ring){
+    var topic = node.getAttribute('data-ac-fan'), q = node.getAttribute('data-ac-quiet');
+    var state = f.getAttribute('data-state');
+    var jobs = [];
+    if(ring){
+      showFan(f, ring);
+      if(topic) jobs.push(pub(topic, FANS[ring - 1]));
+      if(state === 'quiet' && q) jobs.push(pub(q, '0'));
+      f.setAttribute('data-state', String(ring));
+    } else {
+      // по центру: авто -> тихо -> авто; со скорости - сразу авто
+      showFan(f, 0);
+      if(state === 'auto' && q){ jobs.push(pub(q, '1')); f.setAttribute('data-state', 'quiet'); }
+      else {
+        if(state === 'quiet' && q) jobs.push(pub(q, '0'));
+        if(topic) jobs.push(pub(topic, 'auto'));
+        f.setAttribute('data-state', 'auto');
+      }
+    }
+    Promise.all(jobs).catch(function(e){ flash('Не удалось: ' + e.message); });
+    schedule(900);
+  }
+
+  /* ---- жалюзи ---- */
+  function dialIndex(g, p){
+    var angs = g.getAttribute('data-angs').split(',').map(parseFloat);
+    var a = Math.atan2(p.y - num(g,'y'), p.x - num(g,'x')) * 180 / Math.PI, best = 0, bd = 1e9;
+    for(var i = 0; i < angs.length; i++){
+      var d = Math.abs(((a - angs[i]) % 360 + 540) % 360 - 180);
+      if(d < bd){ bd = d; best = i; }
+    }
+    return best;
+  }
+  function showDial(g, idx, auto){
+    g.setAttribute('class', 'acs-dial' + (auto ? ' auto' : ''));
+    var arr = g.querySelectorAll('.acs-arrow');
+    for(var i = 0; i < arr.length; i++)
+    { arr[i].setAttribute('class', 'acs-arrow' + (auto || i === idx ? ' on' : ''));
+      arr[i].setAttribute('stroke-width', g.getAttribute(!auto && i === idx ? 'data-awon' : 'data-aw')); }
+    if(!auto){
+      var angs = g.getAttribute('data-angs').split(',').map(parseFloat), a = angs[idx] * Math.PI / 180;
+      var x = num(g,'x'), y = num(g,'y'), p1 = num(g,'p1'), p2 = num(g,'p2'), ptr = g.querySelector('.acs-ptr');
+      ptr.setAttribute('x1', (x + Math.cos(a) * p1).toFixed(1)); ptr.setAttribute('y1', (y + Math.sin(a) * p1).toFixed(1));
+      ptr.setAttribute('x2', (x + Math.cos(a) * p2).toFixed(1)); ptr.setAttribute('y2', (y + Math.sin(a) * p2).toFixed(1));
+      g.setAttribute('data-active', String(idx));
+    }
+  }
+  function sendDial(g, value){
+    var topic = node.getAttribute(g.getAttribute('data-z') === 'vdial' ? 'data-ac-swing' : 'data-ac-swing-h');
+    if(topic) pub(topic, value).catch(function(e){ flash('Не удалось: ' + e.message); });
+    schedule(1500);
+  }
+
+  /* ---- жесты ---- */
+  function begin(e){
+    if(!G) return;
+    busy = true;
+    var p = local(e), zEl = closest(e.target, '[data-z]');
+    gest = {zone: zEl ? zEl.getAttribute('data-z') : '', el: zEl, x0: p.x, y0: p.y, p: p,
+            moved: false, t0: pos, a0: angle(p), idx: -1};
+    if(gest.zone === 'vdial-hub' || gest.zone === 'hdial-hub') gest.dial = closest(zEl.parentNode, '[data-z]');
+  }
+  function move(e){
+    if(!gest || !G) return;
+    var p = local(e);
+    if(!(p.x || p.y)) return;
+    gest.p = p;
+    if(Math.sqrt(Math.pow(p.x - gest.x0, 2) + Math.pow(p.y - gest.y0, 2)) > 6 * Math.max(1, D.fs / 2)) gest.moved = true;
+    if(!gest.moved) return;
+    var z = gest.zone;
+    if(z === 'wheel' && !D.notarget){
+      var d = angle(p) - gest.a0;
+      while(d > 180) d -= 360;
+      while(d < -180) d += 360;
+      pos = Math.max(D.lo, Math.min(D.hi, gest.t0 - d / D.dpd));
+      temp = Math.max(D.lo, Math.min(D.hi, Math.round(pos / stepV) * stepV));
+      draw();
+    } else if(z === 'fan'){
+      var ring = fanRing(gest.el, p);
+      if(ring){ gest.ring = ring; showFan(gest.el, ring); }
+    } else if(z === 'vdial' || z === 'hdial'){
+      gest.idx = dialIndex(gest.el, p);
+      showDial(gest.el, gest.idx, false);
+    }
+  }
+  function done(){
+    busy = false;
+    var g = gest; gest = null;
+    if(!g || !G) return;
+    var ch = G.querySelector('.acs-ch'), chOpen = ch && /open/.test(ch.getAttribute('class'));
+    if(g.moved){
+      if(g.zone === 'wheel' && !D.notarget){ pos = temp; draw(); if(Math.abs(temp - g.t0) > 0.001) sendTarget(); }
+      else if(g.zone === 'fan' && g.ring) setFan(g.el, g.ring);
+      else if((g.zone === 'vdial' || g.zone === 'hdial') && g.idx >= 0)
+        sendDial(g.el, g.el.getAttribute('data-values').split(',')[g.idx]);
+      return;
+    }
+    // касание без сдвига
+    if(chOpen && g.zone !== 'pick'){ ch.setAttribute('class', 'acs-ch'); return; }
+    var z = g.zone, p = g.p;
+    if(z === 'back'){ closeOv(); return; }
+    if(z === 'power'){
+      var topic = node.getAttribute('data-topic');
+      if(topic) pub(topic, D.on ? node.getAttribute('data-off') : node.getAttribute('data-on'))
+        .catch(function(e){ flash('Не удалось: ' + e.message); });
+      schedule(700); return;
+    }
+    if(z === 'mode'){ if(ch) ch.setAttribute('class', 'acs-ch open'); return; }
+    if(z === 'pick'){
+      var mt = node.getAttribute('data-ac-mode');
+      if(ch) ch.setAttribute('class', 'acs-ch');
+      if(mt) pub(mt, g.el.getAttribute('data-mode')).catch(function(e){ flash('Не удалось: ' + e.message); });
+      schedule(700); return;
+    }
+    if(z === 'fan'){ setFan(g.el, fanRing(g.el, p)); return; }
+    if(z === 'vdial-hub' || z === 'hdial-hub'){
+      var dg = g.dial, auto = /auto/.test(dg.getAttribute('class')), vals = dg.getAttribute('data-values').split(',');
+      var idx = parseInt(dg.getAttribute('data-active'), 10);
+      if(isNaN(idx) || idx < 0) idx = 2;
+      showDial(dg, idx, !auto);
+      sendDial(dg, auto ? vals[idx] : 'auto');
+      return;
+    }
+    if(z === 'vdial' || z === 'hdial'){
+      var i2 = dialIndex(g.el, p); showDial(g.el, i2, false);
+      sendDial(g.el, g.el.getAttribute('data-values').split(',')[i2]); return;
+    }
+    if(z === 'wheel' && !D.notarget){
+      // тап по шкале у обода - уставка доезжает до этого деления
+      var dist = Math.sqrt(Math.pow(p.x - D.cx, 2) + Math.pow(p.y - D.cy, 2));
+      if(Math.abs(dist - D.r) < 26 * D.fs){
+        var dd = angle(p) - D.asp;
+        while(dd > 180) dd -= 360;
+        while(dd < -180) dd += 360;
+        var t = Math.max(D.lo, Math.min(D.hi, Math.round((pos + dd / D.dpd) / stepV) * stepV));
+        if(Math.abs(t - pos) > 0.001) animateTo(t);
+      }
+    }
   }
 }
 

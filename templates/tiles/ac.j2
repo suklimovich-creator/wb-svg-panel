@@ -70,6 +70,84 @@
   .acl.swing .acl-b  { stroke: var(--ac-pill-ink); opacity: 1; }
   .acl-a             { fill: none; stroke: var(--ink-dim); stroke-linecap: round; }
   .acl.swing .acl-a  { stroke: var(--ac-pill-ink); }
+
+  /* ---- пульт на весь экран (с 1.16) ---------------------------------
+     Внутри диска - чернила диска, снаружи - чернила плитки; какие
+     именно, решает сборщик (inside) и ставит класс .in. */
+  .acs-bg            { fill: var(--tile); }
+  .acs-disk          { fill: var(--ac-disk); }
+  .acs.off .acs-disk { fill: var(--ac-off); }
+  .acs-ink           { fill: var(--ink); }
+  .acs-ink.in        { fill: var(--ac-ink); }
+  .acs.off .acs-ink.in { fill: var(--ac-off-ink); }
+  .acs-dim           { fill: var(--ink-dim); }
+  .acs-dim.in        { fill: var(--ac-dim); }
+  .acs-seg           { fill: none; stroke: var(--ac-seg-cool); stroke-linecap: round; }
+  .acs.heat .acs-seg { stroke: var(--ac-seg-heat); }
+  .acs-cm            { stroke: var(--ac-seg-cool); stroke-linecap: round; }
+  .acs.heat .acs-cm  { stroke: var(--ac-seg-heat); }
+  .acs-to            { stroke: var(--ink); stroke-linecap: round; opacity: .5; }
+  .acs-ti            { stroke: var(--ac-ink); stroke-linecap: round; opacity: .5; }
+  .acs-to.mj, .acs-ti.mj { opacity: .9; }
+  .acs.off .acs-ti   { stroke: var(--ac-off-ink); }
+  .acs-lab           { fill: var(--ac-dim); font-weight: 600; }
+  .acs.off .acs-lab  { fill: var(--ac-off-dim); }
+  .acs-mi            { stroke: var(--ac-ink); stroke-linecap: round; }
+  .acs.off .acs-mi   { stroke: var(--ac-off-ink); }
+  .acs-mo            { stroke: var(--ink); stroke-linecap: round; }
+  .acs-num           { fill: var(--ac-ink); font-weight: 650; letter-spacing: -1px; }
+  .acs.off .acs-num  { fill: var(--ac-off-ink); }
+  .acs-ic            { color: var(--ink); }
+  .acs-ic.in         { color: var(--ac-ink); }
+  .acs.off .acs-ic.in { color: var(--ac-off-dim); }
+  .acs-hid           { display: none; }
+  .acs-ring          { fill: none; stroke: var(--ink-dim); opacity: .55; }
+  .acs-ring.in       { stroke: var(--ac-dim); }
+  .acs-ring.on       { stroke: var(--ink); opacity: 1; }
+  .acs-ring.in.on    { stroke: var(--ac-ink); }
+  .acs-ring.auto     { stroke-dasharray: 3 3; }
+  .acs-blade         { fill: var(--ink); }
+  .acs-blade.in      { fill: var(--ac-ink); }
+  .acs-hubc          { fill: var(--tile); stroke: var(--ink); }
+  .acs-hubc.in       { fill: var(--ac-disk); stroke: var(--ac-ink); }
+  .acs-badge         { fill: var(--ink); }
+  .acs-badge.in      { fill: var(--ac-ink); }
+  .acs-badge-t       { fill: var(--tile); font-weight: 750; }
+  .acs-badge-t.in    { fill: var(--ac-disk); }
+  .acs-fan-bg        { fill: var(--ac-disk); }
+  /* пропеллер крутится сам - CSS, без перерисовки; кто просил меньше
+     движения - стоит */
+  .acs-spin          { transform-origin: 0 0; animation: acs-spin 1.3s linear infinite; }
+  @keyframes acs-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .acs-spin { animation: none; } }
+  .acs-gear          { fill: var(--ac-disk); }
+  .acs-arrow         { fill: none; stroke: var(--ink-dim); stroke-linecap: round; stroke-linejoin: round; opacity: .6; }
+  .acs-arrow.on      { stroke: var(--ac-pill-on); opacity: 1; }
+  .acs-dial.auto .acs-arrow.on { stroke: var(--ink); }
+  .acs-ptr           { stroke: var(--ac-ink); stroke-linecap: round; }
+  .acs-dial.auto .acs-ptr { display: none; }
+  .acs-hub           { fill: var(--ac-disk); stroke: var(--ac-ink); }
+  .acs-dial.auto .acs-hub { fill: var(--ac-ink); }
+  .acs-hub-t         { fill: var(--ac-ink); font-weight: 750; }
+  .acs-dial.auto .acs-hub-t { fill: var(--ac-disk); }
+  .acs-btn           { fill: var(--ac-pill); }
+  .acs-btn-ink       { stroke: var(--ink); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .acs-pw            { fill: var(--ac-pill-on); }
+  .acs-pw-ink        { stroke: var(--ac-pill-ink); fill: none; stroke-linecap: round; }
+  .acs.off .acs-pw   { fill: var(--ac-pill); }
+  .acs.off .acs-pw-ink { stroke: var(--ink); }
+  .acs-ch            { display: none; }
+  .acs-ch.open       { display: inline; }
+  .acs-ch-bg         { fill: var(--tile); opacity: .98; }
+  .acs-ch-line       { fill: var(--ink-dim); opacity: .4; }
+  .acs-pill          { fill: var(--ac-pill); }
+  .acs-pill.on       { fill: var(--ac-pill-on); }
+  .acs-pill-t        { fill: var(--ink); font-weight: 600; }
+  .acs-pill-t.on     { fill: var(--ac-pill-ink); }
+  .acs-pill-ic       { color: var(--ink); }
+  .acs-pill-ic.on    { color: var(--ac-pill-ink); }
+  .acs-shade         { fill: var(--shadow); }
+  .acs-lit           { fill: none; stroke: #FFFFFF; stroke-opacity: .14; }
 {% endmacro %}
 
 {#- ---- кондиционер ----
@@ -77,7 +155,9 @@
     приглушённые. Отдельной цифры под дугой нет, она дублировала. Внизу
     фактическая температура и режим работы. -#}
 {% macro tile_ac(t) %}
-  {% if t.disk and not t.compact and t.h >= 150 %}
+  {% if t.screen %}
+  {{ screen(t) }}
+  {% elif t.disk and not t.compact and t.h >= 150 %}
   {{ disk(t) }}
   {% else %}
   {{ base.plate(t) }}
@@ -162,6 +242,7 @@
      data-labr="{{ d.lab_r }}" data-w="{{ t.w }}" data-h="{{ t.h }}" data-fs="{{ fs }}"
      data-on="{{ '1' if t.on else '0' }}">
     <circle cx="{{ d.cx }}" cy="{{ d.cy }}" r="{{ d.r }}" class="acd-disk"/>
+    {% if d.teeth %}<path d="{{ d.teeth }}" class="acd-disk"/>{% endif %}
     <path d="{{ d.seg or 'M 0,0' }}" class="acd-seg{{ ' acd-hid' if not d.seg }}" stroke-width="{{ d.seg_w }}"/>
     <g class="acd-scale">
       {% for k in d.ticks %}
@@ -216,4 +297,183 @@
   <text x="{{ n.x }}" y="{{ n.y }}" font-size="{{ n.size }}" text-anchor="middle" class="acd-cur">{{ n.text }}<tspan
         class="acd-deg" font-size="{{ n.deg }}" dy="{{ n.dy }}">°</tspan></text>
   <text x="20" y="{{ d.title_y }}" font-size="{{ d.title_size }}" class="acd-name">{{ t.title }}</text>
+{% endmacro %}
+
+{#- ---- кондиционер на весь экран (с 1.16) ----
+    Колесо с зубчатым ободом, вентилятор кольцами на месте уставки другого
+    режима, два малых колеса жалюзи, «назад» и питание. Где что лежит -
+    решает раскладка в ac_disk.SCREEN; жесты разбирает пульт (padScreen)
+    по data-z у элементов. Тени - как у плиток панели: у светлых тем две,
+    у тёмных вместо тени светлая кромка. -#}
+{% macro shade(x, y, r, s) %}
+  {% set dark = theme in ('dark', 'graphite') %}
+  {% if dark %}
+  <circle cx="{{ x }}" cy="{{ y }}" r="{{ r + 0.6 }}" class="acs-lit" stroke-width="1.2"/>
+  {% else %}
+  {% set amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.24}.get(theme, 0.13) %}
+  {% set key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.14}.get(theme, 0.08) %}
+  <circle cx="{{ x }}" cy="{{ y + s.sh_dy }}" r="{{ r * 0.96 }}" class="acs-shade" opacity="{{ amb }}" filter="url(#{{ uid }}acs-amb)"/>
+  <circle cx="{{ x }}" cy="{{ y + s.sh_dy2 }}" r="{{ r }}" class="acs-shade" opacity="{{ key }}" filter="url(#{{ uid }}acs-key)"/>
+  {% endif %}
+{% endmacro %}
+
+{% macro screen(t) %}
+  {% set s = t.screen %}
+  <defs>
+    <filter id="{{ uid }}acs-amb" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="{{ s.sh_blur }}"/></filter>
+    <filter id="{{ uid }}acs-key" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="{{ s.sh_key }}"/></filter>
+    <linearGradient id="{{ uid }}acs-gl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".22"/>
+      <stop offset=".55" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity=".16"/>
+    </linearGradient>
+    <clipPath id="{{ uid }}acs-clip"><rect width="{{ s.w }}" height="{{ s.h }}"/></clipPath>
+  </defs>
+  <g class="acs {{ s.kind }}{{ ' off' if not t.on }}" clip-path="url(#{{ uid }}acs-clip)"
+     data-cx="{{ s.cx }}" data-cy="{{ s.cy }}" data-r="{{ s.r }}" data-rr="{{ s.rr }}" data-dpd="{{ s.dpd }}"
+     data-asp="{{ s.a_sp }}" data-val="{{ s.value }}" data-lo="{{ s.lo }}" data-hi="{{ s.hi }}"
+     data-cur="{{ s.cur if s.cur is not none else '' }}" data-box="{{ s.box|join(',') }}" data-labr="{{ s.lab_r }}"
+     data-w="{{ s.w }}" data-h="{{ s.h }}" data-fs="{{ s.fs }}" data-on="{{ '1' if t.on else '0' }}"
+     data-notarget="{{ '1' if s.no_target else '0' }}" data-orient="{{ s.orient }}">
+    <rect width="{{ s.w }}" height="{{ s.h }}" class="acs-bg"/>
+    {#- колесо уставки -#}
+    <g data-z="wheel">
+      {{ shade(s.cx, s.cy, s.r, s) }}
+      <circle cx="{{ s.cx }}" cy="{{ s.cy }}" r="{{ s.r }}" class="acs-disk"/>
+      <path d="{{ s.seg or 'M 0,0' }}" class="acs-seg{{ ' acs-hid' if not s.seg }}" stroke-width="{{ s.seg_w }}"/>
+      <g class="acs-scale">
+        {% if s.teeth %}<path d="{{ s.teeth }}" class="acs-disk"/>{% endif %}
+        {% for k in s.ticks %}
+        <g class="acs-tk{{ ' acs-hid' if k.hide }}" data-t="{{ k.t }}">
+        <line x1="{{ k.ox1 }}" y1="{{ k.oy1 }}" x2="{{ k.ox2 }}" y2="{{ k.oy2 }}" class="acs-to{{ ' mj' if k.major }}"
+              stroke-width="{{ s.tk_w if k.major else s.tk_w2 }}"/>
+        <line x1="{{ k.ix1 }}" y1="{{ k.iy1 }}" x2="{{ k.ix2 }}" y2="{{ k.iy2 }}" class="acs-ti{{ ' mj' if k.major }}"
+              stroke-width="{{ s.tk_w if k.major else s.tk_w2 }}"/>
+        </g>
+        {% endfor %}
+        {% for l in s.labels %}
+        <text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ s.lab_size }}" text-anchor="middle" dominant-baseline="central"
+              data-t="{{ l.t }}" class="acs-lab{{ ' acs-hid' if l.hide }}" transform="rotate({{ l.rot }} {{ l.x }} {{ l.y }})">{{ l.text }}</text>
+        {% endfor %}
+        {% if s.cur_mark %}
+        <line x1="{{ s.cur_mark.x1 }}" y1="{{ s.cur_mark.y1 }}" x2="{{ s.cur_mark.x2 }}" y2="{{ s.cur_mark.y2 }}"
+              class="acs-cm" stroke-width="{{ s.cur_mark.w }}"/>
+        {% endif %}
+      </g>
+      <circle cx="{{ s.cx }}" cy="{{ s.cy }}" r="{{ s.r + s.lift + 2 }}" fill="url(#{{ uid }}acs-gl)" pointer-events="none"/>
+      {% if not s.no_target %}
+      <line x1="{{ s.mark.x1 }}" y1="{{ s.mark.y1 }}" x2="{{ s.mark.x2 }}" y2="{{ s.mark.y2 }}" class="acs-mi" stroke-width="{{ s.mark.wi }}"/>
+      <line x1="{{ s.mark.x2 }}" y1="{{ s.mark.y2 }}" x2="{{ s.mark.x3 }}" y2="{{ s.mark.y3 }}" class="acs-mo" stroke-width="{{ s.mark.wo }}"/>
+      {% endif %}
+      <text x="{{ s.num.x }}" y="{{ s.num.y }}" font-size="{{ s.num.size }}" text-anchor="middle" class="acs-num"><tspan
+            class="acs-v">{{ s.num.text }}</tspan>{% if not s.no_target %}<tspan font-size="{{ s.num.deg }}" dy="{{ s.num.dy }}">°</tspan>{% endif %}</text>
+    </g>
+    {#- режим: нажатие открывает выбор -#}
+    {% set m = s.mode %}
+    <g data-z="mode">
+      <rect x="{{ m.hit[0] }}" y="{{ m.hit[1] }}" width="{{ m.hit[2] }}" height="{{ m.hit[3] }}" fill="transparent"/>
+      <g class="acs-ic{{ ' in' if m.inside }}"><use href="#{{ uid }}ic-{{ m.icon }}" xlink:href="#{{ uid }}ic-{{ m.icon }}"
+         x="{{ m.ix }}" y="{{ m.iy }}" width="{{ m.isize }}" height="{{ m.isize }}"/></g>
+      <text x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" font-weight="650" text-anchor="{{ m.anchor }}"
+            class="acs-ink{{ ' in' if m.inside }}">{{ m.word }}</text>
+    </g>
+    {#- вентилятор: пропеллер, вокруг кольца скоростей -#}
+    {% set f = s.fan %}
+    <g data-z="fan" data-fx="{{ f.x }}" data-fy="{{ f.y }}" data-fr="{{ f.r }}" data-rg="{{ f.rg }}"
+       data-state="{{ f.state }}" data-sw="{{ f.sw }}" data-swon="{{ f.sw_on }}" class="acs-fan">
+      {% if not f.inside %}{{ shade(f.x, f.y, f.r + 3 * f.rg, s) }}
+      <circle cx="{{ f.x }}" cy="{{ f.y }}" r="{{ f.r + 3 * f.rg + 4 }}" class="acs-fan-bg"/>{% endif %}
+      <circle cx="{{ f.x }}" cy="{{ f.y }}" r="{{ f.hit }}" fill="transparent"/>
+      {% for g in f.rings %}
+      <circle cx="{{ f.x }}" cy="{{ f.y }}" r="{{ g.r }}" data-ring="{{ g.i }}"
+              class="acs-ring in{{ ' on' if t.on and f.ring and g.i <= f.ring }}{{ ' auto' if t.on and f.state in ('auto', 'quiet') }}"
+              stroke-width="{{ f.sw_on if t.on and g.i == f.ring else f.sw }}"/>
+      {% endfor %}
+      <g transform="translate({{ f.x }} {{ f.y }})" pointer-events="none">
+        <g class="{{ 'acs-spin' if f.spin }}" style="animation-duration: {{ f.spin or 1 }}s">
+          <path d="{{ f.blades }}" class="acs-blade in"/>
+          <circle r="{{ f.hub }}" class="acs-hubc in" stroke-width="{{ f.hubw }}"/>
+        </g>
+      </g>
+      <g class="acs-fbadge{{ ' acs-hid' if not (t.on and f.state in ('auto', 'quiet')) }}" pointer-events="none">
+        <circle cx="{{ f.bx }}" cy="{{ f.by }}" r="{{ f.badge }}" class="acs-badge in"/>
+        {% if f.state == 'quiet' %}
+        <g class="acs-ic"><use href="#{{ uid }}ic-moon" xlink:href="#{{ uid }}ic-moon" x="{{ f.bx - f.badge * 0.7 }}"
+           y="{{ f.by - f.badge * 0.7 }}" width="{{ f.badge * 1.4 }}" height="{{ f.badge * 1.4 }}" style="color: var(--ac-disk)"/></g>
+        {% else %}
+        <text x="{{ f.bx }}" y="{{ f.by }}" font-size="{{ f.badge * 1.25 }}" text-anchor="middle" dominant-baseline="central"
+              class="acs-badge-t in">A</text>
+        {% endif %}
+      </g>
+    </g>
+    {#- малые колёса жалюзи: «A» в центре - качание -#}
+    {% for key in ('vdial', 'hdial') %}
+    {% set d = s[key] %}
+    {% if d %}
+    <g data-z="{{ key }}" class="acs-dial{{ ' auto' if d.auto }}" data-x="{{ d.x }}" data-y="{{ d.y }}"
+       data-hub="{{ d.hub }}" data-angs="{{ d.angs|join(',') }}" data-values="{{ d.vals|join(',') }}"
+       data-active="{{ d.active }}" data-p1="{{ d.p1 }}" data-p2="{{ d.p2 }}" data-aw="{{ d.aw }}" data-awon="{{ d.aw_on }}">
+      <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.hit }}" fill="transparent"/>
+      {{ shade(d.x, d.y, d.r, s) }}
+      <path d="{{ d.gear }}" class="acs-gear"/>
+      <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.r }}" fill="url(#{{ uid }}acs-gl)" pointer-events="none"/>
+      {% for a in d.arrows %}
+      <path d="{{ a.d }}" data-i="{{ a.i }}" class="acs-arrow{{ ' on' if a.on }}"
+            stroke-width="{{ d.aw_on if a.on and not d.auto else d.aw }}"/>
+      {% endfor %}
+      <line x1="{{ d.px1 }}" y1="{{ d.py1 }}" x2="{{ d.px2 }}" y2="{{ d.py2 }}" class="acs-ptr" stroke-width="{{ d.pw }}"/>
+      <g data-z="{{ key }}-hub">
+        <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.hub }}" class="acs-hub" stroke-width="{{ d.rim }}"/>
+        <text x="{{ d.x }}" y="{{ d.y }}" font-size="{{ d.font }}" text-anchor="middle" dominant-baseline="central"
+              class="acs-hub-t" pointer-events="none">A</text>
+      </g>
+    </g>
+    {% endif %}
+    {% endfor %}
+    {#- факт и название -#}
+    {% set n = s.now %}
+    <text x="{{ n.x }}" y="{{ n.label_y }}" font-size="{{ n.label_size }}" text-anchor="{{ n.anchor }}"
+          class="acs-dim{{ ' in' if n.inside }}">сейчас</text>
+    <text x="{{ n.x }}" y="{{ n.y }}" font-size="{{ n.size }}" font-weight="650" letter-spacing="-1"
+          text-anchor="{{ n.anchor }}" class="acs-ink{{ ' in' if n.inside }}">{{ n.text }}<tspan
+          font-size="{{ n.deg }}" font-weight="500" dy="{{ n.dy }}">°</tspan></text>
+    {% set nm = s.name %}
+    <text x="{{ nm.x }}" y="{{ nm.y }}" font-size="{{ nm.size }}" font-weight="500" text-anchor="{{ nm.anchor }}"
+          class="acs-ink{{ ' in' if nm.inside }}">{{ t.title }}</text>
+    {#- «назад» и питание -#}
+    {% set b = s.back %}
+    <g data-z="back">
+      {{ shade(b.x, b.y, b.r, s) }}
+      <circle cx="{{ b.x }}" cy="{{ b.y }}" r="{{ b.r }}" class="acs-btn"/>
+      <path d="M {{ b.x + b.r * 0.18 }},{{ b.y - b.r * 0.45 }} L {{ b.x - b.r * 0.3 }},{{ b.y }} L {{ b.x + b.r * 0.18 }},{{ b.y + b.r * 0.45 }}"
+            class="acs-btn-ink" stroke-width="{{ b.r * 0.14 }}"/>
+    </g>
+    {% set p = s.power %}
+    <g data-z="power">
+      {{ shade(p.x, p.y, p.r, s) }}
+      <circle cx="{{ p.x }}" cy="{{ p.y }}" r="{{ p.r }}" class="acs-pw"/>
+      <path d="M {{ p.x - p.r * 0.27 }},{{ p.y - p.r * 0.27 }} A {{ p.r * 0.38 }},{{ p.r * 0.38 }} 0 1 0 {{ p.x + p.r * 0.27 }},{{ p.y - p.r * 0.27 }} M {{ p.x }},{{ p.y - p.r * 0.52 }} L {{ p.x }},{{ p.y - p.r * 0.08 }}"
+            class="acs-pw-ink" stroke-width="{{ p.r * 0.1 }}"/>
+    </g>
+    {#- выбор режима: шторка от верхнего края, открывает пульт -#}
+    <g class="acs-ch">
+      <rect width="{{ s.w }}" height="{{ s.ch_h + 18 }}" class="acs-ch-bg" data-z="ch-bg"/>
+      <rect y="{{ s.ch_h + 17 }}" width="{{ s.w }}" height="1" class="acs-ch-line"/>
+      {% for c in s.chooser %}
+      <g data-z="pick" data-mode="{{ c.key }}">
+        <rect x="{{ c.x }}" y="{{ s.ch_y }}" width="{{ c.w }}" height="{{ s.ch_pill }}" rx="{{ s.ch_pill / 2 }}"
+              class="acs-pill{{ ' on' if c.on }}"/>
+        {% if c.key == 'auto' %}
+        <text x="{{ c.tx }}" y="{{ s.ch_y + s.ch_pill * 0.36 }}" font-size="{{ c.isize }}" text-anchor="middle"
+              dominant-baseline="central" class="acs-pill-t{{ ' on' if c.on }}" font-weight="750">A</text>
+        {% else %}
+        <g class="acs-pill-ic{{ ' on' if c.on }}"><use href="#{{ uid }}ic-{{ c.icon }}" xlink:href="#{{ uid }}ic-{{ c.icon }}"
+           x="{{ c.ix }}" y="{{ s.ch_y + s.ch_pill * 0.36 - c.isize / 2 }}" width="{{ c.isize }}" height="{{ c.isize }}"/></g>
+        {% endif %}
+        <text x="{{ c.tx }}" y="{{ s.ch_y + s.ch_pill * 0.82 }}" font-size="{{ s.ch_font }}" text-anchor="middle"
+              class="acs-pill-t{{ ' on' if c.on }}">{{ c.word }}</text>
+      </g>
+      {% endfor %}
+    </g>
+  </g>
 {% endmacro %}

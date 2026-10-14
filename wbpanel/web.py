@@ -814,8 +814,8 @@ def tile_svg(name, index):
         abort(404, "плитки %d нет на панели %r" % (index, name))
 
     try:
-        width = max(240, min(int(request.args.get("w") or 700), 2000))
-        height = max(200, min(int(request.args.get("h") or 480), 2000))
+        width = max(240, min(int(request.args.get("w") or 700), 3000))
+        height = max(200, min(int(request.args.get("h") or 480), 3000))
     except ValueError:
         width, height = 700, 480
 
@@ -824,19 +824,21 @@ def tile_svg(name, index):
     theme = panel_theme(panel_conf)
     panel_conf = dict(panel_conf, theme=theme)
     conf = tiles[index]
-    # Пульт кондиционера берёт колесо отсюда же, но в своём виде: без
-    # значков жалюзи (они кнопками под колесом) и с цифрами крупнее.
-    if request.args.get("view") == "pad":
+    # Пульт кондиционера на весь экран (с 1.16): плитка во весь размер
+    # окна, без полей и скруглений, раскладка - по форме экрана.
+    pad = request.args.get("view") == "pad"
+    if pad:
         conf = dict(conf, view="pad")
-    tile = build_tile(conf, 0, PAD, PAD, width, height,
+    edge = 0 if pad else PAD
+    tile = build_tile(conf, 0, edge, edge, width, height,
                       panel_conf, state, history, interactive)
     scale = font_scale(height)
     svg = jinja.get_template(panel_conf.get("template", "panel.svg.j2")).render(
         uid="t%d-" % index,
         fs=scale,
         tiles=[tile], headers=[],
-        width=width + PAD * 2, height=height + PAD * 2,
-        rx=RX, theme=theme, shadows=True, bare=conf.get("view") == "pad",
+        width=width + edge * 2, height=height + edge * 2,
+        rx=0 if pad else RX, theme=theme, shadows=not pad, bare=pad,
         title="", updated=time.strftime("%H:%M"), connected=state.connected)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(
@@ -888,8 +890,8 @@ def chart_svg():
         abort(403, "канал %r не используется ни на одной панели" % channel)
 
     try:
-        width = max(240, min(int(request.args.get("w") or 700), 2000))
-        height = max(200, min(int(request.args.get("h") or 480), 2000))
+        width = max(240, min(int(request.args.get("w") or 700), 3000))
+        height = max(200, min(int(request.args.get("h") or 480), 3000))
     except ValueError:
         width, height = 700, 480
 

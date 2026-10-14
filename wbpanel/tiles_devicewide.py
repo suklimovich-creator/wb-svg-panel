@@ -22,7 +22,7 @@ from .const import BAND, log
 from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
                        grid_bounds, hour_ticks, label_color, label_digits, nice_step,
                        parse_duration, smooth_path, text_width)
-from .ac_disk import build_disk
+from .ac_disk import build_disk, build_screen
 from .registry import Tile, Zone, tile
 from .state import is_on, to_float
 from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
@@ -628,6 +628,13 @@ def build_ac(tile, state):
                            swing_h=swing_h if swing_h_snap["known"] else None,
                            pad=tile.get("view") == "pad",
                            step=float(tile.get("step", 1) or 1)),
+        # Пульт на весь экран (с 1.16): своя раскладка по форме экрана.
+        "screen": build_screen(tile.get("inner_w") or 390, tile.get("chart_h") or 844,
+                               mode, on, tgt, cur, lo, hi, fan=fan, quiet=quiet,
+                               swing=swing if swing_snap["known"] else None,
+                               swing_h=swing_h if swing_h_snap["known"] else None,
+                               step=float(tile.get("step", 1) or 1))
+                  if tile.get("view") == "pad" else None,
         "enabled": on,
         "reach": None,
         "snaps": snaps,

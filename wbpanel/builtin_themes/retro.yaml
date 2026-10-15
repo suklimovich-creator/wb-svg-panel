@@ -1,0 +1,47 @@
+# Встроенная тема wb-svg-panel: ретро.
+# ретро: кремовая бумага, тёмно-синий, терракота, шалфей
+#
+# Значения - CSS-переменные плиток (без «--»). Тема наследует всё,
+# чего не задала, у темы из extends.
+name: retro
+title: "ретро"
+extends: light
+mode: light   # light | dark: от неё пульты, подписи графиков
+on_style: card   # rim - рамка у включённой; card - тёмная карточка
+inv_kinds: ["chart"]   # типы плиток, у которых карточка тёмная всегда
+sheen: false   # отсвет из угла плитки (тёмные темы)
+shadow: {amb: 0.2, key: 0.12}   # тени плиток: рассеянная и ключевая
+vars:
+  bg-top: "#EFE6D6"
+  bg-bottom: "#E7DBC6"
+  tile: "#FBF6EC"
+  edge: "rgba(90,64,38,.08)"
+  edge-w: "1"
+  active: "#C9622F"
+  active-w: "0"
+  active-soft: "#F3D3BD"
+  active-soft-edge: "rgba(201,98,47,.40)"
+  active-ink: "#A24A26"
+  ink: "#2B3344"
+  ink-dim: "#8C7F6C"
+  ink-faint: "rgba(70,52,32,.34)"
+  stroke: "#3E4757"
+  window: "#C7CFCB"
+  fabric: "#F6EFE2"
+  drape: "#9C9583"   # штора нового вида - приглушённая
+  sash: "#F6F1E6"   # переплёт окна
+  shadow: "#5A4026"
+  cool: "#5E8C6A"
+  inv-tile: "#2F3A4F"
+  inv-ink: "#F6EEDF"
+  inv-dim: "rgba(246,238,223,.72)"
+  inv-stroke: "#F6EEDF"
+  inv-accent: "#E8894E"
+  section: "#FBF6EC"
+  section-op: ".9"
+  ac-disk: "#2F3A4F"
+  ac-ink: "#F6EEDF"
+  ac-dim: "rgba(246,238,223,.62)"
+  ac-pill: "#EFE5D4"
+  ac-pill-on: "#2F3A4F"
+  ac-pill-ink: "#F6EEDF"

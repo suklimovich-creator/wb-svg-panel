@@ -19,6 +19,7 @@ from .tiles import DIAL_START, DIAL_SWEEP, HEAT_MODE, HEAT_NOW, build_dial
 from .state import to_float
 from .skeuo import dimmer_layout, knob_dial, sphere_tile
 from .sky import drapes, roman, scene, weather_now
+from . import palette
 
 
 def _percent(ctx, role, default_max=100.0):
@@ -95,7 +96,7 @@ class Light(Tile):
                                  (brightness or 0.0) / 100.0,
                                  dot_x if dot_x is not None else 0.5, on, cold, warm,
                                  float(ctx.opt("inner_w") or 170) < 156,
-                                 light=ctx.opt("theme") not in ("dark", "graphite"))
+                                 light=not palette.is_dark(ctx.opt("theme") or "light"))
         return {
             "on": on,
             "sphere": sphere,

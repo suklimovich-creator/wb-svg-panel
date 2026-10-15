@@ -4,7 +4,8 @@
 """
 
 import re
-from .const import DARK_THEMES, log
+from .const import log
+from . import palette
 
 
 # ==========================================================================
@@ -81,13 +82,9 @@ def resolve_css_vars(svg, theme="light", fs=1.0):
                         line[:100])
             break
 
-    values = _css_vars(style, "svg")
-    # Тёмные темы (graphite) - палитра .dark и свои поправки поверх;
-    # светлые (autumn, retro, noir) - поправки поверх общей светлой.
-    if theme in DARK_THEMES:
-        values.update(_css_vars(style, ".dark"))
-    if theme not in ("light", "dark"):
-        values.update(_css_vars(style, "." + str(theme)))
+    # Значения - прямо из данных темы, с наследованием (palette), а не
+    # разбором текста стилей: с 1.24 палитра - данные.
+    values = palette.css_vars(theme)
     values["--fs"] = str(fs)
 
     def replace(match):

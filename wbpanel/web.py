@@ -32,6 +32,7 @@ from .water import water
 from .calendars import calendars
 from . import checkup
 from . import themes
+from . import palette
 from . import __version__
 import html
 import threading
@@ -55,6 +56,12 @@ history = None
 jinja = None
 
 
+def _template(name):
+    """Шаблон с общими для всех глобалами: PAL - данные тем (с 1.24)."""
+    jinja.globals.setdefault("PAL", palette)
+    return jinja.get_template(name)
+
+
 def panel_theme(panel_conf=None):
     """
     Тема для этого ответа: ?theme= из адреса (выбор на устройстве - у
@@ -62,7 +69,7 @@ def panel_theme(panel_conf=None):
     Неизвестное имя в адресе молча игнорируется.
     """
     asked = request.args.get("theme") if request else None
-    if asked in THEMES:
+    if asked and palette.exists(asked):
         return asked
     # theme: auto - по расписанию theme_auto (день/ночь, восход/закат).
     return themes.resolve((panel_conf or {}).get("theme", config.get("theme", "light")),
@@ -88,7 +95,7 @@ def render_panel(name, cols=None):
     tiles, width, height, headers, top_chips = prepare(
         panel_conf, state, history, cols=cols, all_panels=config.panels,
         name=name, closed=closed, opened=opened)
-    template = jinja.get_template(panel_conf.get("template", "panel.svg.j2"))
+    template = _template(panel_conf.get("template", "panel.svg.j2"))
     return template.render(
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
         # документе, и без него их clipPath и градиенты перекрывают друг друга
@@ -559,7 +566,8 @@ def _panel_args(name, cols):
     closed = tuple(p for p in (request.args.get("closed") or "").split(",") if p)
     opened = request.args.get("open") or None
     flat = request.args.get("flat") not in ("0", "false", "no")
-    theme = request.args.get("theme") if request.args.get("theme") in THEMES else None
+    asked = request.args.get("theme")
+    theme = asked if asked and palette.exists(asked) else None
     return closed, opened, flat, theme
 
 
@@ -836,7 +844,7 @@ def tile_svg(name, index):
     tile = build_tile(conf, 0, edge, edge, width, height,
                       panel_conf, state, history, interactive)
     scale = font_scale(height)
-    svg = jinja.get_template(panel_conf.get("template", "panel.svg.j2")).render(
+    svg = _template(panel_conf.get("template", "panel.svg.j2")).render(
         uid="t%d-" % index,
         fs=scale,
         tiles=[tile], headers=[],
@@ -921,7 +929,7 @@ def chart_svg():
     tile = build_tile(conf, 0, PAD, PAD, width, height, {"theme": theme},
                       state, history, False)
     scale = font_scale(height)
-    svg = jinja.get_template("panel.svg.j2").render(
+    svg = _template("panel.svg.j2").render(
         uid="c-", fs=scale, tiles=[tile], headers=[],
         width=width + PAD * 2, height=height + PAD * 2,
         rx=RX, theme=theme, title="", updated=time.strftime("%H:%M"),
@@ -953,7 +961,10 @@ def panel_html(name):
             ("__NAME_JS__", json.dumps(name)),
             ("__EVERY__", str(every)),
             ("__INTERACTIVE__", "true" if interactive else "false"),
-            ("__APP_JS__", json.dumps(__version__))):
+            ("__APP_JS__", json.dumps(__version__)),
+            # Список тем для меню и цвета полей страницы - из данных тем,
+            # а не из копии в скрипте страницы (с 1.24).
+            ("__THEMES_JS__", json.dumps(palette.menu(), ensure_ascii=False))):
         html_page = html_page.replace(mark, value)
 
     # страница не кэшируется: после обновления панели должны прийти

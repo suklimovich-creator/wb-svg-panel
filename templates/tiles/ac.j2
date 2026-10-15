@@ -309,13 +309,13 @@
     нему, а не по кругу. Круг проходил поперёк желобов, и желоба выглядели
     тёмными вставками, а не прорезями. -#}
 {% macro shade(x, y, r, s, path=None) %}
-  {% set dark = theme in ('dark', 'graphite') %}
+  {% set dark = PAL.is_dark(theme) %}
   {% if dark %}
   {% if path %}<path d="{{ path }}" class="acs-lit" stroke-width="1.2"/>
   {% else %}<circle cx="{{ x }}" cy="{{ y }}" r="{{ r + 0.6 }}" class="acs-lit" stroke-width="1.2"/>{% endif %}
   {% else %}
-  {% set amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.24}.get(theme, 0.13) %}
-  {% set key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.14}.get(theme, 0.08) %}
+  {% set amb = (PAL.info(theme).shadow or {'amb': 0.13}).amb %}
+  {% set key = (PAL.info(theme).shadow or {'key': 0.08}).key %}
   {% if path %}
   <path d="{{ path }}" transform="translate(0 {{ s.sh_dy }})" class="acs-shade" opacity="{{ amb }}" filter="url(#{{ uid }}acs-amb)"/>
   <path d="{{ path }}" transform="translate(0 {{ s.sh_dy2 }})" class="acs-shade" opacity="{{ key }}" filter="url(#{{ uid }}acs-key)"/>
@@ -347,13 +347,13 @@
     <rect width="{{ s.w }}" height="{{ s.h }}" class="acs-bg"/>
     {#- колесо уставки -#}
     <g data-z="wheel">
-      {% set dark = theme in ('dark', 'graphite') %}
+      {% set dark = PAL.is_dark(theme) %}
       {#- Тень колеса: мягкая - кругом (она неподвижна, и размытие не
           пересчитывается при повороте), резкая - копией зубцов со сдвигом
           вниз, без размытия: крутится вместе со шкалой. -#}
       {% if not dark %}
-      {% set amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.24}.get(theme, 0.13) %}
-      {% set key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.14}.get(theme, 0.08) %}
+      {% set amb = (PAL.info(theme).shadow or {'amb': 0.13}).amb %}
+      {% set key = (PAL.info(theme).shadow or {'key': 0.08}).key %}
       <circle cx="{{ s.cx }}" cy="{{ s.cy + s.sh_dy }}" r="{{ s.r * 0.98 }}" class="acs-shade" opacity="{{ amb }}" filter="url(#{{ uid }}acs-amb)"/>
       <g transform="translate(0 {{ s.sh_dy2 }})"><g class="acs-scale">
         <circle cx="{{ s.cx }}" cy="{{ s.cy }}" r="{{ s.r }}" class="acs-shade" opacity="{{ key }}"/>

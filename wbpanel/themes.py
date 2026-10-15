@@ -23,7 +23,8 @@ import datetime as dt
 import math
 import re
 
-from .const import THEMES, log
+from .const import log
+from . import palette
 
 DEFAULTS = {"day": "light", "night": "dark"}
 #: Без координат или когда солнце не садится / не встаёт (полярные день и
@@ -109,8 +110,8 @@ def problems(config):
     out = []
     for key in ("day", "night"):
         name = conf.get(key, DEFAULTS[key])
-        if name not in THEMES:
-            out.append("theme_auto.%s: темы %r нет (есть: %s)" % (key, name, ", ".join(THEMES)))
+        if not palette.exists(name):
+            out.append("theme_auto.%s: темы %r нет (есть: %s)" % (key, name, ", ".join(palette.names())))
     uses_sun = any(_SPEC_RE.match(str(conf.get(k) or "")) for k in ("day_from", "night_from"))
     for key in ("day_from", "night_from"):
         val = conf.get(key)
@@ -127,9 +128,9 @@ def auto_theme(config, now=None):
     conf = (config.get("theme_auto") or {}) if config else {}
     day_name = conf.get("day", DEFAULTS["day"])
     night_name = conf.get("night", DEFAULTS["night"])
-    if day_name not in THEMES:
+    if not palette.exists(day_name):
         day_name = DEFAULTS["day"]
-    if night_name not in THEMES:
+    if not palette.exists(night_name):
         night_name = DEFAULTS["night"]
     now = now or dt.datetime.now().astimezone()
     loc = _location(conf, config)
@@ -158,4 +159,4 @@ def resolve(name, config, now=None):
         except Exception as exc:                # тема не должна ронять панель
             log.warning("theme_auto: %s", exc)
             return DEFAULTS["day"]
-    return name if name in THEMES else "light"
+    return name if palette.exists(name) else "light"

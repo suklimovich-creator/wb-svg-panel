@@ -8,7 +8,8 @@ import time
 from .commands import cmd_attrs, xml_escape
 from .commands import build as build_command
 from .const import BAND, CELL, GAP, HEADER, PAD, RX, SECTION, TILE, font_scale, log
-from .const import INV_SKIP, STALE_AFTER, THEME_STYLE
+from .const import INV_SKIP, STALE_AFTER
+from . import palette
 from .geometry import _fmt, cells, layout, text_width
 from .status import build_status, place_chips
 from .registry import resolve_type
@@ -202,8 +203,8 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # она разная. CSS-переменная тут не подходит - цвет у каждой серии свой.
     conf["theme"] = (panel_conf or {}).get("theme") or (
         config.get("theme", "light") if config else "light")
-    style = THEME_STYLE.get(conf["theme"], {})
-    inv_kind = conf.get("type") in style.get("inv_kinds", ())
+    style = palette.info(conf["theme"])
+    inv_kind = conf.get("type") in style["inv_kinds"]
     if inv_kind:
         # Тёмная карточка графика: подписи считаем как для тёмной темы.
         conf["theme"] = "dark"
@@ -220,7 +221,7 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # Тёмная карточка (класс inv): у типа - всегда, у включённой плитки -
     # если тема так делает.
     tile["inv"] = tile["kind"] not in INV_SKIP and (
-        inv_kind or bool(style.get("inv_on") and tile.get("on")))
+        inv_kind or bool(style["card"] and tile.get("on")))
 
     # Служебные поля реестра до шаблона доходить не должны.
     zones = tile.pop("_zones", None) or []

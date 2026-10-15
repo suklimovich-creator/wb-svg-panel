@@ -69,6 +69,13 @@ done
 if [ -z "$MISSING" ]; then
     echo "    ok:  templates/tiles/ (шесть файлов)"
 fi
+# Темы с 1.24 - файлы данных: без них панель рисуется без палитры.
+for f in light dark graphite autumn retro noir; do
+    if [ ! -f "$SRC/wbpanel/builtin_themes/$f.yaml" ]; then
+        MISSING="$MISSING wbpanel/builtin_themes/$f.yaml"
+        echo "    НЕТ: wbpanel/builtin_themes/$f.yaml"
+    fi
+done
 if [ -n "$MISSING" ]; then
     cat <<MSG
 

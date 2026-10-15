@@ -243,7 +243,8 @@ def label_color(hex_color, theme="light"):
     белый - серый, а не чужой цвет.
     """
     lum = luma(hex_color)
-    if theme in ("dark", "graphite"):   # const.DARK_THEMES
+    from . import palette
+    if palette.is_dark(theme):
         floor = LABEL_LUMA["dark"]
         if lum >= floor:
             return hex_color

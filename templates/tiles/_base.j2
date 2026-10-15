@@ -15,263 +15,13 @@
     старые WebView такое молча игнорируют. Поэтому каркас
     склеивает куски, а не выпускает несколько блоков. -#}
 {% macro style() %}
-  /* ---- палитра: светлая тема ------------------------------------------ */
-  svg {
-    /* Масштаб типографики. В обычной плитке 1, в раскрытой на весь экран
-       больше: размеры шрифтов зашиты в пикселях, и без этого подписи на
-       крупной картинке выглядят микроскопическими. */
-    --fs: 1;
-    --bg-top:      #F1F1F3;
-    --bg-bottom:   #E6E6E9;
-    --tile:        #D9D9DC;   /* сама плитка */
-    --edge:        rgba(60,60,67,.20);
-    --edge-w:      1.5;
-    --active:      #E09B2D;   /* рамка включённого устройства */
-    --active-w:    3.5;
-    /* Чип строки состояния: мягкая версия .plate.on. У включённой плитки
-       активность показана рамкой 3.5 - для чипа высотой 36 это грубо,
-       поэтому здесь заливка и тонкий контур того же семейства.
-       Чернила значка гуще основного активного цвета: тонкие штрихи на
-       светлом фоне выцветают там, где широкая рамка ещё читается.
-       Двоеточие после имени переменной в комментариях писать нельзя -
-       разбор палитры принимает это за объявление и съедает следующее. */
-    --active-soft:      #EBD9B4;
-    --active-soft-edge: rgba(184,121,26,.35);
-    --active-ink:       #A96A0F;
-    --ink:         #3A3A3E;
-    --ink-dim:     #8A8A90;
-    --ink-faint:   rgba(60,60,67,.34);
-    --stroke:      #6E6E75;   /* иконки */
-    --window:      #B4BCC7;   /* «улица» за шторой */
-    --fabric:      #F0ECE5;   /* ткань */
-    --drape:       #9E978C;   /* штора нового вида - приглушённая */
-    --sash:        #F4F2EE;   /* переплёт окна */
-    /* Подложка включённой плитки. В светлой и тёмной та же, что у
-       выключенной - там о включении говорит рамка; ретро и мягкая
-       подкрашивают саму плитку. */
-    --tile-on:     var(--tile);
-    --shadow:      #34343C;
-    /* Охлаждение - на дуге термостата и в режимах. */
-    --cool:        #3B8FD4;
-    /* Тёмная карточка (класс inv). В темах без неё класс не ставится,
-       значения здесь - чтобы плоская подстановка не оставила пустот. */
-    --inv-tile:    var(--tile);
-    --inv-ink:     var(--ink);
-    --inv-dim:     var(--ink-dim);
-    --inv-stroke:  var(--stroke);
-    --inv-accent:  var(--active);
-    --chip-on-ink: var(--ink);
-    --section:     var(--tile);
-    --section-op:  .35;
-    /* Колесо кондиционера: залитый диск, его чернила, полоски-таблетки
-       и яркий отрезок «сейчас - уставка» снаружи обода. Отрезок лежит на
-       плитке, а не на диске, поэтому цвета подобраны под подложку. */
-    --ac-disk:     #2F2F34;
-    --ac-ink:      #F4F4F6;
-    --ac-dim:      rgba(244,244,246,.62);
-    --ac-off:      #C8C8CC;
-    --ac-off-ink:  #3A3A3E;
-    --ac-off-dim:  #6E6E75;
-    --ac-pill:     #CACACE;
-    --ac-pill-on:  #2F2F34;
-    --ac-pill-ink: #F4F4F6;
-    --ac-seg-cool: #2D86D6;
-    --ac-seg-heat: #E0661A;
-  }
-  /* ---- тёмная тема ------------------------------------------------------ */
-  .dark {
-    --bg-top:      #1B1B1F;
-    --bg-bottom:   #101012;
-    --tile:        #2C2C31;
-    --edge:        rgba(255,255,255,.16);
-    --edge-w:      1.5;
-    --active:      #FFAE28;
-    --active-w:    3.5;
-    --active-soft:      #3A2E18;
-    --active-soft-edge: rgba(255,174,40,.32);
-    --active-ink:       #FFAE28;
-    --ink:         #EDEDF0;
-    --ink-dim:     rgba(255,255,255,.52);
-    --ink-faint:   rgba(255,255,255,.28);
-    --stroke:      #C6C6CC;
-    --window:      #39404A;
-    --fabric:      #7B7568;
-    --drape:       #4A4741;   /* штора нового вида - приглушённая */
-    --sash:        #141518;   /* переплёт окна */
-    /* Отсвет плиток из левого верхнего угла: белёсый у всех, тёплый у
-       включённой. У графита свои, построже. */
-    --sheen:       rgba(255,255,255,.065);
-    --sheen-on:    rgba(255,174,40,.30);
-    --section:     #2C2C31;
-    --section-op:  .8;
-    --ac-disk:     #FFAE28;
-    --ac-ink:      #1A1408;
-    --ac-dim:      rgba(26,20,8,.62);
-    --ac-off:      #3A3B40;
-    --ac-off-ink:  #C6C6CC;
-    --ac-off-dim:  rgba(255,255,255,.45);
-    --ac-pill:     #3A3A40;
-    --ac-pill-on:  #FFAE28;
-    --ac-pill-ink: #1A1408;
-    --ac-seg-cool: #6CC4FF;
-    --ac-seg-heat: #FF9A3D;
-  }
-
-  /* ---- графит: тёмная тема построже -------------------------------------
-     Поверх тёмной: почти чёрный фон, плитки угольные с тонким контуром,
-     у каждой мягкий отсвет из левого верхнего угла, у включённой - тёплый
-     янтарный. Рамка включённой тоньше: о состоянии говорит отсвет. */
-  .graphite {
-    --bg-top:      #151618;
-    --bg-bottom:   #0B0C0D;
-    --tile:        #1C1D20;
-    --edge:        rgba(255,255,255,.07);
-    --edge-w:      1;
-    --active:      #F2A23A;
-    --active-w:    2;
-    --active-soft:      #34281A;
-    --active-soft-edge: rgba(242,162,58,.30);
-    --active-ink:       #F6B455;
-    --ink:         #F2F2F4;
-    --ink-dim:     rgba(255,255,255,.50);
-    --ink-faint:   rgba(255,255,255,.26);
-    --stroke:      #B8B9BF;
-    --window:      #2F353D;
-    --fabric:      #6E6A60;
-    --drape:       #403F3B;   /* штора нового вида - приглушённая */
-    --sash:        #111214;   /* переплёт окна */
-    --sheen:       rgba(255,255,255,.075);
-    --sheen-on:    rgba(242,162,58,.34);
-    --section:     #232427;
-    --section-op:  1;
-    --ac-disk:     #F2A23A;
-    --ac-ink:      #17130D;
-    --ac-dim:      rgba(23,19,13,.62);
-    --ac-pill:     #27282C;
-    --ac-pill-on:  #F2A23A;
-    --ac-pill-ink: #17130D;
-  }
+  /* ---- палитры тем ----------------------------------------------------
+     С 1.24 - данные, а не CSS: wbpanel/builtin_themes/«имя».yaml, блоки
+     собирает wbpanel/palette.py. Корневая тема - svg {}, остальные -
+     .имя {} только со своими значениями поверх родителя. */
+{{ PAL.css()|safe }}
   .sheen     { pointer-events: none; }
 
-  /* ==== светлые темы с тёмной карточкой ===============================
-     Устроены одинаково: светлый фон, светлые карточки с тенью, а
-     включённая плитка - тёмная карточка со светлым текстом (класс inv).
-     Цвета каждой темы взяты одним набором, как на палитре: фон, карточка,
-     тёмная карточка, чернила и два акцента - для светлой карточки и для
-     тёмной. Подбирались по контрасту: акцент на тёмной карточке светлее
-     того, что на светлой. */
-
-  /* ---- осень: белые карточки на тёплом сером, коньячный и охра ------- */
-  .autumn {
-    --bg-top:      #E2DED7;
-    --bg-bottom:   #D8D3CA;
-    --tile:        #FFFFFF;
-    --edge:        rgba(70,45,20,.06);
-    --edge-w:      1;
-    --active:      #D2691E;
-    --active-w:    0;
-    --active-soft:      #F7E3C2;
-    --active-soft-edge: rgba(210,105,30,.35);
-    --active-ink:       #9A4A12;
-    --ink:         #1F1B17;
-    --ink-dim:     #8A8177;
-    --ink-faint:   rgba(31,27,23,.30);
-    --stroke:      #4A423A;
-    --window:      #CFC7BC;
-    --fabric:      #F6F1EA;
-    --drape:       #A39484;   /* штора нового вида - приглушённая */
-    --sash:        #F7F4EF;   /* переплёт окна */
-    --shadow:      #4A3420;
-    --cool:        #4F7C8A;
-    --inv-tile:    #8A4A20;
-    --inv-ink:     #FFF4E4;
-    --inv-dim:     rgba(255,244,228,.80);
-    --inv-stroke:  #F3D59B;
-    --inv-accent:  #F2B54E;
-    --section:     #FFFFFF;
-    --section-op:  .75;
-    --ac-disk:     #8A4A20;
-    --ac-ink:      #FFF4E4;
-    --ac-dim:      rgba(255,244,228,.72);
-    --ac-pill:     #F1ECE5;
-    --ac-pill-on:  #8A4A20;
-    --ac-pill-ink: #FFF4E4;
-  }
-
-  /* ---- ретро: кремовая бумага, тёмно-синий, терракота, шалфей --------- */
-  .retro {
-    --bg-top:      #EFE6D6;
-    --bg-bottom:   #E7DBC6;
-    --tile:        #FBF6EC;
-    --edge:        rgba(90,64,38,.08);
-    --edge-w:      1;
-    --active:      #C9622F;
-    --active-w:    0;
-    --active-soft:      #F3D3BD;
-    --active-soft-edge: rgba(201,98,47,.40);
-    --active-ink:       #A24A26;
-    --ink:         #2B3344;
-    --ink-dim:     #8C7F6C;
-    --ink-faint:   rgba(70,52,32,.34);
-    --stroke:      #3E4757;
-    --window:      #C7CFCB;
-    --fabric:      #F6EFE2;
-    --drape:       #9C9583;   /* штора нового вида - приглушённая */
-    --sash:        #F6F1E6;   /* переплёт окна */
-    --shadow:      #5A4026;
-    --cool:        #5E8C6A;
-    --inv-tile:    #2F3A4F;
-    --inv-ink:     #F6EEDF;
-    --inv-dim:     rgba(246,238,223,.72);
-    --inv-stroke:  #F6EEDF;
-    --inv-accent:  #E8894E;
-    --section:     #FBF6EC;
-    --section-op:  .9;
-    --ac-disk:     #2F3A4F;
-    --ac-ink:      #F6EEDF;
-    --ac-dim:      rgba(246,238,223,.62);
-    --ac-pill:     #EFE5D4;
-    --ac-pill-on:  #2F3A4F;
-    --ac-pill-ink: #F6EEDF;
-  }
-
-  /* ---- нуар: тёплый серо-бежевый, графит, сепия --------------------- */
-  .noir {
-    --bg-top:      #EFECE7;
-    --bg-bottom:   #E5E1DA;
-    --tile:        #E2DBD0;
-    --edge:        rgba(40,34,28,.07);
-    --edge-w:      1;
-    --active:      #2A2623;
-    --active-w:    0;
-    --active-soft:      #2A2623;
-    --active-soft-edge: rgba(42,38,35,.6);
-    --active-ink:       #F2EDE4;
-    --ink:         #1E1C1A;
-    --ink-dim:     #6A635A;
-    --ink-faint:   rgba(30,28,26,.50);
-    --stroke:      #34302C;
-    --window:      #C9C2B7;
-    --fabric:      #EEE8DE;
-    --drape:       #958C80;   /* штора нового вида - приглушённая */
-    --sash:        #F3F0EA;   /* переплёт окна */
-    --shadow:      #2A2420;
-    --cool:        #5F7280;
-    --inv-tile:    #262321;
-    --inv-ink:     #F2EDE4;
-    --inv-dim:     rgba(242,237,228,.68);
-    --inv-stroke:  #E9E1D4;
-    --inv-accent:  #CDB898;
-    --chip-on-ink: #F2EDE4;
-    --section:     #D8CFC1;
-    --section-op:  1;
-    --ac-disk:     #262321;
-    --ac-ink:      #F2EDE4;
-    --ac-dim:      rgba(242,237,228,.62);
-    --ac-pill:     #D3CABC;
-    --ac-pill-on:  #262321;
-    --ac-pill-ink: #F2EDE4;
-  }
 
   /* ---- тёмная карточка (inv) ----------------------------------------
      Значки красятся через currentColor (см. .icon): color на группе
@@ -538,6 +288,11 @@
     <stop offset="0" stop-color="#FFC27A" stop-opacity=".5"/>
     <stop offset="1" stop-color="#FFC27A" stop-opacity="0"/>
   </radialGradient>
+  <!-- мягкая тень под шаром ленты: без размытия, градиентом -->
+  <radialGradient id="{{ uid }}sphsh" cx=".5" cy=".5" r=".5">
+    <stop offset=".7" stop-color="var(--shadow)" stop-opacity=".32"/>
+    <stop offset="1" stop-color="var(--shadow)" stop-opacity="0"/>
+  </radialGradient>
   <radialGradient id="{{ uid }}halo" cx=".5" cy=".5" r=".5">
     <stop offset="0" stop-color="var(--active)" stop-opacity=".55"/>
     <stop offset="1" stop-color="var(--active)" stop-opacity="0"/>
@@ -567,7 +322,7 @@
     <stop offset=".5" stop-color="#FFFFFF" stop-opacity=".10"/>
     <stop offset="1" stop-color="#000000" stop-opacity=".02"/>
   </linearGradient>
-  {% if theme in ('dark', 'graphite') %}
+  {% if PAL.info(theme).sheen %}
   {#- Отсвет плиток тёмных тем: радиальный из левого верхнего угла. Цвет -
       переменной, чтобы плоская подстановка для старых браузеров его
       развернула. -#}
@@ -956,14 +711,27 @@
   {% endif %}
 {% endmacro %}
 
+{#- Мягкие тени органов управления (1.23.1). Без фильтров: круглому -
+    радиальный градиент, прямоугольному - три рамки с нарастающим краем.
+    Прежняя тень - тот же контур, сдвинутый вниз, - выглядывала из-под
+    детали резким серпом. -#}
+{% macro soft_round(cx, cy, r, dy) %}
+  <circle cx="{{ cx }}" cy="{{ (cy + dy)|round(1) }}" r="{{ (r * 1.16)|round(1) }}" fill="url(#{{ uid }}sphsh)"/>
+{% endmacro %}
+{% macro soft_rect(x, y, w, h, r, dy) %}
+  {% for g in (3.0, 1.8, 0.6) %}
+  <rect x="{{ (x - g)|round(1) }}" y="{{ (y + dy - g * 0.5)|round(1) }}" width="{{ (w + 2 * g)|round(1) }}"
+        height="{{ (h + 2 * g)|round(1) }}" rx="{{ (r + g)|round(1) }}" class="key-sh" opacity=".07"/>
+  {% endfor %}
+{% endmacro %}
+
 {#- Клавиша-качалка: нажатая половина утоплена (градиент), разделитель
     посередине, диод у дальнего края. -#}
 {% macro rocker(t) %}
   {% set k = t.key %}
   {% set r = 16 if k.kw > 50 else 11 %}
   <g class="rocker {{ 'on' if t.on }}">
-    <rect x="{{ k.kx }}" y="{{ k.ky + 4 }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" class="key-sh" opacity=".22"/>
-    <rect x="{{ k.kx }}" y="{{ k.ky + 2 }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" class="key-sh" opacity=".18"/>
+    {{ soft_rect(k.kx, k.ky, k.kw, k.kh, r, 2.5) }}
     <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" class="key"/>
     <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}"
           fill="url(#{{ uid }}{{ 'keyh' if k.horiz else 'key' }}-{{ 'on' if t.on else 'off' }})"/>
@@ -995,7 +763,7 @@
     {% if t.on %}
     <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ k.halo_r }}" fill="url(#{{ uid }}sh{{ t.i }})"/>
     {% endif %}
-    <circle cx="{{ k.cx }}" cy="{{ k.cy + k.r * 0.1 }}" r="{{ k.r }}" class="key-sh" opacity=".35"/>
+    <circle cx="{{ k.cx }}" cy="{{ k.cy + k.r * 0.07 }}" r="{{ k.r * 1.16 }}" fill="url(#{{ uid }}sphsh)"/>
     <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ k.r }}" fill="url(#{{ uid }}sb{{ t.i }})"/>
     <path d="{{ k.seams }}" fill="none" stroke="{{ k.seam }}" stroke-opacity="{{ k.seam_op }}"
           stroke-width="{{ k.seam_w }}" stroke-linejoin="round"/>
@@ -1058,7 +826,7 @@
 {#- Отсвет поверх подложки - в тёмных темах (dark, graphite). Рамку не трогает:
     отступ в полторы точки внутрь. -#}
 {% macro sheen(t, on=False) %}
-  {% if theme in ('dark', 'graphite') %}
+  {% if PAL.info(theme).sheen %}
   <rect x="1.5" y="1.5" width="{{ t.w - 3 }}" height="{{ t.h - 3 }}" rx="{{ rx - 0.5 }}"
         fill="url(#{{ uid }}sheen{{ '-on' if on }})" class="sheen"/>
   {% endif %}

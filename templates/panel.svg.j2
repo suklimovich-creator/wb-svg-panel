@@ -17,7 +17,7 @@
   лежит рядом с panel.py, после разделения больше не работает.
 -#}
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     class="{{ 'dark graphite' if theme == 'graphite' else theme }}" style="--fs:{{ fs | default(1) }}" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}"
+     class="{{ PAL.classes(theme) }}" style="--fs:{{ fs | default(1) }}" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}"
      font-family="-apple-system, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif">
 
 {#- Плитки живут в templates/tiles/. Импорт с контекстом: макросам нужны
@@ -46,11 +46,12 @@
     у края и широкое мягкое. Именно на панель, а не на плитку: двадцать
     фильтров старый планшет тянет плохо, два - терпимо. shadows: false в
     конфиге выключает. -#}
-{% set use_shadows = shadows and theme in ('light', 'autumn', 'retro', 'noir') %}
+{% set th_shadow = PAL.info(theme).shadow %}
+{% set use_shadows = shadows and th_shadow %}
 {#- Сила теней: у светлой - чуть-чуть, у неё есть контур; у остальных
     контура почти нет, тень и отделяет плитку от фона. -#}
-{% set sh_amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.24}.get(theme, 0) %}
-{% set sh_key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.14}.get(theme, 0) %}
+{% set sh_amb = th_shadow.amb if th_shadow else 0 %}
+{% set sh_key = th_shadow.key if th_shadow else 0 %}
 {% if use_shadows %}
   <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="0" y="0"
           width="{{ width }}" height="{{ height + 40 }}">

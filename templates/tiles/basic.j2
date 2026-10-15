@@ -65,7 +65,7 @@
   {% for k in t.skeys %}
   <g class="skey" data-kind="scene" data-topic="{{ k.topic }}" data-on="{{ k.value }}"
      data-off="{{ k.value }}" data-state="0">
-    <rect x="{{ k.x }}" y="{{ k.y + 3 }}" width="{{ k.w }}" height="{{ k.h }}" rx="12" class="key-sh" opacity=".25"/>
+    {{ base.soft_rect(k.x, k.y, k.w, k.h, 12, 2) }}
     <rect x="{{ k.x }}" y="{{ k.y }}" width="{{ k.w }}" height="{{ k.h }}" rx="12" class="key skey-face"/>
     <rect x="{{ k.x }}" y="{{ k.y }}" width="{{ k.w }}" height="{{ k.h }}" rx="12" fill="url(#{{ uid }}gl)"/>
     <rect x="{{ k.x }}" y="{{ k.y }}" width="{{ k.w }}" height="{{ k.h }}" rx="12"
@@ -92,12 +92,11 @@
   {% set wh = k.wheel %}
   {{ base.plate(t) }}
   <g class="tvw{{ '' if t.on else ' off' }}">
-    <circle cx="{{ wh.cx }}" cy="{{ wh.cy + wh.sh * 2 }}" r="{{ wh.R }}" class="key-sh" opacity=".10"/>
-    <circle cx="{{ wh.cx }}" cy="{{ wh.cy + wh.sh }}" r="{{ wh.R }}" class="key-sh" opacity=".18"/>
+    {{ base.soft_round(wh.cx, wh.cy, wh.R, wh.sh) }}
     <path d="{{ wh.gear }}" class="key"/>
     <path d="{{ wh.gear }}" fill="url(#{{ uid }}gl)"/>
     {% for a in wh.arrows %}<path d="{{ a.tri }}" class="tvw-ar" data-k="{{ a.key }}"/>{% endfor %}
-    <circle cx="{{ wh.cx }}" cy="{{ wh.cy + wh.sh * 0.6 }}" r="{{ wh.ok }}" class="key-sh" opacity=".25"/>
+    {{ base.soft_round(wh.cx, wh.cy, wh.ok, wh.sh * 0.5) }}
     <circle cx="{{ wh.cx }}" cy="{{ wh.cy }}" r="{{ wh.ok }}" class="tvw-ok" data-k="ok"/>
     <circle cx="{{ wh.cx }}" cy="{{ wh.cy }}" r="{{ wh.ok }}" fill="url(#{{ uid }}gl)"/>
     {% if wh.R >= 30 %}
@@ -105,7 +104,7 @@
           text-anchor="middle" class="tvw-okt">OK</text>
     {% endif %}
     {% for b in k.buttons %}
-    <circle cx="{{ b.cx }}" cy="{{ b.cy + 1.5 }}" r="{{ b.r }}" class="key-sh" opacity=".22"/>
+    {{ base.soft_round(b.cx, b.cy, b.r, 1.2) }}
     <circle cx="{{ b.cx }}" cy="{{ b.cy }}" r="{{ b.r }}" class="key" data-k="{{ b.key }}"/>
     <use href="#{{ uid }}ic-{{ 'undo' if b.key == 'back' else 'home' }}"
          xlink:href="#{{ uid }}ic-{{ 'undo' if b.key == 'back' else 'home' }}"

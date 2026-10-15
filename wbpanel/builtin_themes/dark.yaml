@@ -1,0 +1,49 @@
+# Встроенная тема wb-svg-panel: тёмная.
+# тёмная тема
+#
+# Значения - CSS-переменные плиток (без «--»). Тема наследует всё,
+# чего не задала, у темы из extends.
+name: dark
+title: "тёмная"
+extends: light
+mode: dark   # light | dark: от неё пульты, подписи графиков
+on_style: rim   # rim - рамка у включённой; card - тёмная карточка
+inv_kinds: []   # типы плиток, у которых карточка тёмная всегда
+sheen: true   # отсвет из угла плитки (тёмные темы)
+shadow: null   # тени плиток не рисуются
+vars:
+  bg-top: "#1B1B1F"
+  bg-bottom: "#101012"
+  tile: "#2C2C31"
+  edge: "rgba(255,255,255,.16)"
+  edge-w: "1.5"
+  active: "#FFAE28"
+  active-w: "3.5"
+  active-soft: "#3A2E18"
+  active-soft-edge: "rgba(255,174,40,.32)"
+  active-ink: "#FFAE28"
+  ink: "#EDEDF0"
+  ink-dim: "rgba(255,255,255,.52)"
+  ink-faint: "rgba(255,255,255,.28)"
+  stroke: "#C6C6CC"
+  window: "#39404A"
+  fabric: "#7B7568"
+  drape: "#4A4741"   # штора нового вида - приглушённая
+  sash: "#141518"   # переплёт окна
+  # Отсвет плиток из левого верхнего угла: белёсый у всех, тёплый у
+  # включённой. У графита свои, построже.
+  sheen: "rgba(255,255,255,.065)"
+  sheen-on: "rgba(255,174,40,.30)"
+  section: "#2C2C31"
+  section-op: ".8"
+  ac-disk: "#FFAE28"
+  ac-ink: "#1A1408"
+  ac-dim: "rgba(26,20,8,.62)"
+  ac-off: "#3A3B40"
+  ac-off-ink: "#C6C6CC"
+  ac-off-dim: "rgba(255,255,255,.45)"
+  ac-pill: "#3A3A40"
+  ac-pill-on: "#FFAE28"
+  ac-pill-ink: "#1A1408"
+  ac-seg-cool: "#6CC4FF"
+  ac-seg-heat: "#FF9A3D"

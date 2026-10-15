@@ -550,9 +550,14 @@ var COLS = readCols();
    светлая. Пусто - как в конфиге. Уезжает на сервер параметром theme,
    ему же отдаётся картинка раскрытой плитки и графика. */
 var THEME_STORE = 'wb-panel-theme';
-var THEMES = [['', 'как в конфиге'], ['light', 'светлая'], ['autumn', 'осень'],
-              ['retro', 'ретро'], ['noir', 'нуар'], ['dark', 'тёмная'],
-              ['graphite', 'графит']];
+/* Темы приходят с сервера (с 1.24): [{name, title, dark, bg}] из данных
+   тем - и меню, и цвет полей, и светлый ли пульт. Своей копии списка в
+   скрипте больше нет. */
+var THEME_LIST = __THEMES_JS__;
+var THEMES = [['', 'как в конфиге']], PAGE_BG = {}, DARK_THEME = {};
+THEME_LIST.forEach(function(t){
+  THEMES.push([t.name, t.title]); PAGE_BG[t.name] = t.bg; DARK_THEME[t.name] = !!t.dark;
+});
 var THEME = (function(){
   var m = location.search.match(/[?&]theme=([\w-]+)/);
   if (m) return m[1];
@@ -565,13 +570,10 @@ function saveTheme(v){
 function themeQ(){ return THEME ? '&theme=' + THEME : ''; }
 /* Поля страницы вокруг панели - в цвет низа её фона: у светлых тем
    чёрная рамка вокруг выглядела чужой. Тему узнаём по классу корня. */
-var PAGE_BG = {light: '#E6E6E9', autumn: '#D8D3CA', retro: '#E7DBC6',
-               noir: '#E5E1DA', dark: '#101012', graphite: '#0B0C0D'};
 var pageBgNow = '';
 function pageBg(root){
   root = root || host.querySelector('svg');
-  var cls = (root && root.getAttribute && root.getAttribute('class')) || '';
-  var name = cls.indexOf('graphite') >= 0 ? 'graphite' : cls.split(' ')[0];
+  var name = rootTheme(root);
   var bg = PAGE_BG[name];
   if (!bg || bg === pageBgNow) return;
   pageBgNow = bg;
@@ -877,14 +879,16 @@ ov.addEventListener('click', function(e){ if(e.target===ov && ovDownBg) closeOv(
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeOv(); });
 
 /* Тема панели по классу корня SVG - как у полей страницы (pageBg). */
-function themeName(){
-  var root = host.querySelector('svg');
+function rootTheme(root){
+  // Корень SVG несёт цепочку тем («dark graphite»): сама тема - последняя.
+  root = root || host.querySelector('svg');
   var cls = (root && root.getAttribute && root.getAttribute('class')) || '';
-  return cls.indexOf('graphite') >= 0 ? 'graphite' : cls.split(' ')[0];
+  var parts = cls.split(' ').filter(function(c){ return PAGE_BG[c]; });
+  return parts.length ? parts[parts.length - 1] : '';
 }
 function ovLight(){
-  var n = themeName();
-  return !!PAGE_BG[n] && n !== 'dark' && n !== 'graphite';
+  var n = rootTheme();
+  return !!PAGE_BG[n] && !DARK_THEME[n];
 }
 /* Цвета для пультов, которые рисуются скриптом (шар, ручка, колесо). */
 function ovPal(){
@@ -892,7 +896,7 @@ function ovPal(){
     ? {lt: true, ink: '#1C1C1E', dim: 'rgba(28,28,30,.55)', track: 'rgba(0,0,0,.10)',
        face: '#F4F4F6', faceEdge: 'rgba(0,0,0,.10)', shadow: 'rgba(0,0,0,.16)',
        knob: '#FFFFFF', knobEdge: 'rgba(0,0,0,.30)', off: 'rgba(0,0,0,.30)', offKnob: '#A4A6AC',
-       halo: PAGE_BG[themeName()] || '#E6E6E9', slot: '#B6B7BD', drum: '#DCDDE2',
+       halo: PAGE_BG[rootTheme()] || '#E6E6E9', slot: '#B6B7BD', drum: '#DCDDE2',
        wheelA: '#FFFFFF', wheelB: '#D3D4DA', wheelEdge: 'rgba(0,0,0,.08)'}
     : {lt: false, ink: '#FFFFFF', dim: 'rgba(255,255,255,.55)', track: 'rgba(255,255,255,.14)',
        face: '#2E2F34', faceEdge: 'rgba(255,255,255,.08)', shadow: 'rgba(0,0,0,.35)',
@@ -904,7 +908,7 @@ function openOv(nodes){
   // Во весь экран, сплошным цветом поля панели; у светлых тем - светлое.
   var lt = ovLight();
   ov.classList.toggle('lt', lt);
-  ov.style.background = PAGE_BG[themeName()] || '#101012';
+  ov.style.background = PAGE_BG[rootTheme()] || '#101012';
   ov.classList.toggle('hashead', nodes.some(function(n){
     return n.classList && n.classList.contains('phead'); }));
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
@@ -1266,7 +1270,11 @@ function padSphere(node){
       halo.addColorStop(0, css(h, .5 * lv)); halo.addColorStop(1, css(h, 0));
       g.fillStyle = halo; g.beginPath(); g.arc(cx, cy, hr, 0, 7); g.fill();
     }
-    g.fillStyle = PAL.shadow; g.beginPath(); g.arc(cx, cy + r * .1, r, 0, 7); g.fill();
+    /* Тень - мягкое пятно под шаром, а не сдвинутый вниз диск: тот
+       выглядывал из-под шара резким серпом. */
+    var shR = r * 1.16, sh = g.createRadialGradient(cx, cy + r * .07, r * .82, cx, cy + r * .07, shR);
+    sh.addColorStop(0, PAL.lt ? 'rgba(0,0,0,.16)' : 'rgba(0,0,0,.45)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = sh; g.beginPath(); g.arc(cx, cy + r * .07, shR, 0, 7); g.fill();
     var body = g.createRadialGradient(cx - r * .32, cy - r * .36, r * .08, cx, cy, r * 1.04);
     body.addColorStop(0, css(mix(c, [255,255,255], lit ? .25 * lv : (PAL.lt ? .45 : .18))));
     body.addColorStop(.6, css(mix(c, DARK, .25)));
@@ -2578,7 +2586,9 @@ function padThermostat(node){
   wrap.appendChild(svgEl);
   mk('defs', {}).innerHTML = '<linearGradient id="tdgl" x1="0" y1="0" x2="1" y2="1">'
     + '<stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/>'
-    + '<stop offset="1" stop-color="#000" stop-opacity=".16"/></linearGradient>';
+    + '<stop offset="1" stop-color="#000" stop-opacity=".16"/></linearGradient>'
+    + '<radialGradient id="tdsh"><stop offset=".7" stop-color="#000" stop-opacity="' + (PAL.lt ? .22 : .5) + '"/>'
+    + '<stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>';
   // шкала: деления через градус, подписи через четыре
   var t0 = Math.ceil(lo), every = (Math.floor(hi) - t0) <= 40 ? 4 : 8;
   for(var v = t0; v <= Math.floor(hi); v++){
@@ -2598,7 +2608,8 @@ function padThermostat(node){
   var pArc = mk('path', {fill: 'none', 'stroke-width': TW, 'stroke-linecap': 'round'});
   var lCurH = mk('line', {stroke: PAL.halo, 'stroke-width': Math.max(6, S * 0.025), 'stroke-linecap': 'round'});
   var lCur = mk('line', {stroke: PAL.ink, 'stroke-width': Math.max(3, S * 0.0114), 'stroke-linecap': 'round'});
-  mk('circle', {cx: CX, cy: CY + S * 0.028, r: RK, fill: '#000', opacity: PAL.lt ? .12 : .22});
+  // мягкая тень ручки: градиент, а не сдвинутый диск (тот торчал серпом)
+  mk('circle', {cx: CX, cy: CY + S * 0.018, r: RK * 1.16, fill: 'url(#tdsh)'});
   var gd = gear(RK, Math.max(0.8, 0.8 * S / 280));
   mk('path', {d: gd, fill: PAL.face, stroke: PAL.faceEdge});
   mk('path', {d: gd, fill: 'url(#tdgl)'});
@@ -2980,12 +2991,14 @@ function padTV(node){
   wb.innerHTML = '<svg viewBox="0 0 260 260" width="260" height="260">'
     + '<defs><radialGradient id="txface" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="' + PAL.wheelA + '"/>'
     + '<stop offset="1" stop-color="' + PAL.wheelB + '"/></radialGradient>'
+    + '<radialGradient id="txsh"><stop offset=".72" stop-color="#000" stop-opacity="' + (PAL.lt ? .2 : .5) + '"/>'
+    + '<stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>'
     + '<radialGradient id="txok" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#FFB24D"/>'
     + '<stop offset="1" stop-color="#E08A2D"/></radialGradient></defs>'
-    + '<circle cx="' + C + '" cy="' + (C + 6) + '" r="' + R + '" fill="#000" opacity="' + (PAL.lt ? .14 : .35) + '"/>'
+    + '<circle cx="' + C + '" cy="' + (C + 4) + '" r="' + (R * 1.12) + '" fill="url(#txsh)"/>'
     + '<path d="' + tvGear(C, C, R, 1.25) + '" fill="url(#txface)" stroke="' + PAL.wheelEdge + '"/>'
     + arr
-    + '<circle cx="' + C + '" cy="' + (C + 3) + '" r="' + OK + '" fill="#000" opacity=".35"/>'
+    + '<circle cx="' + C + '" cy="' + (C + 2) + '" r="' + (OK * 1.2) + '" fill="url(#txsh)"/>'
     + '<circle class="okb" data-k="ok" cx="' + C + '" cy="' + C + '" r="' + OK + '" fill="url(#txok)"/>'
     + '<text x="' + C + '" y="' + (C + 8) + '" text-anchor="middle" class="okt">OK</text></svg>';
   var wsvg = wb.firstChild;

@@ -1,0 +1,48 @@
+# Встроенная тема wb-svg-panel: нуар.
+# нуар: тёплый серо-бежевый, графит, сепия
+#
+# Значения - CSS-переменные плиток (без «--»). Тема наследует всё,
+# чего не задала, у темы из extends.
+name: noir
+title: "нуар"
+extends: light
+mode: light   # light | dark: от неё пульты, подписи графиков
+on_style: card   # rim - рамка у включённой; card - тёмная карточка
+inv_kinds: []   # типы плиток, у которых карточка тёмная всегда
+sheen: false   # отсвет из угла плитки (тёмные темы)
+shadow: {amb: 0.24, key: 0.14}   # тени плиток: рассеянная и ключевая
+vars:
+  bg-top: "#EFECE7"
+  bg-bottom: "#E5E1DA"
+  tile: "#E2DBD0"
+  edge: "rgba(40,34,28,.07)"
+  edge-w: "1"
+  active: "#2A2623"
+  active-w: "0"
+  active-soft: "#2A2623"
+  active-soft-edge: "rgba(42,38,35,.6)"
+  active-ink: "#F2EDE4"
+  ink: "#1E1C1A"
+  ink-dim: "#6A635A"
+  ink-faint: "rgba(30,28,26,.50)"
+  stroke: "#34302C"
+  window: "#C9C2B7"
+  fabric: "#EEE8DE"
+  drape: "#958C80"   # штора нового вида - приглушённая
+  sash: "#F3F0EA"   # переплёт окна
+  shadow: "#2A2420"
+  cool: "#5F7280"
+  inv-tile: "#262321"
+  inv-ink: "#F2EDE4"
+  inv-dim: "rgba(242,237,228,.68)"
+  inv-stroke: "#E9E1D4"
+  inv-accent: "#CDB898"
+  chip-on-ink: "#F2EDE4"
+  section: "#D8CFC1"
+  section-op: "1"
+  ac-disk: "#262321"
+  ac-ink: "#F2EDE4"
+  ac-dim: "rgba(242,237,228,.62)"
+  ac-pill: "#D3CABC"
+  ac-pill-on: "#262321"
+  ac-pill-ink: "#F2EDE4"

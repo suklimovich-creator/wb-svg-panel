@@ -483,8 +483,7 @@
           class="kcur" stroke-width="{{ k.cur.w }}"/>
     {% endif %}
     {#- ручка: тень двумя слоями без размытия, тело, блик -#}
-    <circle cx="{{ k.cx }}" cy="{{ k.cy + k.shadow_dy * 2 }}" r="{{ k.rk }}" class="ksh" opacity=".10"/>
-    <circle cx="{{ k.cx }}" cy="{{ k.cy + k.shadow_dy }}" r="{{ k.rk }}" class="ksh" opacity=".18"/>
+    {{ base.soft_round(k.cx, k.cy, k.rk, k.shadow_dy) }}
     <path d="{{ k.gear }}" class="kgear"/>
     <path d="{{ k.gear }}" fill="url(#{{ uid }}gl)"/>
     {% if k.ptr %}

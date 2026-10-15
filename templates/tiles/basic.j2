@@ -312,8 +312,15 @@
 {#- ---- простое значение ---- -#}
 {% macro tile_value(t) %}
   {{ base.plate(t) }}
+  {% if t.compact %}
+  {#- Узкая плитка (w: 0.5): значку и числу рядом тесно - число налезало на
+      значок. Здесь только число, крупно по центру, под ним подпись. -#}
+  <text x="{{ t.w / 2 }}" y="{{ (t.h / 2 + 2) | round(1) }}" class="badge" text-anchor="middle"
+        style="font-size:{{ (18 * (fs | float)) | round(1) }}px">{{ t.value }}{{ ' ' ~ t.unit if t.unit and t.unit|length > 1 else t.unit }}</text>
+  {% else %}
   {{ base.icon_c(t, t.icon or 'thermo', 24) }}
   <text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ t.value }} {{ t.unit }}</text>
+  {% endif %}
   {{ base.caption(t, t.subtitle) }}
 {% endmacro %}
 

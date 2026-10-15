@@ -33,6 +33,7 @@ from .calendars import calendars
 from . import checkup
 from . import themes
 from . import palette
+from . import showcase
 from . import __version__
 import html
 import threading
@@ -83,12 +84,21 @@ def panel_theme(panel_conf=None):
                           config)
 
 
-def render_panel(name, cols=None):
-    config.reload()
-    state.set_watched(config.used_channels(), config.service_prefixes())
+def _source(name):
+    """Откуда панель: (конфиг, состояние, история, все панели). Витрина тем
+    (/themes) живёт на своём состоянии, а не на приборах из MQTT."""
+    if showcase.is_demo(name):
+        return showcase.panel(), showcase.state, showcase.history, {}
     panel_conf = config.panels.get(name)
     if panel_conf is None:
         abort(404, "панель %r не найдена в конфиге" % name)
+    return panel_conf, state, history, config.panels
+
+
+def render_panel(name, cols=None):
+    config.reload()
+    state.set_watched(config.used_channels(), config.service_prefixes())
+    panel_conf, st, hist, all_panels = _source(name)
     # Свёрнутые разделы приходят в адресе: панель - цельная картинка с
     # посчитанной геометрией, спрятать плитки на стороне браузера нельзя,
     # останутся дыры. Список свой на каждом устройстве, страница хранит
@@ -100,7 +110,7 @@ def render_panel(name, cols=None):
     # Тема нужна и сборке: подписи графиков красятся под цвет подложки.
     panel_conf = dict(panel_conf, theme=theme)
     tiles, width, height, headers, top_chips = prepare(
-        panel_conf, state, history, cols=cols, all_panels=config.panels,
+        panel_conf, st, hist, cols=cols, all_panels=all_panels,
         name=name, closed=closed, opened=opened)
     template = _template(panel_conf.get("template", "panel.svg.j2"))
     return template.render(
@@ -121,7 +131,7 @@ def render_panel(name, cols=None):
         shadows=bool(panel_conf.get("shadows", config.get("shadows", True))),
         title=panel_conf.get("title", ""),
         updated=time.strftime("%H:%M"),
-        connected=state.connected,
+        connected=st.connected,
     )
 
 
@@ -239,6 +249,7 @@ def index():
  <a href="docs"><b>Как собирать панели</b></a> ·
  <a href="channels">Список каналов</a> ·
  <a href="check">Проверка конфига</a> ·
+ <a href="themes">Темы</a> ·
  <a href="healthz">healthz</a> ·
  плитка ведёт на <code>.html</code> с автообновлением,
  сама картинка — <code>&lt;имя&gt;.svg</code>
@@ -338,6 +349,13 @@ def api_publish():
         return Response('{"error":"нужны поля topic и value"}', status=400,
                         mimetype="application/json")
 
+    # Витрина тем: прибор выдуманный, нажатие меняет только её состояние.
+    if showcase.owns(topic):
+        if len(value) > 32:
+            return Response('{"error":"слишком длинное значение"}', status=400,
+                            mimetype="application/json")
+        showcase.publish(topic, value)
+        return Response('{"ok":true}', mimetype="application/json")
     if topic not in allowed_topics():
         log.warning("отклонена публикация в %s", topic)
         return Response('{"error":"топик не разрешён"}', status=403,
@@ -745,6 +763,8 @@ def panel_svg(name):
         cols = None
     if cols:
         cols = max(1, min(cols, 12))
+    if showcase.is_demo(name):
+        return demo_svg(cols)
     if name not in config.panels:
         abort(404, "панель %r не найдена в конфиге" % name)
 
@@ -809,10 +829,40 @@ def panel_svg(name):
     return Response(svg, mimetype="image/svg+xml", headers=headers)
 
 
-def panel_tiles(panel_conf):
+def demo_svg(cols):
+    """Витрина тем картинкой. Как обычная панель, только своё состояние:
+    ждущий запрос просыпается от нажатий на витрине, а не от приборов."""
+    st = showcase.state
+    try:
+        since = int(request.args.get("since"))
+    except (TypeError, ValueError):
+        since = None
+    headers = {"Access-Control-Allow-Origin": "*",
+               "Access-Control-Expose-Headers": "X-Panel-Version, X-Panel-App",
+               "X-Panel-App": __version__, "Cache-Control": "no-store"}
+    if since is not None and since == st.version:
+        sem = _waiters()
+        if not sem.acquire(blocking=False):
+            headers["X-Panel-Version"] = str(since)
+            return Response(status=204, headers=headers)
+        try:
+            st.wait_change(since, _refresh_every())
+        finally:
+            sem.release()
+    version = st.version
+    svg = render_panel(showcase.NAME, cols=cols)
+    if request.args.get("flat") not in ("0", "false", "no"):
+        svg = resolve_css_vars(svg, panel_theme(), 1.0)
+    headers["X-Panel-Version"] = str(version)
+    return Response(svg, mimetype="image/svg+xml", headers=headers)
+
+
+def panel_tiles(panel_conf, all_panels=None):
     """Плоский список плиток панели в том же порядке, что и на картинке."""
     out = []
-    for _title, tiles, _status, _key in resolve_sections(panel_conf, config.panels):
+    if all_panels is None:
+        all_panels = config.panels
+    for _title, tiles, _status, _key in resolve_sections(panel_conf, all_panels):
         out.extend(tiles)
     return out
 
@@ -825,10 +875,8 @@ def tile_svg(name, index):
     Размер приходит в пикселях: страница знает про экран, сервер - нет.
     """
     config.reload()
-    panel_conf = config.panels.get(name)
-    if panel_conf is None:
-        abort(404, "панель %r не найдена" % name)
-    tiles = panel_tiles(panel_conf)
+    panel_conf, st, hist, all_panels = _source(name)
+    tiles = panel_tiles(panel_conf, all_panels)
     if not 0 <= index < len(tiles):
         abort(404, "плитки %d нет на панели %r" % (index, name))
 
@@ -850,7 +898,7 @@ def tile_svg(name, index):
         conf = dict(conf, view="pad")
     edge = 0 if pad else PAD
     tile = build_tile(conf, 0, edge, edge, width, height,
-                      panel_conf, state, history, interactive)
+                      panel_conf, st, hist, interactive)
     scale = font_scale(height)
     svg = _template(panel_conf.get("template", "panel.svg.j2")).render(
         uid="t%d-" % index,
@@ -858,7 +906,7 @@ def tile_svg(name, index):
         tiles=[tile], headers=[],
         width=width + edge * 2, height=height + edge * 2,
         rx=0 if pad else RX, theme=theme, shadows=not pad, bare=pad,
-        title="", updated=time.strftime("%H:%M"), connected=state.connected)
+        title="", updated=time.strftime("%H:%M"), connected=st.connected)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(
             svg, theme, scale)
@@ -902,7 +950,9 @@ def chart_svg():
     channel = request.args.get("channel") or ""
     if not channel:
         abort(400, "нужен параметр channel")
-    if channel not in config.used_channels():
+    demo = showcase.owns_channel(channel)
+    st, hist = (showcase.state, showcase.history) if demo else (state, history)
+    if not demo and channel not in config.used_channels():
         # Тот же принцип, что и у записи в MQTT: рисуем только то, что
         # описано в конфиге. Иначе по адресу можно вытащить историю
         # любого канала контроллера.
@@ -919,8 +969,8 @@ def chart_svg():
     # пустым. Просим источник прямо сейчас: это разовое действие человека,
     # подождать полсекунды он готов.
     span = parse_duration(request.args.get("range") or "12h")
-    if not history.get(channel, span, 120):
-        history.refresh(channel, span, 120)
+    if not hist.get(channel, span, 120):
+        hist.refresh(channel, span, 120)
 
     conf = {
         "type": "chart",
@@ -935,13 +985,13 @@ def chart_svg():
     }
     theme = panel_theme()
     tile = build_tile(conf, 0, PAD, PAD, width, height, {"theme": theme},
-                      state, history, False)
+                      st, hist, False)
     scale = font_scale(height)
     svg = _template("panel.svg.j2").render(
         uid="c-", fs=scale, tiles=[tile], headers=[],
         width=width + PAD * 2, height=height + PAD * 2,
         rx=RX, theme=theme, title="", updated=time.strftime("%H:%M"),
-        connected=state.connected)
+        connected=st.connected)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(svg, theme, scale)
     return Response(svg, mimetype="image/svg+xml",
@@ -961,7 +1011,7 @@ def panel_html(name):
     every = int(config.get("http", {}).get("refresh", 10))
     panel_conf = config.panels.get(name) or {}
     interactive = bool(panel_conf.get("interactive",
-                       config.get("interactive", False)))
+                       config.get("interactive", False))) or showcase.is_demo(name)
 
     html_page = wrapper_html()
     palette.refresh(0)
@@ -979,6 +1029,37 @@ def panel_html(name):
     # страница не кэшируется: после обновления панели должны прийти
     # новые скрипты, а не старые из кэша браузера
     return Response(html_page, mimetype="text/html; charset=utf-8",
+                    headers={"Cache-Control": "no-cache, must-revalidate"})
+
+
+@app.route("/themes")
+def themes_page():
+    """
+    Витрина тем (с 1.28): все плитки и пульты на выдуманной панели в любой
+    теме - сменить тему, ширину телефона или планшета, посмотреть все темы
+    рядом. Основные цвета темы, наследование и ошибки файла - тут же.
+    """
+    config.reload()
+    palette.refresh(0)
+    menu = dict((m["name"], m) for m in palette.menu())
+    data = {
+        "themes": [dict(menu.get(n, {}), **palette.describe(n)) for n in palette.names()],
+        "stray": palette.stray_problems(),
+        "theme": themes.resolve(config.get("theme", "light"), config),
+        "dir_name": config.get("themes_dir") or "themes",
+    }
+    page = ""
+    for base in TEMPLATE_DIRS:
+        path = os.path.join(base, "themes.html")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                page = fh.read()
+            break
+    # Названия тем пишет человек: «</script>» в названии не должно
+    # закрыть скрипт страницы.
+    blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    return Response(page.replace("__DATA__", blob),
+                    mimetype="text/html; charset=utf-8",
                     headers={"Cache-Control": "no-cache, must-revalidate"})
 
 

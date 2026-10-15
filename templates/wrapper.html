@@ -540,6 +540,18 @@ var NAME = __NAME_JS__, EVERY = __EVERY__000;
    рисовались новым сервером, а вели себя по-старому. Поэтому страница
    сверяет версию с каждым ответом и перезагружается сама. */
 var APP = __APP_JS__, appReload = false;
+/* Витрина тем (/themes, с 1.28): та же страница на выдуманной панели.
+   still=1 - миниатюра: без ожидания изменений и без шагов истории;
+   pad=<вид> - сразу открыть пульт этого вида (xy, level, ac…). */
+var DEMO = NAME === '_demo';
+var STILL = DEMO && /[?&]still=1/.test(location.search);
+var AUTO_PAD = DEMO ? ((location.search.match(/[?&]pad=([\w-]+)/) || [])[1] || '') : '';
+/* Тему и колонки витрины выбирает страница /themes вокруг неё. */
+if (DEMO) {
+  document.getElementById('back').style.display = 'none';
+  document.getElementById('cols').style.display = 'none';
+  document.getElementById('host').style.paddingTop = '10px';
+}
 
 /* Запасной вход на 8080 не закрыт паролем: кто попал в домашнюю сеть, тот
    управляет светом и шторами. Годится, чтобы попробовать, но не как
@@ -586,6 +598,7 @@ var THEME = (function(){
 })();
 function saveTheme(v){
   THEME = v;
+  if (DEMO) return;          // выбор на витрине - не выбор этого устройства
   try { v ? localStorage.setItem(THEME_STORE, v) : localStorage.removeItem(THEME_STORE); } catch(e) {}
 }
 function themeQ(){ return THEME ? '&theme=' + THEME : ''; }
@@ -615,6 +628,7 @@ var BACK_TO = (function(){
 })();
 function saveCols(v){
   COLS = v;
+  if (DEMO) return;
   try { v ? localStorage.setItem(STORE, v) : localStorage.removeItem(STORE); } catch(e) {}
 }
 /* Свёрнутые разделы. Список свой на каждом устройстве: на планшете в
@@ -721,6 +735,8 @@ function drawCols(){
       html += '<b data-t="' + THEMES[k][0] + '"' + (THEMES[k][0] === THEME ? ' class="on"' : '')
             + '>' + THEMES[k][1] + '</b>';
     }
+    // Все темы на всех плитках и пультах - страница /themes (с 1.28).
+    html += '<b data-go="themes">все темы…</b>';
   }
   box.innerHTML = html;
   var btns = box.getElementsByTagName('b');
@@ -734,6 +750,9 @@ function drawCols(){
         return;
       }
       colsOpen = '';
+      if (this.hasAttribute('data-go')) {
+        location.href = 'themes' + (THEME ? '?theme=' + THEME : ''); return;
+      }
       if (this.hasAttribute('data-t')) saveTheme(this.getAttribute('data-t'));
       else saveCols(this.getAttribute('data-v'));
       drawCols();
@@ -947,7 +966,7 @@ function openOv(nodes){
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
   nodes.forEach(function(n){ ov.appendChild(n); });
   ov.classList.add('open'); paused=true;
-  if(!ovHist && window.history && history.pushState){
+  if(!ovHist && !STILL && window.history && history.pushState){
     try { history.pushState({ov: 1}, ''); ovHist = true; } catch(e) {}
   }
   // Фон окна закрывает только касание, начатое на нём уже после открытия.
@@ -3781,6 +3800,13 @@ function applySvg(svg, seq){
   pageBg(root);
   host.classList.remove('wait');
   err.style.display = 'none';
+  if (AUTO_PAD) {
+    var want = AUTO_PAD; AUTO_PAD = '';
+    setTimeout(function(){
+      var n = host.querySelector('[data-pad="' + want + '"]');
+      if (n) openPad(n);
+    }, 60);
+  }
 }
 function flushPending(){
   if (!pendingSvg || fingerHeld()) return;
@@ -3856,7 +3882,7 @@ function schedule(ms){
   pollTimer = setTimeout(poll, ms);
 }
 function poll(){
-  if (pollBusy) return;
+  if (pollBusy || STILL) return;
   if (document.hidden) return;          // продолжим, когда вкладку покажут
   if (!LIVE) { if (!paused) refresh(); schedule(EVERY); return; }
   pollBusy = true;

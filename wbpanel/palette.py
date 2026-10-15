@@ -370,6 +370,52 @@ def menu():
     return out
 
 
+#: Основные цвета темы для страницы /themes: (ключ, переменная, подпись).
+SWATCHES = (("bg", "--bg-bottom", "фон"), ("tile", "--tile", "плитка"),
+            ("ink", "--ink", "текст"), ("accent", "--active", "акцент"),
+            ("heat", "--ac-seg-heat", "тепло"), ("cool", "--cool", "холод"),
+            ("card", "--inv-tile", "карточка"))
+
+
+def describe(name):
+    """
+    Для страницы /themes (с 1.28): откуда тема и от кого наследует, её
+    основные цвета (как они получились после наследования и расчёта),
+    контраст текста и что с файлом не так.
+    """
+    theme = get(name)
+    v = css_vars(name)
+    i = info(name)
+    tile = _parse(v.get("--tile"), v) or (217, 217, 220)
+    swatches = []
+    for key, var, title in SWATCHES:
+        if key == "card" and not i["card"]:
+            continue
+        c = _solid(v.get(var), v, tile)
+        if c:
+            swatches.append({"key": key, "title": title, "color": _hex(c)})
+    ink = _parse(v.get("--ink"), v)
+    # У встроенных тем ошибок не бывает, а имя файла у них может совпасть
+    # со своим (light.yaml в themes/) - не приписываем им чужое.
+    own = [text for where, text in _PROBLEMS
+           if not theme["builtin"] and where == theme["file"]]
+    return {"name": theme["name"], "title": theme["title"],
+            "own": not theme["builtin"],
+            "file": os.path.basename(theme["file"]) if theme["file"] else "",
+            "extends": theme.get("extends") or "",
+            "mode": i["mode"], "on_style": "card" if i["card"] else "rim",
+            "swatches": swatches,
+            "contrast": round(contrast(tuple(ink) + (1.0,), tuple(tile) + (1.0,)), 1) if ink else None,
+            "problems": own}
+
+
+def stray_problems():
+    """Ошибки файлов, из которых тема не получилась вовсе (не читается,
+    имя занято): их не к чему приложить на странице /themes."""
+    files = set(t["file"] for t in _THEMES.values() if not t["builtin"])
+    return [(where, text) for where, text in _PROBLEMS if where not in files]
+
+
 def _solid(value, vars_, bg):
     """Цвет без прозрачности: rgba кладём на подложку."""
     c = _rgba(value, vars_)

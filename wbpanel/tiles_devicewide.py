@@ -155,7 +155,9 @@ def build_chart(tile, state, history):
     # На весь экран под шапкой - пояснение к зонам. Раскладываем его
     # заранее: кривая опускается ровно настолько, чтобы не налезать.
     fs_val = float(tile.get("fs", 1) or 1)
-    legend = _legend(specs, tile, fs_val) if fs_val >= 1.6 else []
+    # С 1.35 пояснение - по кнопке «i» в шапке окна (?info=1): на виду
+    # только число, слово зоны и сам график.
+    legend = _legend(specs, tile, fs_val) if fs_val >= 1.6 and tile.get("info") else []
     band = BAND
     if legend:
         bottom = legend[-1]["end"] + 18 * fs_val

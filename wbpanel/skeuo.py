@@ -13,6 +13,7 @@
 import math
 
 from .ac_disk import gear_path
+from . import form
 from .geometry import _fmt, poly, text_width
 
 #: Дуга термостата: та же, что была (tiles.DIAL_START / DIAL_SWEEP).
@@ -142,6 +143,19 @@ def roller(x, y, w, h, level, horiz=False):
     return ribs
 
 
+def _clear_corner(x, y, r, gap=4.0):
+    """x левого края фигуры со скруглением r так, чтобы её угол в (x, y)
+    отстоял от скругления угла плитки не меньше чем на gap. Скругление -
+    из формы темы (radius, с 1.35)."""
+    R = form.radius()
+    for _ in range(40):
+        cx, cy = x + r, y + r
+        if cx >= R or cy >= R or math.hypot(R - cx, R - cy) + r <= R - 1 - gap:
+            return x
+        x += 0.5
+    return x
+
+
 def dimmer_layout(w, h, level):
     """
     Где на плитке диммера колесо, шкала и диод.
@@ -154,6 +168,10 @@ def dimmer_layout(w, h, level):
     if w >= h * 1.6:
         kw, kh = 0.36 * w, 0.49 * h
         kx, ky = 0.064 * w, 0.165 * h
+        # Прорезь (на 4 шире колеса, скругление 5) не должна заходить в
+        # скругление угла плитки: на плитке 1×0.5 её угол ложился на рамку
+        # (с 1.33). Сдвигаем вправо, пока угол прорези не отойдёт от дуги.
+        kx = _clear_corner(kx - 4, ky - 4, 5.0) + 4
         return {"kind": "wide", "kx": _r(kx), "ky": _r(ky), "kw": _r(kw), "kh": _r(kh),
                 "bar": {"x": _r(kx), "y": _r(ky + kh + 10), "w": _r(kw), "h": 4, "horiz": True},
                 "led": {"x": _r(w - 26), "y": 13}, "text_x": _r(kx + kw + 16),

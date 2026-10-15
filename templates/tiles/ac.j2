@@ -438,7 +438,12 @@
       <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.hit }}" fill="transparent"/>
       {{ shade(d.x, d.y, d.r, s, d.gear) }}
       <path d="{{ d.gear }}" class="acs-gear"/>
+      {% if base.BEVEL == 'round' %}
       <path d="{{ d.gear }}" fill="url(#{{ uid }}acs-gl)" pointer-events="none"/>
+      {% elif base.BEVEL == 'sharp' %}
+      <path d="{{ d.gear }}" fill="url(#{{ uid }}bev)" pointer-events="none"/>
+      <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ (d.r * 0.8)|round(1) }}" class="acs-gear kface" pointer-events="none"/>
+      {% endif %}
       {% for a in d.arrows %}
       <path d="{{ a.d }}" data-i="{{ a.i }}" class="acs-arrow{{ ' on' if a.on }}"
             stroke-width="{{ d.aw_on if a.on and not d.auto else d.aw }}"/>

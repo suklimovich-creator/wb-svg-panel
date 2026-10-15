@@ -489,7 +489,12 @@
     {% set gid = uid ~ 'kg' ~ t.i %}
     <defs><path id="{{ gid }}" d="{{ k.gear }}"/></defs>
     <use href="#{{ gid }}" xlink:href="#{{ gid }}" class="kgear"/>
+    {% if base.BEVEL == 'round' %}
     <use href="#{{ gid }}" xlink:href="#{{ gid }}" fill="url(#{{ uid }}gl)"/>
+    {% elif base.BEVEL == 'sharp' %}
+    <use href="#{{ gid }}" xlink:href="#{{ gid }}" fill="url(#{{ uid }}bev)"/>
+    <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ (k.rk * 0.8)|round(1) }}" class="kgear kface"/>
+    {% endif %}
     {% if k.ptr %}
     <line x1="{{ k.ptr.x1 }}" y1="{{ k.ptr.y1 }}" x2="{{ k.ptr.x2 }}" y2="{{ k.ptr.y2 }}"
           class="kptr" stroke-width="{{ k.ptr.w }}"/>

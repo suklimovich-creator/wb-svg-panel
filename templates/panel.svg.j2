@@ -104,9 +104,11 @@
 
 {% if title %}
 <text x="20" y="44" class="h1">{{ title }}</text>
-<text x="{{ width - 20 }}" y="44" class="h1-sub" text-anchor="end">
-  {{ updated }}{{ '' if connected else '  · нет связи с MQTT' }}
-</text>
+{#- Часы - крупно, под ними день недели и дата (с 1.35): раньше было
+    только мелкое время, и на стене его было не прочесть. -#}
+<text x="{{ width - 20 }}" y="38" class="clock" text-anchor="end">{{ updated }}</text>
+<text x="{{ width - 20 }}" y="54" class="h1-sub date" text-anchor="end">
+  {{- today or '' }}{{ '' if connected else ' · нет связи с MQTT' }}</text>
 {% endif %}
 
 {#- Строка состояния комнаты: чипы справа от заголовка раздела.

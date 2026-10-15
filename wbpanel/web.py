@@ -18,7 +18,7 @@ from .const import (BASE_DIR, CONFIG_PATH, DB_PATH, GAP, HEADER, PAD,
 from .config import Config
 from .state import MqttRpc, WbState, make_client, state, to_float
 from .history import History
-from .geometry import cells, parse_duration, text_width
+from .geometry import cells, clock_now, parse_duration, text_width
 from .status import status_channels, status_entries
 from . import assemble
 from . import stats
@@ -126,11 +126,12 @@ def render_panel(name, cols=None):
                                            config.get("section_plate", True))),
         width=width,
         height=height,
-        rx=RX,
+        rx=palette.info(theme)["radius"],
         theme=theme,
         shadows=bool(panel_conf.get("shadows", config.get("shadows", True))),
         title=panel_conf.get("title", ""),
-        updated=time.strftime("%H:%M"),
+        updated=clock_now()[0],
+        today=clock_now()[1],
         connected=st.connected,
     )
 
@@ -896,6 +897,9 @@ def tile_svg(name, index):
     pad = request.args.get("view") == "pad"
     if pad:
         conf = dict(conf, view="pad")
+    # Пояснение к зонам графика на весь экран - по кнопке «i» (с 1.35).
+    if request.args.get("info") == "1":
+        conf = dict(conf, info=True)
     edge = 0 if pad else PAD
     tile = build_tile(conf, 0, edge, edge, width, height,
                       panel_conf, st, hist, interactive)
@@ -905,7 +909,7 @@ def tile_svg(name, index):
         fs=scale,
         tiles=[tile], headers=[],
         width=width + edge * 2, height=height + edge * 2,
-        rx=0 if pad else RX, theme=theme, shadows=not pad, bare=pad,
+        rx=0 if pad else palette.info(theme)["radius"], theme=theme, shadows=not pad, bare=pad,
         title="", updated=time.strftime("%H:%M"), connected=st.connected)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(
@@ -982,6 +986,7 @@ def chart_svg():
         "series": [{"channel": channel,
                     "unit": request.args.get("unit") or "",
                     "digits": int(request.args.get("digits") or 0)}],
+        "info": request.args.get("info") == "1",
     }
     theme = panel_theme()
     tile = build_tile(conf, 0, PAD, PAD, width, height, {"theme": theme},
@@ -990,7 +995,7 @@ def chart_svg():
     svg = _template("panel.svg.j2").render(
         uid="c-", fs=scale, tiles=[tile], headers=[],
         width=width + PAD * 2, height=height + PAD * 2,
-        rx=RX, theme=theme, title="", updated=time.strftime("%H:%M"),
+        rx=palette.info(theme)["radius"], theme=theme, title="", updated=time.strftime("%H:%M"),
         connected=st.connected)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(svg, theme, scale)

@@ -53,6 +53,7 @@
   .key        { fill: var(--ac-pill); stroke: var(--edge); stroke-width: 1; }
   .key-sh     { fill: var(--shadow); }
   .key-hl     { fill: var(--neu-light); }
+  .kface      { stroke: var(--edge); stroke-width: .8; }
   .key-split  { stroke: #000000; stroke-width: 1.2; opacity: .45; }
   .slot       { fill: var(--shadow); opacity: .85; }
   .drum       { fill: var(--ac-pill); }
@@ -94,6 +95,9 @@
   /* ---- типографика ------------------------------------------------------ */
   .h1     { font-size: calc(26px * var(--fs)); font-weight: 700; letter-spacing: -.6px; fill: var(--ink); }
   .h1-sub { font-size: calc(13px * var(--fs)); font-weight: 500; fill: var(--ink-faint); }
+  .clock  { font-size: calc(24px * var(--fs)); font-weight: 600; fill: var(--ink-dim);
+            letter-spacing: -.3px; font-variant-numeric: tabular-nums; }
+  .h1-sub.date { font-size: calc(12px * var(--fs)); fill: var(--ink-dim); opacity: .85; }
   .h2     { font-size: calc(18px * var(--fs)); font-weight: 650; letter-spacing: -.3px; fill: var(--ink); }
   /* подложка заголовка раздела: подсказывает, что по строке можно нажать */
   /* Полоса раздела (заголовок в гармошке). Цвет и плотность - из темы:
@@ -248,6 +252,13 @@
 {% macro defs() %}
   {#- Органы управления (с 1.17): блик на ручке и клавише, цилиндр колеса
       диммера, светящийся диод. Один раз на документ. -#}
+  {#- острая фаска: свет на верхнем-левом скосе, тень на нижнем-правом -#}
+  <linearGradient id="{{ uid }}bev" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".6"/>
+    <stop offset=".47" stop-color="#FFFFFF" stop-opacity="0"/>
+    <stop offset=".53" stop-color="#000000" stop-opacity="0"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".38"/>
+  </linearGradient>
   <linearGradient id="{{ uid }}gl" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#FFFFFF" stop-opacity=".22"/>
     <stop offset=".55" stop-color="#FFFFFF" stop-opacity="0"/>
@@ -300,6 +311,20 @@
     <stop offset=".7" stop-color="var(--neu-light)" stop-opacity=".95"/>
     <stop offset="1" stop-color="var(--neu-light)" stop-opacity="0"/>
   </radialGradient>
+  <!-- край плитки: свет на верхней-левой кромке, тень на нижней-правой -
+       без него на тёмном фоне выпуклость расплывалась, граница не читалась -->
+  <linearGradient id="{{ uid }}neu-edge" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="var(--neu-light)" stop-opacity=".75"/>
+    <stop offset=".45" stop-color="var(--neu-light)" stop-opacity="0"/>
+    <stop offset=".55" stop-color="var(--shadow)" stop-opacity="0"/>
+    <stop offset="1" stop-color="var(--shadow)" stop-opacity=".7"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}neu-edge-in" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="var(--shadow)" stop-opacity=".8"/>
+    <stop offset=".45" stop-color="var(--shadow)" stop-opacity="0"/>
+    <stop offset=".55" stop-color="var(--neu-light)" stop-opacity="0"/>
+    <stop offset="1" stop-color="var(--neu-light)" stop-opacity=".6"/>
+  </linearGradient>
   <!-- утопленная плитка: тень у верхнего-левого края внутри, свет у нижнего-правого -->
   <linearGradient id="{{ uid }}neu-in" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="var(--shadow)" stop-opacity=".8"/>
@@ -766,8 +791,17 @@
   <g class="rocker {{ 'on' if t.on }}">
     {{ soft_rect(k.kx, k.ky, k.kw, k.kh, r, 2.5) }}
     <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" class="key"/>
-    <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}"
+    {#- фаска: острая - скос по краю и плоское лицо внутри, без фаски -
+        лицо плоское целиком; нажатую половину показывают тень и диод -#}
+    {% if BEVEL == 'sharp' %}
+    <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" fill="url(#{{ uid }}bev)"/>
+    <rect x="{{ k.kx + 3 }}" y="{{ k.ky + 3 }}" width="{{ k.kw - 6 }}" height="{{ k.kh - 6 }}" rx="{{ r - 2.5 }}" class="key kface"/>
+    {% endif %}
+    {% if BEVEL != 'none' %}
+    {% set ins = 3 if BEVEL == 'sharp' else 0 %}
+    <rect x="{{ k.kx + ins }}" y="{{ k.ky + ins }}" width="{{ k.kw - 2 * ins }}" height="{{ k.kh - 2 * ins }}" rx="{{ r - ins * 0.8 }}"
           fill="url(#{{ uid }}{{ 'keyh' if k.horiz else 'key' }}-{{ 'on' if t.on else 'off' }})"/>
+    {% endif %}
     {% if k.horiz %}
     <line x1="{{ k.kx + k.kw / 2 }}" y1="{{ k.ky + 8 }}" x2="{{ k.kx + k.kw / 2 }}" y2="{{ k.ky + k.kh - 8 }}" class="key-split"/>
     {% else %}
@@ -855,6 +889,11 @@
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
         fill="url(#{{ uid }}neu-in)" class="neu-in"/>
   {% endif %}
+  {#- кромка: у выпуклой свет сверху-слева, у утопленной - наоборот -#}
+  {% if NEU %}
+  <rect x="1.6" y="1.6" width="{{ t.w - 3.2 }}" height="{{ t.h - 3.2 }}" rx="{{ [rx - 0.6, 0]|max }}" fill="none"
+        stroke="url(#{{ uid }}neu-edge{{ '-in' if t.on else '' }})" stroke-width="1.2"/>
+  {% endif %}
   {{ sheen(t, t.on) }}
 {% endmacro %}
 
@@ -866,7 +905,7 @@
     отступ в полторы точки внутрь. -#}
 {% macro sheen(t, on=False) %}
   {% if PAL.info(theme).sheen %}
-  <rect x="1.5" y="1.5" width="{{ t.w - 3 }}" height="{{ t.h - 3 }}" rx="{{ rx - 0.5 }}"
+  <rect x="1.5" y="1.5" width="{{ t.w - 3 }}" height="{{ t.h - 3 }}" rx="{{ [rx - 0.5, 0]|max }}"
         fill="url(#{{ uid }}sheen{{ '-on' if on }})" class="sheen"/>
   {% endif %}
 {% endmacro %}
@@ -942,6 +981,9 @@
 {#- Форма темы (с 1.32): глубина плиток и органов управления. -#}
 {% set DEPTH = PAL.info(theme).depth %}
 {% set NEU = DEPTH == 'neumo' %}
+{#- Фаска ручек и клавиш (с 1.34): round - мягкий блик, none - плоское лицо,
+    sharp - кольцо скоса вокруг плоского лица. -#}
+{% set BEVEL = PAL.info(theme).bevel %}
 {% macro icon_c(t, name, size=24) %}
   {% if t.compact %}
   <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"

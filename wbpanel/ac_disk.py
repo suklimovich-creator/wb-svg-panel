@@ -20,7 +20,8 @@
 import functools
 import math
 
-from .geometry import poly, text_width
+from . import form
+from .geometry import _num as _pnum, _tenths, poly, text_width
 
 # Три точки обода (доли ширины и высоты), куда смотрит риска уставки и где
 # центр блока «сейчас». Подобраны на макетах; пульт выше плитки, поэтому
@@ -334,7 +335,39 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     }
 
 
-def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None, rim=False):
+def _circle(cx, cy, r):
+    """Окружность одним путём: две дуги."""
+    x0, y, d, rr = _tenths(cx - r), _tenths(cy), _tenths(2 * r), _pnum(_tenths(r))
+    return "M%s,%sa%s,%s 0 1 0 %s,0a%s,%s 0 1 0 %s,0z" % (
+        _pnum(x0), _pnum(y), rr, rr, _pnum(d), rr, rr, _pnum(-d))
+
+
+def _rim_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds, rim, edge):
+    """Обод без зубцов (с 1.34): гладкий - дуга, рифлёный - мелкая насечка.
+    Внешний край - там же, где шапки зубцов, чтобы шкала не сдвигалась."""
+    fs = gw / 7.0
+    outer = R + th * 0.8
+    if edge == "smooth":
+        step, deep = 3.0 * fs / per_deg, 0.0       # дуга ломаной: точка на 3 px
+    else:
+        step, deep = 2.2 * fs / per_deg, 1.8 * fs  # полпериода насечки
+    pts, k, t = [], 0, t0
+    while t <= t1 + 1e-6:
+        a = math.radians(ang(t))
+        r = outer - (deep if k % 2 else 0.0)
+        px, py = cx + r * math.cos(a), cy + r * math.sin(a)
+        if not bounds or (bounds[0] - 40 < px < bounds[2] + 40 and bounds[1] - 40 < py < bounds[3] + 40):
+            pts.append((px, py))
+        t += step
+        k += 1
+    if not pts:
+        return None
+    if rim:
+        return poly(pts)
+    return poly(pts, close=True, start=(cx, cy))
+
+
+def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None, rim=False, edge=None):
     """
     Обод с зубцами: прямые шапки на радиусе R + th, между ними круглые
     желоба до R. Желоба - между делениями шкалы (на t + 0.25), деления
@@ -344,7 +377,13 @@ def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None, rim=Fa
     bounds - (x0, y0, x1, y1): рисовать только видимое. Для пульта, где
     шкала крутится, - None: весь диапазон, иначе при повороте из-за края
     выезжал бы гладкий обод.
+
+    edge - край из формы темы (form.py): teeth - эти зубцы, smooth и knurl
+    рисует _rim_path.
     """
+    edge = edge or form.edge()
+    if edge != "teeth":
+        return _rim_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds, rim, edge)
     pts = []
     hx = gw / 2.0
     top = R + th
@@ -378,10 +417,26 @@ def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None, rim=Fa
     return poly(pts, close=True, start=(cx, cy))
 
 
-@functools.lru_cache(maxsize=256)
-def gear_path(cx, cy, r, fs):
-    """Малое колесо жалюзи: тот же обод с желобами, по кругу."""
+def gear_path(cx, cy, r, fs, edge=None):
+    """Зубчатое колесо (ручка термостата, жалюзи, телевизор) - край из
+    формы темы: teeth - желоба, smooth - гладкий круг, knurl - насечка."""
+    return _gear(cx, cy, r, fs, edge or form.edge())
+
+
+@functools.lru_cache(maxsize=512)
+def _gear(cx, cy, r, fs, edge):
     tw, tth = 7.0 * fs, 6.0 * fs
+    if edge == "smooth":
+        return _circle(cx, cy, r - tth * 0.2)
+    if edge == "knurl":
+        outer, deep = r - tth * 0.2, 1.8 * fs
+        n = max(36, int(round(2 * math.pi * outer / (4.4 * fs))))
+        pts = []
+        for k in range(2 * n):
+            a = math.pi * k / n
+            rad = outer - (deep if k % 2 else 0.0)
+            pts.append((cx + rad * math.cos(a), cy + rad * math.sin(a)))
+        return poly(pts, close=True)
     n = max(18, int(round(2 * math.pi * r / (16.0 * fs))))
     hw = tw / 2.0 / r
     pts = []

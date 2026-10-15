@@ -233,6 +233,9 @@ function drawInfo(){
   meta.push(t.mode === 'dark' ? 'тёмная' : 'светлая');
   meta.push(t.on_style === 'card' ? 'включённая — тёмная карточка' : 'включённая — рамка');
   meta.push(DEPTH_RU[t.depth] || DEPTH_RU.soft);
+  meta.push('край — ' + (EDGE_RU[t.edge] || EDGE_RU.teeth).toLowerCase() +
+            ', фаска — ' + (BEVEL_RU[t.bevel] || BEVEL_RU.round).toLowerCase() +
+            ', углы — ' + (t.radius === undefined ? 24 : t.radius) + ' px');
   var sw = t.swatches.map(function(s){
     return '<div><i style="background:' + s.color + '"></i><div>' + esc(s.title) +
            '<span>' + s.color + '</span></div></div>';
@@ -409,6 +412,9 @@ var KEYS = [['bg', 'bg-bottom', 'Фон', 'страница и поля вокр
             ['shadow', 'shadow', 'Тень', 'цвет теней плиток'],
             ['card', 'inv-tile', 'Карточка', 'включённая плитка при «тёмной карточке»']];
 var DEPTH_RU = {soft: 'мягкая тень', flat: 'плоско', neumo: 'неоморфизм'};
+var EDGE_RU = {teeth: 'Зубцы', smooth: 'Гладкий', knurl: 'Насечка'};
+var BEVEL_RU = {round: 'Мягкая', none: 'Плоская', sharp: 'Острая'};
+var RADIUS_RU = {'6': 'Острые', '14': 'Средние', '24': 'Мягкие', '34': 'Круглые'};
 var ED = null, edTimer = null, padTimer = null, edSeq = 0, lastResp = null;
 var DRAFT_KEY = 'wb-panel-theme-editor';
 
@@ -560,7 +566,8 @@ function freshEditor(name, editOwn){
     var p = t.src.props || {};
     return {editing: t.name, title: t.title, name: t.name, nameSet: true,
             extends: t.src.extends || 'light', mode: p.mode || '', on_style: p.on_style || '',
-            depth: p.depth || '',
+            depth: p.depth || '', edge: p.edge || '', bevel: p.bevel || '',
+            radius: p.radius === undefined ? '' : p.radius,
             vars: JSON.parse(JSON.stringify(t.src.vars || {})),
             keep: JSON.parse(JSON.stringify((function(){
               var o = {}; ['sheen', 'inv_kinds', 'shadow', 'chart'].forEach(function(k){
@@ -568,7 +575,7 @@ function freshEditor(name, editOwn){
             gen: null};
   }
   return {editing: '', title: 'Моя тема', name: '', nameSet: false, extends: t.name,
-          mode: '', on_style: '', depth: '', vars: {}, keep: {}, gen: null};
+          mode: '', on_style: '', depth: '', edge: '', bevel: '', radius: '', vars: {}, keep: {}, gen: null};
 }
 function saveEditor(){
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(ED)); } catch(e) {}
@@ -588,6 +595,18 @@ function base(){ return BY[ED.extends] || THEMES[0]; }
 function baseMode(){ return ED.mode || base().mode; }
 function baseStyle(){ return ED.on_style || base().on_style; }
 function baseDepth(){ return ED.depth || base().depth || 'soft'; }
+function baseEdge(){ return ED.edge || base().edge || 'teeth'; }
+function baseBevel(){ return ED.bevel || base().bevel || 'round'; }
+function baseRadius(){
+  return String(ED.radius !== '' && ED.radius !== undefined ? ED.radius
+                : (base().radius === undefined ? 24 : base().radius));
+}
+/* Ряд выбора из словаря подписей: <div class="seg"><b data-v>…</b></div> */
+function segOf(id, dict){
+  var h = '<div class="seg" id="' + id + '">';
+  for (var k in dict) h += '<b data-v="' + k + '">' + dict[k] + '</b>';
+  return h + '</div>';
+}
 function value(k){
   var v = ED.vars[k[1]] !== undefined ? ED.vars[k[1]] : ED.vars[k[0]];
   return v !== undefined ? v : null;
@@ -634,6 +653,12 @@ function drawEditor(){
     '<b data-v="flat">Плоско</b><b data-v="neumo">Неоморфизм</b></div></div>' +
     '<div class="note">Форма. Неоморфизм: плитка того же цвета, что и фон, её отделяют ' +
     'светлая тень сверху-слева и тёмная снизу-справа, включённая — утоплена.</div>' +
+    '<div class="two">' + segOf('e-edge', EDGE_RU) + '</div>' +
+    '<div class="note">Край ручек и колёс: термостат, кондиционер, телевизор.</div>' +
+    '<div class="two">' + segOf('e-bevel', BEVEL_RU) + '</div>' +
+    '<div class="note">Фаска ручек и клавиш: мягкий блик, плоское лицо или острый скос по краю.</div>' +
+    '<div class="two">' + segOf('e-radius', RADIUS_RU) + '</div>' +
+    '<div class="note">Углы плиток: 6, 14, 24 (как было) или 34 точки.</div>' +
 
     '<h3>Собрать за раз</h3>' +
     '<div class="gen"><input type="color" class="pick" id="e-acc" value="' + shownColor(KEYS[3]) + '">' +
@@ -658,6 +683,7 @@ function drawEditor(){
     '<div class="note" id="e-where"></div>' +
     '<pre id="e-yaml" hidden></pre>';
   drawSeg('e-mode', baseMode()); drawSeg('e-style', baseStyle()); drawSeg('e-depth', baseDepth());
+  drawSeg('e-edge', baseEdge()); drawSeg('e-bevel', baseBevel()); drawSeg('e-radius', baseRadius());
   if (ED.gen && ED.gen.photo) drawPhoto(ED.gen.photo);
   bindEditor();
   drawChecks();
@@ -772,6 +798,19 @@ function bindEditor(){
     if (v === 'neumo') neuMaterial(); else delete ED.vars['edge-w'];
     drawEditor(); changed();
   };
+  $('e-edge').onclick = function(ev){
+    var v = ev.target.getAttribute('data-v'); if (!v) return;
+    ED.edge = v === (base().edge || 'teeth') ? '' : v; drawEditor(); changed();
+  };
+  $('e-bevel').onclick = function(ev){
+    var v = ev.target.getAttribute('data-v'); if (!v) return;
+    ED.bevel = v === (base().bevel || 'round') ? '' : v; drawEditor(); changed();
+  };
+  $('e-radius').onclick = function(ev){
+    var v = ev.target.getAttribute('data-v'); if (!v) return;
+    ED.radius = String(base().radius === undefined ? 24 : base().radius) === v ? '' : +v;
+    drawEditor(); changed();
+  };
   $('e-gen').onclick = function(){ generate($('e-acc').value, null); drawEditor(); changed(); };
   $('e-photo').onclick = function(){ $('e-file').click(); };
   $('e-file').onchange = function(){
@@ -836,6 +875,9 @@ function payload(){
   if (ED.mode) t.mode = ED.mode;
   if (ED.on_style) t.on_style = ED.on_style;
   if (ED.depth) t.depth = ED.depth;
+  if (ED.edge) t.edge = ED.edge;
+  if (ED.bevel) t.bevel = ED.bevel;
+  if (ED.radius !== '' && ED.radius !== undefined) t.radius = ED.radius;
   for (var k in ED.keep) t[k] = ED.keep[k];
   return {theme: t};
 }

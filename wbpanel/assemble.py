@@ -9,8 +9,8 @@ from .commands import cmd_attrs, xml_escape
 from .commands import build as build_command
 from .const import BAND, CELL, GAP, HEADER, PAD, RX, SECTION, TILE, font_scale, log
 from .const import INV_SKIP, STALE_AFTER
-from . import palette
-from .geometry import _fmt, cells, layout, text_width
+from . import form, palette
+from .geometry import _fmt, cells, clock_width, layout, text_width
 from .status import build_status, place_chips
 from .registry import resolve_type
 from .sky import facing_of, location_of
@@ -204,6 +204,7 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     conf["theme"] = (panel_conf or {}).get("theme") or (
         config.get("theme", "light") if config else "light")
     style = palette.info(conf["theme"])
+    form.use(style)                 # край колёс - для геометрии (form.py)
     inv_kind = conf.get("type") in style["inv_kinds"]
     if inv_kind:
         # Тёмная карточка графика: подписи считаем как для тёмной темы.
@@ -394,7 +395,8 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
     # Заголовок панели: базовая линия на 44, значит середина чипа на 38.
     title = str(panel_conf.get("title") or "")
     # Без связи справа ещё «· нет связи с MQTT» - чипы отходят левее.
-    clock_w = 62 if state.connected else 62 + text_width("  · нет связи с MQTT", 13)
+    # С 1.35 часы крупнее и с датой под ними: чипы - левее их блока.
+    clock_w = clock_width(state.connected)
     top_chips = place_chips(build_status(panel_conf, state),
                             width - PAD - clock_w, 20,
                             left=PAD + text_width(title, 26) * 1.1 + 14 if title else None)

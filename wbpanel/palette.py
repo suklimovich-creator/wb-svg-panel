@@ -44,14 +44,23 @@ BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_
 ORDER = ("light", "autumn", "retro", "noir", "neumo", "dark", "graphite")
 
 #: Свойства темы, кроме цветов. Своя тема наследует незаданные.
-PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart", "depth")
+PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart", "depth", "edge",
+         "bevel", "radius")
 _PROP_DEFAULTS = {"mode": "light", "on_style": "rim", "inv_kinds": (), "sheen": False,
-                  "shadow": None, "chart": None, "depth": "soft"}
+                  "shadow": None, "chart": None, "depth": "soft", "edge": "teeth",
+                  "bevel": "round", "radius": 24}
 #: Форма - вторая ось темы (с 1.32): глубина плиток и органов управления.
 #: soft - мягкая тень снизу, как было; flat - без теней; neumo -
 #: неоморфизм: плитка из того же материала, что и фон, светлая тень
 #: сверху-слева и тёмная снизу-справа, включённая - утоплена.
 DEPTHS = ("soft", "flat", "neumo")
+#: Край ручек и колёс (с 1.34): зубцы, гладкий, рифлёный.
+EDGES = ("teeth", "smooth", "knurl")
+#: Фаска ручек и клавиш (с 1.34): скруглённая (мягкий блик, как было),
+#: без фаски (плоское лицо), острая (кольцо скоса вокруг плоского лица).
+BEVELS = ("round", "none", "sharp")
+#: Какие свойства какими значениями бывают - для проверки файлов.
+_CHOICES = {"depth": DEPTHS, "edge": EDGES, "bevel": BEVELS}
 
 #: Значение переменной: цвет, число или ссылка на другую переменную. Всё
 #: прочее не пропускаем - значения уходят прямо в <style> и в атрибуты, и
@@ -192,10 +201,20 @@ def _load_user(directory, builtin):
             _PROBLEMS.append((base, "on_style: %r - бывает rim или card"
                                     % theme["props"]["on_style"]))
             theme["props"].pop("on_style")
-        if theme["props"].get("depth") not in (None,) + DEPTHS:
-            _PROBLEMS.append((base, "depth: %r - бывает %s"
-                                    % (theme["props"]["depth"], ", ".join(DEPTHS))))
-            theme["props"].pop("depth")
+        for key, allowed in _CHOICES.items():
+            if theme["props"].get(key) not in (None,) + allowed:
+                _PROBLEMS.append((base, "%s: %r - бывает %s"
+                                        % (key, theme["props"][key], ", ".join(allowed))))
+                theme["props"].pop(key)
+        if "radius" in theme["props"]:
+            try:
+                ok = 0 <= float(theme["props"]["radius"]) <= 40
+            except (TypeError, ValueError):
+                ok = False
+            if not ok:
+                _PROBLEMS.append((base, "radius: %r - число от 0 до 40"
+                                        % (theme["props"]["radius"],)))
+                theme["props"].pop("radius")
         if not theme["extends"]:
             theme["extends"] = "dark" if theme["props"].get("mode") == "dark" else "light"
         found[name] = theme
@@ -347,7 +366,21 @@ def info(name):
         "shadow": dict(shadow) if isinstance(shadow, dict) else None,
         "page_bg": css_vars(name).get("--bg-bottom", "#E6E6E9"),
         "depth": prop(name, "depth") if prop(name, "depth") in DEPTHS else "soft",
+        "edge": prop(name, "edge") if prop(name, "edge") in EDGES else "teeth",
+        "bevel": prop(name, "bevel") if prop(name, "bevel") in BEVELS else "round",
+        "radius": _radius(prop(name, "radius")),
     }
+
+
+def _radius(value):
+    """Скругление углов плитки (с 1.35): 0-40 px, иначе прежние 24."""
+    try:
+        r = float(value)
+    except (TypeError, ValueError):
+        return 24
+    if not 0 <= r <= 40:
+        return 24
+    return int(r) if r == int(r) else round(r, 1)
 
 
 def css():
@@ -399,7 +432,12 @@ def menu_entry(n):
             "bg": page, "own": not get(n)["builtin"],
             "acc": _hex(acc), "acc2": _hex(_mix(acc, _WHITE, 0.28)),
             "accInk": _hex(_readable_on(acc, (255, 250, 242), (42, 26, 8))),
-            "heat": _hex(heat), "cool": _hex(cool)}
+            "heat": _hex(heat), "cool": _hex(cool),
+            # форма (с 1.35): пульты рисуют ручки, колёса и кнопки так же,
+            # как плитки, - глубина, край, фаска и цвета двух теней
+            "depth": info(n)["depth"], "edge": info(n)["edge"], "bevel": info(n)["bevel"],
+            "neu": _hex(_parse(v.get("--neu-light"), v) or _WHITE),
+            "shd": _hex(_parse(v.get("--shadow"), v) or _BLACK)}
 
 
 #: Основные цвета темы для страницы /themes: (ключ, переменная, подпись).
@@ -439,7 +477,7 @@ def describe(name):
             "file": os.path.basename(theme["file"]) if theme["file"] else "",
             "extends": theme.get("extends") or "",
             "mode": i["mode"], "on_style": "card" if i["card"] else "rim",
-            "depth": i["depth"],
+            "depth": i["depth"], "edge": i["edge"], "bevel": i["bevel"], "radius": i["radius"],
             "swatches": swatches,
             "contrast": round(contrast(tuple(ink) + (1.0,), tuple(tile) + (1.0,)), 1) if ink else None,
             "problems": own,
@@ -452,7 +490,7 @@ def describe(name):
                 "extends": theme.get("extends") or "",
                 "props": dict((k, v) for k, v in theme["props"].items()
                               if k in ("mode", "on_style", "sheen", "inv_kinds", "shadow", "chart",
-                                       "depth")),
+                                       "depth", "edge", "bevel", "radius")),
                 "vars": dict((k[2:], v) for k, v in theme.get("raw", {}).items())}}
 
 
@@ -716,7 +754,7 @@ def _rules(dark, card):
          lambda v: _hex(_mix(v["--inv-ink"], v["--active"], 0.25))),
         # Светлая тень неоморфизма (depth: neumo) - фон, разбавленный белым.
         ("--neu-light", ("--bg-bottom",),
-         lambda v: _hex(_mix(v["--bg-bottom"], _WHITE, 0.09 if dark else 0.72))),
+         lambda v: _hex(_mix(v["--bg-bottom"], _WHITE, 0.16 if dark else 0.72))),
         ("--inv-accent", ("--active", "--inv-tile"),
          lambda v: _hex(_lift(v["--active"], v["--inv-tile"]))),
     ]
@@ -789,9 +827,11 @@ def _clean_draft(data):
     out["name"] = raw_name if _NAME_RE.match(raw_name) else (slug(raw_name or title) or "my-theme")
     parent = str(data.get("extends") or "")
     out["extends"] = parent if parent in _THEMES else None
-    for key in ("mode", "on_style", "depth"):
+    for key in ("mode", "on_style", "depth", "edge", "bevel"):
         if data.get(key) is not None:
             out[key] = str(data[key])
+    if data.get("radius") is not None:
+        out["radius"] = _radius(data["radius"])
     for key in ("sheen", "inv_kinds", "shadow", "chart"):
         if key in data:
             out[key] = data[key]
@@ -831,8 +871,9 @@ def draft(data):
         theme["props"].pop("mode")
     if theme["props"].get("on_style") not in (None, "rim", "card"):
         theme["props"].pop("on_style")
-    if theme["props"].get("depth") not in (None,) + DEPTHS:
-        theme["props"].pop("depth")
+    for key, allowed in _CHOICES.items():
+        if theme["props"].get(key) not in (None,) + allowed:
+            theme["props"].pop(key)
     if theme["props"].get("chart") is not None:
         theme["props"]["chart"] = _clean_chart(theme["props"]["chart"], where)
     if not theme["extends"]:
@@ -880,6 +921,15 @@ def to_yaml(data, stamp=""):
     if data.get("depth") in DEPTHS:
         lines.append("depth: %s           # soft - мягкая тень, flat - плоско, neumo - неоморфизм"
                      % data["depth"].ljust(5))
+    if data.get("edge") in EDGES:
+        lines.append("edge: %s           # край ручек: teeth - зубцы, smooth - гладкий, knurl - насечка"
+                     % data["edge"].ljust(6))
+    if data.get("bevel") in BEVELS:
+        lines.append("bevel: %s           # фаска: round - мягкая, none - плоско, sharp - острая"
+                     % data["bevel"].ljust(5))
+    if data.get("radius") is not None:
+        lines.append("radius: %s              # скругление углов плитки, px (0-40)"
+                     % str(data["radius"]).ljust(3))
     for key in ("sheen", "inv_kinds", "shadow"):
         if key in data:
             lines.append("%s: %s" % (key, json.dumps(data[key], ensure_ascii=False)))

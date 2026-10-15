@@ -541,12 +541,14 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     if tgt is not None and digits and abs(tgt - round(tgt)) < 0.05:
         num_text = _num(tgt, 0)
     ncx, ncy, bw, bh = _num_place(cx, cy, R, a_sp, num_size, gap, "24")
-    box = (ncx - bw / 2 - 3 * fs, ncy - bh / 2 - 3 * fs, ncx + bw / 2 + 3 * fs, ncy + bh / 2 + 3 * fs)
+    # Рамка цифры - впритык (с 1.30): с запасом в 3 + 5 единиц она
+    # прятала и соседние подписи шкалы, пока колесо крутили.
+    box = (ncx - bw / 2 - fs, ncy - bh / 2 - fs, ncx + bw / 2 + fs, ncy + bh / 2 + fs)
     lab_r = R - 17.0 * fs
     lab_size = wl["lab"] * fs
 
     def label_hidden(lx, ly):
-        m = 5.0 * fs
+        m = 1.0 * fs
         inbox = box[0] - m < lx < box[2] + m and box[1] - m < ly < box[3] + m
         return inbox or not (9 < lx < w - 9 and 9 < ly < h - 9)
 

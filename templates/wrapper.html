@@ -1607,7 +1607,7 @@ function padDisk(node){
     var sc = G.querySelectorAll('.acs-scale');
     for(var si = 0; si < sc.length; si++)
       sc[si].setAttribute('transform', 'rotate(' + rot.toFixed(3) + ' ' + D.cx + ' ' + D.cy + ')');
-    var b = D.box, m = 5 * D.fs, i;
+    var b = D.box, m = 1 * D.fs, i;   // как label_hidden в ac_disk.py
     var labs = G.querySelectorAll('.acs-lab');
     for(i = 0; i < labs.length; i++){
       var t = parseFloat(labs[i].getAttribute('data-t'));

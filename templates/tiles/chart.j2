@@ -84,10 +84,13 @@
   {% endfor %}
   {#- На весь экран - пояснение к зонам, строкой на каждый ряд. -#}
   {% for lg in t.legend or [] %}
-  <text x="20" y="{{ lg.y }}" class="legend">
-    <tspan class="lname">{{ lg.name }}:</tspan>
-    {% for p in lg.parts %}<tspan dx="8" style="fill:{{ p.color }}">●</tspan><tspan dx="4">{{ p.text }}</tspan>{% endfor %}
+  {#- Строка зон переносится между зонами: продолжение - под первой зоной. -#}
+  {% for line in lg.lines or [lg.parts] %}
+  <text x="20" y="{{ (lg.ys or [lg.y])[loop.index0] }}" class="legend">
+    {%- if loop.first %}<tspan class="lname">{{ lg.name }}:</tspan>{% endif -%}
+    {% for p in line %}<tspan {% if loop.first and lg.indent %}x="{{ lg.indent + lg.gap }}"{% else %}dx="{{ lg.gap or 8 }}"{% endif %} style="fill:{{ p.color }}">●</tspan><tspan dx="{{ lg.dot or 4 }}">{{ p.text }}</tspan>{% endfor %}
   </text>
+  {% endfor %}
   {% for line in lg.about %}
   <text x="20" y="{{ lg.about_y[loop.index0] }}" class="lnote">{{ line }}</text>
   {% endfor %}

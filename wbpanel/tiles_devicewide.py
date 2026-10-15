@@ -80,8 +80,26 @@ def _legend(specs, tile, fs):
         if not zs:
             continue
         kind = air.KINDS.get(air.kind_of(spec["channel"]) or "") or {}
-        out.append({"name": spec.get("label") or kind.get("title") or spec.get("unit") or "",
-                    "parts": _zone_parts(zs),
+        name = spec.get("label") or kind.get("title") or spec.get("unit") or ""
+        parts = _zone_parts(zs)
+        # Строка зон переносится (с 1.30): у VOC четыре зоны, и на узком
+        # экране строка уходила за правый край. Перенос - между зонами,
+        # продолжение - под первой зоной, а не под именем.
+        size, gap = 9.0 * fs, 8.0 * fs
+        name_w = text_width(name + ":", size, 0.62)
+        avail = tile["inner_w"] - 40
+        lines, cur, x = [], [], name_w
+        for part in parts:
+            pw = gap + text_width("●", size, 0.62) + 4 * fs + text_width(part["text"], size, 0.6)
+            if cur and x + pw > avail:
+                lines.append(cur)
+                cur, x = [], name_w
+            cur.append(part)
+            x += pw
+        if cur:
+            lines.append(cur)
+        out.append({"name": name, "parts": parts, "lines": lines,
+                    "indent": round(20 + name_w, 1), "gap": round(gap, 1), "dot": round(4 * fs, 1),
                     "about": _wrap(air.about(spec), tile["inner_w"] - 40, 7.5 * fs, 2)})
     if not out:
         return []
@@ -90,8 +108,11 @@ def _legend(specs, tile, fs):
         y = 41 + 23 * fs * (len(specs) - 1) + 24 * fs
         for lg in out:
             lg["y"] = round(y, 1)
+            lg["ys"] = []
+            for _line in lg["lines"]:
+                lg["ys"].append(round(y, 1))
+                y += 13 * fs
             lg["about_y"] = []
-            y += 13 * fs
             if with_about:
                 for _line in lg["about"]:
                     lg["about_y"].append(round(y, 1))
@@ -269,7 +290,13 @@ def build_chart(tile, state, history):
     # 4. подписи: без них не понять, что шкала растянута под сами данные -
     #    провал на полградуса выглядит как обвал
     with_time = bool(tile.get("time_labels", False))
-    for s in series_out:
+    # Правая шкала стоит у того же края, что и числа рядов в шапке, и её
+    # верхние подписи («1500») садились на «VOC 471». Подпись, чей верх
+    # выше низа последней строки чисел, не пишем (с 1.30): линия сетки
+    # остаётся, а значение и так видно у соседних.
+    numbers_bottom = (series_out[-1]["badge_y"] + 4 * fs_val) if series_out else 0
+    axis_top = 9.5 * fs_val * 0.75 + 3
+    for idx, s in enumerate(series_out):
         s["labels"] = []
         if not s["geom"]:
             continue
@@ -280,6 +307,8 @@ def build_chart(tile, state, history):
             # отсчитывается шкала. Раньше её прятали ради строки часов -
             # теперь вместо этого убираются крайние подписи часов, они и
             # были причиной наложения.
+            if idx > 0 and hl["y"] - axis_top < numbers_bottom + 2:
+                continue
             s["labels"].append({"y": hl["y"],
                                 "text": _fmt(lo + hl["f"] * (hi - lo), digits)})
         s["span"] = "%s–%s %s" % (_fmt(lo, digits), _fmt(hi, digits), s["unit"])

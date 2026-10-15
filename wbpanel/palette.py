@@ -41,9 +41,9 @@ BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_
 ORDER = ("light", "autumn", "retro", "noir", "dark", "graphite")
 
 #: Свойства темы, кроме цветов. Своя тема наследует незаданные.
-PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow")
+PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart")
 _PROP_DEFAULTS = {"mode": "light", "on_style": "rim", "inv_kinds": (), "sheen": False,
-                  "shadow": None}
+                  "shadow": None, "chart": None}
 
 #: Значение переменной: цвет, число или ссылка на другую переменную. Всё
 #: прочее не пропускаем - значения уходят прямо в <style> и в атрибуты, и
@@ -166,6 +166,9 @@ def _load_user(directory, builtin):
             _PROBLEMS.append((base, "mode: %r - бывает light или dark"
                                     % theme["props"]["mode"]))
             theme["props"].pop("mode")
+        chart = theme["props"].get("chart")
+        if chart is not None:
+            theme["props"]["chart"] = _clean_chart(chart, base)
         if theme["props"].get("on_style") not in (None, "rim", "card"):
             _PROBLEMS.append((base, "on_style: %r - бывает rim или card"
                                     % theme["props"]["on_style"]))
@@ -345,9 +348,132 @@ def css():
 
 
 def menu():
-    """Для страницы: [{name, title, dark, bg, own}] в порядке меню."""
-    return [{"name": n, "title": get(n)["title"], "dark": is_dark(n),
-             "bg": info(n)["page_bg"], "own": not get(n)["builtin"]} for n in names()]
+    """Для страницы: [{name, title, dark, bg, own, acc…}] в порядке меню.
+    Цвета пультов (с 1.27): акцент, он же светлее для выпуклых кнопок,
+    текст на акценте, нагрев и холод - из темы, а не свои у страницы."""
+    out = []
+    for n in names():
+        v = css_vars(n)
+        tile = _parse(v.get("--tile"), v) or (217, 217, 220)
+        acc = _solid(v.get("--active"), v, tile) or (224, 155, 45)
+        heat = _solid(v.get("--ac-seg-heat"), v, tile) or (224, 102, 26)
+        cool = _solid(v.get("--cool"), v, tile) or (59, 143, 212)
+        page = info(n)["page_bg"]
+        # Нагрев и холод на пульте - и дуга, и надпись: должны читаться на поле.
+        field = _parse(page, v) or tile
+        heat, cool = _lift(heat, field), _lift(cool, field)
+        out.append({"name": n, "title": get(n)["title"], "dark": is_dark(n),
+                    "bg": page, "own": not get(n)["builtin"],
+                    "acc": _hex(acc), "acc2": _hex(_mix(acc, _WHITE, 0.28)),
+                    "accInk": _hex(_readable_on(acc, (255, 250, 242), (42, 26, 8))),
+                    "heat": _hex(heat), "cool": _hex(cool)})
+    return out
+
+
+def _solid(value, vars_, bg):
+    """Цвет без прозрачности: rgba кладём на подложку."""
+    c = _rgba(value, vars_)
+    if not c:
+        return None
+    return _over(c, tuple(bg) + (1.0,))[:3]
+
+
+# --------------------------------------------------- цвета графиков (1.27)
+#: Величины, у которых в теме бывает свой цвет.
+CHART_KINDS = ("temperature", "humidity", "co2", "voc", "pressure", "power")
+#: Насколько цвета двух линий на одной плитке должны различаться (ΔE в Lab).
+DISTINCT = 22.0
+
+
+def _clean_chart(chart, where):
+    """Проверить раздел chart своей темы: только цвета, известные имена."""
+    out = {}
+    if not isinstance(chart, dict):
+        _PROBLEMS.append((where, "chart: ожидался словарь (palette, temperature, …)"))
+        return None
+    for key, value in chart.items():
+        if key == "palette":
+            good = [str(c).strip() for c in (value or []) if _VALUE_RE.match(str(c).strip())]
+            if len(good) != len(value or []):
+                _PROBLEMS.append((where, "chart.palette: не все значения - цвета"))
+            out["palette"] = good
+            for i, a in enumerate(good):
+                for b in good[i + 1:]:
+                    ca, cb = _rgba(a, {}), _rgba(b, {})
+                    if ca and cb and delta_e(ca, cb) < DISTINCT:
+                        _PROBLEMS.append((where, "chart.palette: %s и %s почти не различить "
+                                                 "на одном графике" % (a, b)))
+        elif key in CHART_KINDS:
+            if _VALUE_RE.match(str(value).strip()):
+                out[key] = str(value).strip()
+            else:
+                _PROBLEMS.append((where, "chart.%s: %r - не цвет" % (key, value)))
+        else:
+            _PROBLEMS.append((where, "chart.%s: такой величины нет (есть: palette, %s)"
+                                     % (key, ", ".join(CHART_KINDS))))
+    return out
+
+
+def _lab(c):
+    def lin(v):
+        v /= 255.0
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (lin(float(x)) for x in c[:3])
+    x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047
+    y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
+
+    def f(t):
+        return t ** (1.0 / 3) if t > 0.008856 else 7.787 * t + 16.0 / 116
+    fx, fy, fz = f(x), f(y), f(z)
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def delta_e(a, b):
+    """Различие цветов (ΔE76): ~2 - едва заметно, 20+ - явно разные."""
+    la, lb = _lab(a), _lab(b)
+    return sum((la[i] - lb[i]) ** 2 for i in range(3)) ** 0.5
+
+
+def chart_colors(name):
+    """{'palette': [...], 'temperature': ..., ...} - с наследованием."""
+    out = {}
+    for theme in chain(name):
+        chart = theme["props"].get("chart") or {}
+        out.update(chart)
+    return out
+
+
+def series_colors(name, series):
+    """
+    Цвета линий одной плитки. series - [(свой цвет или None, величина или
+    None)]. Свой цвет из конфига сильнее темы. Остальным - цвет величины
+    из темы, иначе следующий из палитры; если он почти как уже занятый на
+    этой плитке, берётся следующий: две линии не должны сливаться.
+    """
+    chart = chart_colors(name)
+    pal = list(chart.get("palette") or ["#E08A2D", "#3B93C4", "#8E8E93"])
+    used = [_rgba(c, {}) for c, _k in series if c]
+    used = [u for u in used if u]
+    out = []
+    for i, (own, kind) in enumerate(series):
+        if own:
+            out.append(own)
+            continue
+        cands = ([chart[kind]] if kind and chart.get(kind) else []) + \
+            pal[i % len(pal):] + pal[:i % len(pal)]
+        pick = None
+        for cand in cands:
+            c = _rgba(cand, {})
+            if c and all(delta_e(c, u) >= DISTINCT for u in used):
+                pick = cand
+                break
+        pick = pick or cands[0]
+        out.append(pick)
+        c = _rgba(pick, {})
+        if c:
+            used.append(c)
+    return out
 
 
 # ------------------------------------------------------------ контраст

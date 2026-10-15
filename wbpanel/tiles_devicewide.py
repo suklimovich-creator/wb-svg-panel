@@ -24,6 +24,7 @@ from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
                        parse_duration, smooth_path, text_width)
 from .ac_disk import build_disk, build_screen
 from .skeuo import tv_tile
+from . import palette
 from .registry import Tile, Zone, tile
 from .state import is_on, to_float
 from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
@@ -104,6 +105,24 @@ def _legend(specs, tile, fs):
     return out
 
 
+def _series_kind(spec, snap):
+    """Что за величина у ряда - для цвета из темы. None - не знаем."""
+    kind = air.kind_of(spec.get("channel"))
+    if kind:
+        return kind
+    name = str(spec.get("channel") or "").split("/")[-1].lower()
+    unit = str(spec.get("unit") or snap.get("units") or "").lower()
+    if "temp" in name or "°" in unit:
+        return "temperature"
+    if "humid" in name or "влажн" in name:
+        return "humidity"
+    if "press" in name or "давлен" in name or unit in ("hpa", "мм рт. ст.", "mmhg"):
+        return "pressure"
+    if "power" in name or unit in ("w", "вт", "kw", "квт"):
+        return "power"
+    return None
+
+
 def build_chart(tile, state, history):
     # Подписи значений красятся под подложку, а она зависит от темы:
     # на светлой цвет линии темнеет, на тёмной светлеет.
@@ -144,6 +163,11 @@ def build_chart(tile, state, history):
     divisions = max([s[3] for s in scales], default=0)
     divisions = min(max(divisions, 2), 6)          # 2..6 линий - читаемо
 
+    # Цвета линий (с 1.27): свой у серии сильнее, иначе цвет величины из
+    # темы или следующий из её палитры - и так, чтобы линии не сливались.
+    colors = palette.series_colors(theme, [
+        (spec.get("color"), _series_kind(spec, snap)) for spec, snap, _d in fetched])
+
     ticks = []
     series_out = []
     for idx, ((spec, snap, data), scale) in enumerate(zip(fetched, scales)):
@@ -158,7 +182,7 @@ def build_chart(tile, state, history):
             ticks = hour_ticks(data[0][0], data[-1][0], tile["inner_w"], pad_x=3.0)
         raw = to_float(snap["raw"])
         geom = smooth_path(data, tile["inner_w"], tile["chart_h"], band=band, lo=lo, hi=hi)
-        color = spec.get("color", ["#E08A2D", "#3B93C4", "#8E8E93"][idx % 3])
+        color = colors[idx]
         # Пороги: цвет линии по текущему значению. Задаются от меньшего к
         # большему, побеждает последний подошедший. Только у графика с
         # одной линией: у двух рядов обе краснели вместе, и было не понять,

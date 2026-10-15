@@ -11,6 +11,16 @@ on_style: rim   # rim - рамка у включённой; card - тёмная 
 inv_kinds: []   # типы плиток, у которых карточка тёмная всегда
 sheen: false   # отсвет из угла плитки (тёмные темы)
 shadow: {amb: 0.13, key: 0.08}   # тени плиток: рассеянная и ключевая
+# Цвета графиков: у величины свой цвет, остальные линии - по порядку из
+# palette. Цвет, заданный у серии в config.yaml, сильнее темы.
+chart:
+  temperature: "#E08A2D"
+  humidity: "#3B93C4"
+  co2: "#4E9A6B"
+  voc: "#8E6BC4"
+  pressure: "#7A7F8C"
+  power: "#C4553B"
+  palette: ["#E08A2D", "#3B93C4", "#8E8E93", "#4E9A6B", "#8E6BC4", "#C4553B"]
 vars:
   bg-top: "#F1F1F3"
   bg-bottom: "#E6E6E9"

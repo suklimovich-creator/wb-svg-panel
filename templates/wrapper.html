@@ -505,6 +505,26 @@
  #ov.lt .hbtn.cold{color:#2F7DC4} #ov.lt .hbtn.warm{color:#D9822B}
  #ov.lt .vals{color:rgba(28,28,30,.85)}
  #ov.lt .vals small{color:rgba(28,28,30,.5)}
+ /* ---- пульты в цвет темы (1.27) ---------------------------------------
+    Акцент, нагрев и холод - переменные на окне (openOv), из темы. Старый
+    браузер без var() отбросит эти правила и останется при прежних. */
+ #ov .pw.on{border-color:var(--acc);color:var(--acc)}
+ #ov .pw.on .led{background:var(--acc)}
+ #crtview .mark.going{background:var(--acc)}
+ #ov .cbtn.on{border-color:var(--acc)}
+ #ov .tvc.ok{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+ #ov .tvapp.now{border-color:var(--acc)}
+ #ov .tvx .tx.txpw.on,#ov.lt .tvx .tx.txpw.on,#ov .hbtn.on,#ov.lt .hbtn.on{
+       background:radial-gradient(circle at 40% 35%,var(--acc2),var(--acc) 75%);color:var(--acc-ink)}
+ #ov .tvx .tx.txpw.on svg,#ov.lt .tvx .tx.txpw.on svg{stroke:var(--acc-ink)}
+ #ov .tvx .txapp.now,#ov.lt .tvx .txapp.now{background:var(--acc);color:var(--acc-ink)}
+ #ov .tvx .txwheel .okt{fill:var(--acc-ink)}
+ #ov .lst input:focus{border-color:var(--acc)}
+ #ov .lst .lgo{background:var(--acc);color:var(--acc-ink)}
+ #ov .lst .done .lchk i{background:var(--acc);border-color:var(--acc)}
+ #ov .lst .agrow.now .agtime{color:var(--acc)}
+ #ov .hbtn.cold,#ov.lt .hbtn.cold{color:var(--cool)}
+ #ov .hbtn.warm,#ov.lt .hbtn.warm{color:var(--heat)}
 </style></head><body>
 <a id="back" href="./">← Панели</a>
 <div id="cols"></div>
@@ -554,9 +574,10 @@ var THEME_STORE = 'wb-panel-theme';
    тем - и меню, и цвет полей, и светлый ли пульт. Своей копии списка в
    скрипте больше нет. */
 var THEME_LIST = __THEMES_JS__;
-var THEMES = [['', 'как в конфиге']], PAGE_BG = {}, DARK_THEME = {};
+var THEMES = [['', 'как в конфиге']], PAGE_BG = {}, DARK_THEME = {}, THEME_INFO = {};
 THEME_LIST.forEach(function(t){
   THEMES.push([t.name, t.title]); PAGE_BG[t.name] = t.bg; DARK_THEME[t.name] = !!t.dark;
+  THEME_INFO[t.name] = t;
 });
 var THEME = (function(){
   var m = location.search.match(/[?&]theme=([\w-]+)/);
@@ -892,7 +913,11 @@ function ovLight(){
 }
 /* Цвета для пультов, которые рисуются скриптом (шар, ручка, колесо). */
 function ovPal(){
-  return ovLight()
+  // Акцент, нагрев и холод пультов - из темы (с 1.27).
+  var t = THEME_INFO[rootTheme()] || {};
+  var c = {acc: t.acc || '#E09B2D', acc2: t.acc2 || '#FFB24D', accInk: t.accInk || '#2A1A08',
+           heat: t.heat || '#FF8A3D', cool: t.cool || '#3B8FD4'};
+  var p = ovLight()
     ? {lt: true, ink: '#1C1C1E', dim: 'rgba(28,28,30,.55)', track: 'rgba(0,0,0,.10)',
        face: '#F4F4F6', faceEdge: 'rgba(0,0,0,.10)', shadow: 'rgba(0,0,0,.16)',
        knob: '#FFFFFF', knobEdge: 'rgba(0,0,0,.30)', off: 'rgba(0,0,0,.30)', offKnob: '#A4A6AC',
@@ -903,11 +928,19 @@ function ovPal(){
        knob: '#F2F2F4', knobEdge: '#1C1D20', off: 'rgba(255,255,255,.42)', offKnob: '#8A8C92',
        halo: '#1C1D20', slot: '#0E0F11', drum: '#3A3B40',
        wheelA: '#4A4B52', wheelB: '#232428', wheelEdge: 'rgba(255,255,255,.07)'};
+  for(var k in c) p[k] = c[k];
+  return p;
 }
 function openOv(nodes){ 
   // Во весь экран, сплошным цветом поля панели; у светлых тем - светлое.
-  var lt = ovLight();
+  var lt = ovLight(), pc = ovPal();
   ov.classList.toggle('lt', lt);
+  // Цвета темы - переменными на окне: ими красятся кнопки пультов (1.27).
+  if(ov.style.setProperty){
+    ov.style.setProperty('--acc', pc.acc); ov.style.setProperty('--acc2', pc.acc2);
+    ov.style.setProperty('--acc-ink', pc.accInk);
+    ov.style.setProperty('--heat', pc.heat); ov.style.setProperty('--cool', pc.cool);
+  }
   ov.style.background = PAGE_BG[rootTheme()] || '#101012';
   ov.classList.toggle('hashead', nodes.some(function(n){
     return n.classList && n.classList.contains('phead'); }));
@@ -1305,7 +1338,7 @@ function padSphere(node){
     function rad(d){ return d * Math.PI / 180; }
     g.lineCap = 'round'; g.lineWidth = sw;
     g.strokeStyle = PAL.track; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B1)); g.stroke();
-    g.strokeStyle = lit ? '#F2A23A' : PAL.offKnob; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B0 + (B1 - B0) * lvl)); g.stroke();
+    g.strokeStyle = lit ? PAL.acc : PAL.offKnob; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B0 + (B1 - B0) * lvl)); g.stroke();
     for (var i = 0; i < 22; i++){
       var f = i / 21, a = rad(T0 - (T0 - T1) * f);
       // точки теплоты цветные всегда: по ним видно, какой будет свет
@@ -2003,7 +2036,7 @@ function padLevel(node){
   mk('rect', {x: KX, y: KY, width: KW, height: KH, rx: 3, fill: 'url(#lvcyl)'});
   var BX = KX + KW + 18;
   mk('rect', {x: BX, y: KY, width: 5, height: KH, rx: 2.5, fill: PAL.track});
-  var bar = mk('rect', {x: BX, width: 5, rx: 2.5, fill: '#F2A23A'});
+  var bar = mk('rect', {x: BX, width: 5, rx: 2.5, fill: PAL.acc});
   box.appendChild(svg);
   var turn = lvl * 9;            // поворот колеса в шагах рёбер, копится за пальцем
   function place(){
@@ -2627,7 +2660,7 @@ function padThermostat(node){
   function paint(){
     // греет - оранжевая, включён и не греет - синяя, выключен - серая
     var enabled = node.getAttribute('data-enabled') !== '0';
-    var color = !enabled ? PAL.off : (live ? '#FF8A3D' : '#3B8FD4');
+    var color = !enabled ? PAL.off : (live ? PAL.heat : PAL.cool);
     var to = degOf(value);
     pArc.setAttribute('d', arc(START, to, RA));
     pArc.setAttribute('stroke', color);
@@ -2993,8 +3026,8 @@ function padTV(node){
     + '<stop offset="1" stop-color="' + PAL.wheelB + '"/></radialGradient>'
     + '<radialGradient id="txsh"><stop offset=".72" stop-color="#000" stop-opacity="' + (PAL.lt ? .2 : .5) + '"/>'
     + '<stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>'
-    + '<radialGradient id="txok" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#FFB24D"/>'
-    + '<stop offset="1" stop-color="#E08A2D"/></radialGradient></defs>'
+    + '<radialGradient id="txok" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="' + PAL.acc2 + '"/>'
+    + '<stop offset="1" stop-color="' + PAL.acc + '"/></radialGradient></defs>'
     + '<circle cx="' + C + '" cy="' + (C + 4) + '" r="' + (R * 1.12) + '" fill="url(#txsh)"/>'
     + '<path d="' + tvGear(C, C, R, 1.25) + '" fill="url(#txface)" stroke="' + PAL.wheelEdge + '"/>'
     + arr

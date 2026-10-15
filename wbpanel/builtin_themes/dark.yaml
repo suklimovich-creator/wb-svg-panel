@@ -11,6 +11,15 @@ on_style: rim   # rim - рамка у включённой; card - тёмная 
 inv_kinds: []   # типы плиток, у которых карточка тёмная всегда
 sheen: true   # отсвет из угла плитки (тёмные темы)
 shadow: null   # тени плиток не рисуются
+# Графики: ярче, чем у светлой, - на тёмной плитке. Графит наследует.
+chart:
+  temperature: "#FF9A3D"
+  humidity: "#4FA8E0"
+  co2: "#5FBF84"
+  voc: "#A98BE6"
+  pressure: "#9EA3AD"
+  power: "#F06A4E"
+  palette: ["#FF9A3D", "#4FA8E0", "#9EA3AD", "#5FBF84", "#A98BE6", "#F06A4E"]
 vars:
   bg-top: "#1B1B1F"
   bg-bottom: "#101012"

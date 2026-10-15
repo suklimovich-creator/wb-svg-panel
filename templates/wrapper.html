@@ -241,7 +241,7 @@
        font-size:17px;font-weight:600;color:#1C1C1E;cursor:pointer;
        user-select:none;touch-action:manipulation}
  #ov .tvdim{opacity:.45}
- /* Пульт телевизора с 1.21: тёмный во всех темах, как пульт в руке.
+ /* Пульт телевизора с 1.21: тёмный, в светлых темах - светлый (1.22).
     Кнопки - выпуклые кружки, без размытия; колесо рисуется SVG. */
  #ov .tvx{width:340px;max-width:94vw;box-sizing:border-box;background:#1D1E22;
        padding:14px 16px 18px;border-radius:26px;color:#F2F2F4;touch-action:manipulation}
@@ -298,6 +298,9 @@
  #ov.full > .acscreen{position:fixed;left:0;top:0;right:0;bottom:0;margin:0;
             touch-action:none;color:#888;font-size:20px;line-height:100vh}
  #ov .acscreen svg{display:block;width:100%;height:100%}
+ #ov.full > .acscreen.boxed{right:auto;bottom:auto;left:50%;top:50%;
+            transform:translate(-50%,-50%);border-radius:24px;overflow:hidden;
+            box-shadow:0 10px 40px rgba(0,0,0,.25)}
  /* Список на весь экран. Кнопки крупные, по 44 px: окно открывают ради
     галочек, и промах мимо строки дороже места на экране. */
  /* Своя подложка, а не прозрачный оверлей, как у пультов: строки текста
@@ -393,6 +396,115 @@
  #ov .lst .wbtn.off{opacity:.45;pointer-events:none}
  #ov .lst .wwarn{color:#FFD8CE;background:rgba(196,85,59,.25);border-radius:12px;
           padding:10px 12px;font-size:13.5px;margin-top:10px}
+ /* ---- светлые пульты (1.22) --------------------------------------------
+    Окно пульта - во весь экран, сплошным цветом поля панели: сквозь
+    прежнюю дымку просвечивала панель, и на телефоне пульт читался как
+    наложенная картинка. У светлых тем (light, autumn, retro, noir) окно
+    светлое: класс lt ставит openOv по теме панели. Правила ниже -
+    зеркало тёмных: белый текст становится тёмным, белые подложки -
+    серыми. */
+ #ov.lt .ttl{color:#1C1C1E}
+ #ov.lt .cam{background:#D9D9DE}
+ #ov.lt .hint{color:rgba(28,28,30,.55)}
+ #ov.lt .pw{border:2px solid rgba(0,0,0,.24);color:#1C1C1E}
+ #ov.lt .pw .led{background:rgba(0,0,0,.24)}
+ #ov.lt .close{color:#1C1C1E}
+ #ov.lt #lvl{background:#D9D9DE}
+ #ov.lt #lvl .val{color:#1C1C1E}
+ #ov.lt .step .lab{color:rgba(28,28,30,.55)}
+ #ov.lt .step .num{color:rgba(28,28,30,.78)}
+ #ov.lt .step button{background:rgba(0,0,0,.09);color:#1C1C1E}
+ #ov.lt .step button:active{background:rgba(0,0,0,.18)}
+ #ov.lt .cbtn{border:2px solid rgba(0,0,0,.18);color:rgba(28,28,30,.85)}
+ #ov.lt #tdial .tbig{fill:#1C1C1E}
+ #ov.lt #tdial .tsub{fill:rgba(28,28,30,.55)}
+ #ov.lt #tdial .tmode{fill:rgba(28,28,30,.65)}
+ #ov.lt .wbig{color:#1C1C1E}
+ #ov.lt .acbtn{border:2px solid rgba(0,0,0,.18);color:rgba(28,28,30,.8)}
+ #ov.lt .acbtn.on{color:#1C1C1E}
+ #ov.lt .lst{background:#FFFFFF}
+ #ov.lt .lst .lttl{color:#1C1C1E}
+ #ov.lt .lst .lcnt{color:rgba(28,28,30,.5)}
+ #ov.lt .lst input{border:1.5px solid rgba(0,0,0,.14);background:rgba(0,0,0,.05);color:#1C1C1E}
+ #ov.lt .lst .lrow{background:rgba(0,0,0,.04)}
+ #ov.lt .lst .lchk i{border:2px solid rgba(0,0,0,.36)}
+ #ov.lt .lst .ltxt{color:#1C1C1E}
+ #ov.lt .lst .done .ltxt{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .lbtn{color:rgba(28,28,30,.55)}
+ #ov.lt .lst .lbtn:active{background:rgba(0,0,0,.08)}
+ #ov.lt .lst .lfoot span{border:2px solid rgba(0,0,0,.14);color:rgba(28,28,30,.75)}
+ #ov.lt .lst .lempty{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .lnote{color:rgba(28,28,30,.4)}
+ #ov.lt .lst .agrow{background:rgba(0,0,0,.04)}
+ #ov.lt .lst .agrow .agtime{color:#1C1C1E}
+ #ov.lt .lst .agrow .agend{color:rgba(28,28,30,.5)}
+ #ov.lt .lst .agrow .agname{color:#1C1C1E}
+ #ov.lt .lst .agrow .agloc{color:rgba(28,28,30,.5)}
+ #ov.lt .lst .agrow.day .agtime{color:rgba(28,28,30,.6)}
+ #ov.lt .lst .agempty{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .wrow{background:rgba(0,0,0,.04)}
+ #ov.lt .lst .wrow .wname{color:#1C1C1E}
+ #ov.lt .lst .wrow .wwhen{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .wrow .wst{color:rgba(28,28,30,.7)}
+ #ov.lt .lst .wclose{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .wbig{color:#1C1C1E}
+ #ov.lt .lst .wsub{color:rgba(28,28,30,.55)}
+ #ov.lt .lst .wbtn.reset{background:rgba(0,0,0,.08);color:#1C1C1E}
+ #ov.lt .cbtn.stop{color:#A2381F}
+ #ov.lt .cbtn.on{color:#A96A0F}
+ #ov.lt .lst .wrow.wet .wst,#ov.lt .lst .wwarn,#ov.lt .lst .lbtn.ask{color:#A2381F}
+ /* пульт телевизора в светлой теме */
+ #ov.lt .tvx{background:#F6F6F8;color:#1C1C1E;box-shadow:0 6px 24px rgba(0,0,0,.10)}
+ #ov.lt .tvx .txsub,#ov.lt .tvx .txlab,#ov.lt .tvx .txv span{color:#7A7A82}
+ #ov.lt .tvx .tx{background:radial-gradient(circle at 35% 30%,#FFFFFF,#E3E3E8 70%);
+       border:1px solid rgba(0,0,0,.06);box-shadow:0 3px 6px rgba(0,0,0,.16)}
+ #ov.lt .tvx .tx.down{box-shadow:0 1px 3px rgba(0,0,0,.2);filter:brightness(.96)}
+ #ov.lt .tvx .tx svg{stroke:#2A2A2E}
+ #ov.lt .tvx .tx svg.fl{fill:#2A2A2E;stroke:none}
+ #ov.lt .tvx .tx.txpw.on svg{stroke:#2A1A08}
+ #ov.lt .tvx .txwheel .ar{fill:#3A3A40}
+ #ov.lt .tvx .txvol{background:#E8E8ED;box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 3px 6px rgba(0,0,0,.10)}
+ #ov.lt .tvx .txv.down{background:rgba(0,0,0,.05)}
+ #ov.lt .tvx .txapp{background:#E8E8ED;color:#1C1C1E;box-shadow:0 2px 4px rgba(0,0,0,.10)}
+ #ov.lt .tvx .txapp.now{background:#F0A33A;color:#2A1A08}
+ /* ---- шапка пульта и круглые кнопки (1.23) ---- */
+ #ov.hashead .close{display:none}
+ #ov .phead{display:flex;align-items:center;width:440px;max-width:100%;box-sizing:border-box;
+            margin:0 auto 4px;padding:0 2px}
+ #ov .phead > * + *{margin-left:12px}
+ #ov .phname{flex:1;min-width:0;text-align:center}
+ #ov .phttl{color:#fff;font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .phsub{color:rgba(255,255,255,.55);font-size:13px;margin-top:2px;min-height:16px;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .hbtn{flex:0 0 46px;width:46px;height:46px;border-radius:50%;box-sizing:border-box;
+           background:radial-gradient(circle at 35% 30%,#45464C,#2A2B30 70%);
+           border:1px solid rgba(255,255,255,.07);box-shadow:0 4px 8px rgba(0,0,0,.45);
+           display:flex;align-items:center;justify-content:center;cursor:pointer;
+           user-select:none;-webkit-user-select:none;touch-action:manipulation;
+           color:#E8E8EC;font-size:28px;font-weight:400;line-height:1}
+ #ov .hbtn svg{color:inherit;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;
+               stroke-linecap:round;stroke-linejoin:round}
+ #ov .hbtn.down{transform:translateY(1px);box-shadow:0 2px 4px rgba(0,0,0,.5)}
+ #ov .hbtn.on{background:radial-gradient(circle at 40% 35%,#FFB24D,#E08A2D 75%);color:#2A1A08}
+ #ov .hbtn.ghost{visibility:hidden}
+ #ov .hbtn.at{position:absolute;margin:-22px 0 0 -22px;width:44px;height:44px;z-index:2}
+ #ov .hbtn.cold{color:#5AA8F0} #ov .hbtn.warm{color:#F2A23A}
+ #ov .stagebox{position:relative;margin:0 auto}
+ #ov .vals{display:flex;justify-content:center;margin:2px auto 6px;color:rgba(255,255,255,.78);
+           font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+ #ov .vals > * + *{margin-left:26px}
+ #ov .vals{align-items:center}
+ #ov .vals > div:not(.hbtn){min-width:84px;text-align:center}
+ #ov .vals small{display:block;font-size:12px;font-weight:500;color:rgba(255,255,255,.5);margin-bottom:1px}
+ #ov.lt .phttl{color:#1C1C1E}
+ #ov.lt .phsub{color:rgba(28,28,30,.55)}
+ #ov.lt .hbtn{background:radial-gradient(circle at 35% 30%,#FFFFFF,#E3E3E8 70%);
+              border:1px solid rgba(0,0,0,.06);box-shadow:0 3px 6px rgba(0,0,0,.16);color:#2A2A2E}
+ #ov.lt .hbtn.down{box-shadow:0 1px 3px rgba(0,0,0,.2)}
+ #ov.lt .hbtn.on{background:radial-gradient(circle at 40% 35%,#FFB24D,#E08A2D 75%);color:#2A1A08}
+ #ov.lt .hbtn.cold{color:#2F7DC4} #ov.lt .hbtn.warm{color:#D9822B}
+ #ov.lt .vals{color:rgba(28,28,30,.85)}
+ #ov.lt .vals small{color:rgba(28,28,30,.5)}
 </style></head><body>
 <a id="back" href="./">← Панели</a>
 <div id="cols"></div>
@@ -764,7 +876,37 @@ var ovDownBg = false;
 ov.addEventListener('click', function(e){ if(e.target===ov && ovDownBg) closeOv(); });
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeOv(); });
 
+/* Тема панели по классу корня SVG - как у полей страницы (pageBg). */
+function themeName(){
+  var root = host.querySelector('svg');
+  var cls = (root && root.getAttribute && root.getAttribute('class')) || '';
+  return cls.indexOf('graphite') >= 0 ? 'graphite' : cls.split(' ')[0];
+}
+function ovLight(){
+  var n = themeName();
+  return !!PAGE_BG[n] && n !== 'dark' && n !== 'graphite';
+}
+/* Цвета для пультов, которые рисуются скриптом (шар, ручка, колесо). */
+function ovPal(){
+  return ovLight()
+    ? {lt: true, ink: '#1C1C1E', dim: 'rgba(28,28,30,.55)', track: 'rgba(0,0,0,.10)',
+       face: '#F4F4F6', faceEdge: 'rgba(0,0,0,.10)', shadow: 'rgba(0,0,0,.16)',
+       knob: '#FFFFFF', knobEdge: 'rgba(0,0,0,.30)', off: 'rgba(0,0,0,.30)', offKnob: '#A4A6AC',
+       halo: PAGE_BG[themeName()] || '#E6E6E9', slot: '#B6B7BD', drum: '#DCDDE2',
+       wheelA: '#FFFFFF', wheelB: '#D3D4DA', wheelEdge: 'rgba(0,0,0,.08)'}
+    : {lt: false, ink: '#FFFFFF', dim: 'rgba(255,255,255,.55)', track: 'rgba(255,255,255,.14)',
+       face: '#2E2F34', faceEdge: 'rgba(255,255,255,.08)', shadow: 'rgba(0,0,0,.35)',
+       knob: '#F2F2F4', knobEdge: '#1C1D20', off: 'rgba(255,255,255,.42)', offKnob: '#8A8C92',
+       halo: '#1C1D20', slot: '#0E0F11', drum: '#3A3B40',
+       wheelA: '#4A4B52', wheelB: '#232428', wheelEdge: 'rgba(255,255,255,.07)'};
+}
 function openOv(nodes){ 
+  // Во весь экран, сплошным цветом поля панели; у светлых тем - светлое.
+  var lt = ovLight();
+  ov.classList.toggle('lt', lt);
+  ov.style.background = PAGE_BG[themeName()] || '#101012';
+  ov.classList.toggle('hashead', nodes.some(function(n){
+    return n.classList && n.classList.contains('phead'); }));
   while(ov.children.length>1) ov.removeChild(ov.lastChild);
   nodes.forEach(function(n){ ov.appendChild(n); });
   ov.classList.add('open'); paused=true;
@@ -800,13 +942,23 @@ function stepRow(label, opts){
   keys.appendChild(minus); keys.appendChild(plus);
   row.appendChild(lab); row.appendChild(num); row.appendChild(keys);
 
+  function paint(){ num.textContent = opts.read() + (opts.unit || ''); }
+  paint();
+  opts.paint = paint;
+  stepKeys(minus, plus, opts);
+  row.repaint = paint;
+  row.el = row;
+  return row;
+}
+
+
+/* Кнопки шага − / +: короткое нажатие - шаг, удержание разгоняется.
+   Отправка отложена на 300 мс после последнего нажатия. Общая для ряда
+   «метка − число +» и для кнопок вокруг шара и ручки (1.23). */
+function stepKeys(minus, plus, opts){
   var lo = opts.min === undefined ? 0 : opts.min;
   var hi = opts.max === undefined ? 100 : opts.max;
   var timer = null, hold = null, pending = null;
-
-  function paint(){ num.textContent = opts.read() + (opts.unit || ''); }
-  paint();
-
   function flush(){
     pending = null;
     Promise.resolve(opts.send()).catch(function(e){
@@ -817,13 +969,14 @@ function stepRow(label, opts){
     var v = Math.max(lo, Math.min(hi, opts.read() + d));
     if(v === opts.read()) return;
     opts.write(v);
-    paint();
+    if(opts.paint) opts.paint();
     if(pending) clearTimeout(pending);
-    pending = setTimeout(flush, 300);
+    pending = setTimeout(flush, opts.delay || 300);
   }
-  function press(d){
+  function press(d, elm){
     return function(ev){
       ev.preventDefault();
+      elm.classList.add('down');
       bump(d);
       var fast = 0;
       hold = setTimeout(function(){
@@ -838,29 +991,55 @@ function stepRow(label, opts){
     if(hold) clearTimeout(hold);
     if(timer) clearInterval(timer);
     hold = timer = null;
+    minus.classList.remove('down'); plus.classList.remove('down');
   }
+  var st = opts.step || 1;
   ['mousedown','touchstart'].forEach(function(e){
-    minus.addEventListener(e, press(-(opts.step || 1)), {passive:false});
-    plus.addEventListener(e, press(opts.step || 1), {passive:false});
+    minus.addEventListener(e, press(-st, minus), {passive:false});
+    plus.addEventListener(e, press(st, plus), {passive:false});
   });
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(e){
     minus.addEventListener(e, release);
     plus.addEventListener(e, release);
   });
-  row.repaint = paint;
-  row.el = row;
-  return row;
 }
 
+/* Шапка пульта (1.23), как у кондиционера: «назад» слева, название и
+   состояние посередине, питание справа. Крестик окна при ней не нужен. */
+var HICON = {
+  back:  '<path d="M15 5l-7 7 7 7"/>',
+  power: '<path d="M12 3v9"/><path d="M6.5 6.5a8 8 0 1 0 11 0"/>'
+};
+function hbtn(cls, html, fn){
+  var b = el('div', 'hbtn' + (cls ? ' ' + cls : ''));
+  if(html) b.innerHTML = html;
+  if(fn) b.onclick = fn;
+  return b;
+}
+function hsvg(path){ return '<svg viewBox="0 0 24 24">' + path + '</svg>'; }
+function padHead(title, power){
+  var h = el('div', 'phead');
+  h.appendChild(hbtn('', hsvg(HICON.back), function(){ closeOv(); }));
+  var nm = el('div', 'phname');
+  nm.appendChild(el('div', 'phttl', title || ''));
+  var sub = el('div', 'phsub');
+  nm.appendChild(sub);
+  h.appendChild(nm);
+  h.appendChild(power || hbtn('ghost'));
+  h.sub = sub;
+  return h;
+}
 
-function powerRow(node){
+function powerRow(node, round){
   var st = {on: node.getAttribute('data-state') === '1'};
-  var row = el('div', 'pw');
+  // round - круглая кнопка для шапки пульта (1.23), иначе прежняя плашка
+  var row = round ? hbtn('hpw', hsvg(HICON.power)) : el('div', 'pw');
   var led = el('span', 'led'), label = el('span');
-  row.appendChild(led); row.appendChild(label);
+  if(!round){ row.appendChild(led); row.appendChild(label); }
   function paint(){
     row.classList.toggle('on', st.on);
-    label.textContent = st.on ? 'Включено' : 'Выключено';
+    if(!round) label.textContent = st.on ? 'Включено' : 'Выключено';
+    if(st.onPaint) st.onPaint();
   }
   paint();
   row.onclick = function(){
@@ -1014,54 +1193,84 @@ function padSphere(node){
   var rot = { x: (x - .5) * YAW, y: -(lvl - .5) * PITCH };
   function hex(c){ c = (c || '#888888').replace('#', ''); return [0, 2, 4].map(function(i){ return parseInt(c.substr(i, 2), 16); }); }
   var COLD = hex(node.getAttribute('data-cold') || '#56AAFF'), WARM = hex(node.getAttribute('data-warm') || '#FF9337');
-  var MID = [236, 230, 220], DARK = [20, 21, 24];
+  var MID = [236, 230, 220], PAL = ovPal();
+  // Тень шара и «стекло» выключенного: в светлой теме - светло-серые,
+  // тёмный шар на светлом поле выглядел дырой.
+  var DARK = PAL.lt ? [92, 94, 102] : [20, 21, 24], BASE = PAL.lt ? [206, 207, 212] : [46, 47, 52];
   function mix(a, b, f){ return a.map(function(v, i){ return v + (b[i] - v) * f; }); }
   function css(a, al){ return 'rgba(' + a.map(Math.round).join(',') + ',' + (al === undefined ? 1 : al) + ')'; }
   function hue(t){ return t < .5 ? mix(COLD, MID, t * 2) : mix(MID, WARM, (t - .5) * 2); }
 
-  var side = Math.round(Math.min(window.innerWidth * 0.86, window.innerHeight * 0.5, 420));
+  /* С 1.23: шапка как у кондиционера (назад, название, питание), кнопки
+     − / + вокруг шара вместо подписей: вверх-вниз - яркость, влево-вправо
+     - теплота, как и сам жест. Проценты - строкой под шаром. */
+  var side = Math.round(Math.min(window.innerWidth * 0.94, window.innerHeight * 0.56, 460));
+  var box = el('div', 'stagebox');
+  box.style.width = side + 'px'; box.style.height = side + 'px';
   var stage = el('div'); stage.id = 'sphstage';
   stage.style.width = side + 'px'; stage.style.height = side + 'px';
   var cv = document.createElement('canvas'); stage.appendChild(cv);
-  var title = el('div', 'ttl', node.getAttribute('data-title') || 'Подсветка');
+  box.appendChild(stage);
   var hint = el('div', 'hint', 'Крутите шар: вверх-вниз — яркость, влево-вправо — теплота');
-  var power = powerRow(node);
-  var rows = [];
-  var bright = stepRow('Яркость', {
-    unit: ' %',
-    read:  function(){ return Math.round(lvl * 100); },
-    write: function(v){ rot.y -= (v / 100 - lvl) * PITCH; lvl = v / 100; draw(); },
-    send:  function(){ return send(); }
-  });
-  rows.push(bright);
-  var warm = null;
-  if (hasTemp){
-    warm = stepRow('Тёплый', {
-      unit: ' %',
-      read:  function(){ return Math.round(x * 100); },
-      write: function(v){ rot.x += (v / 100 - x) * YAW; x = v / 100; draw(); },
-      send:  function(){ return send(); }
-    });
-    rows.push(warm);
+  var power = powerRow(node, true);
+  var head = padHead(node.getAttribute('data-title') || 'Подсветка', power.el);
+  var vals = el('div', 'vals'), vB = el('div'), vT = el('div');
+  vals.appendChild(vB); if (hasTemp) vals.appendChild(vT);
+  function paintVals(){
+    vB.innerHTML = '<small>яркость</small>' + Math.round(lvl * 100) + ' %';
+    if (hasTemp) vT.innerHTML = '<small>теплота</small>' + Math.round(x * 100) + ' %';
+    head.sub.textContent = power.on ? 'Включено' : 'Выключено';
   }
-  openOv([title, stage].concat(rows, [power.el, hint]));
+  power.onPaint = paintVals;
+  // Кнопки на окружности за шкалами: те же r и R, что в draw().
+  var GR = side * .27, GRR = GR + Math.max(11, GR * .12), GB = GRR + 31;
+  function ringBtn(cls, deg, text){
+    var b = hbtn('at' + (cls ? ' ' + cls : ''), '', null);
+    b.textContent = text;
+    var a = deg * Math.PI / 180;
+    b.style.left = (side / 2 + GB * Math.cos(a)).toFixed(1) + 'px';
+    b.style.top = (side / 2 + GB * Math.sin(a)).toFixed(1) + 'px';
+    box.appendChild(b); return b;
+  }
+  var bPlus = ringBtn('', 270, '+'), bMinus = ringBtn('', 90, '−');
+  stepKeys(bMinus, bPlus, {
+    read:  function(){ return Math.round(lvl * 100); },
+    write: function(v){ touched = true; rot.y -= (v / 100 - lvl) * PITCH; lvl = v / 100; draw(); },
+    send:  function(){ return send(); },
+    paint: paintVals
+  });
+  if (hasTemp){
+    var tMinus = ringBtn('cold', 150, '−'), tPlus = ringBtn('warm', 30, '+');
+    stepKeys(tMinus, tPlus, {
+      read:  function(){ return Math.round(x * 100); },
+      write: function(v){ touched = true; rot.x += (v / 100 - x) * YAW; x = v / 100; draw(); },
+      send:  function(){ return send(); },
+      paint: paintVals
+    });
+  }
+  paintVals();
+  openOv([head, box, vals, hint]);
 
   function draw(){
     var dpr = window.devicePixelRatio || 1, W = side, H = side;
     if (cv.width !== Math.round(W * dpr)){ cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
     var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-    var cx = W / 2, cy = H / 2, r = W * .3, lit = power.on || touched;
-    var lv = lit ? lvl : 0, h = hue(x), c = mix(DARK, h, .18 + .82 * (lit ? lvl : .25));
+    var cx = W / 2, cy = H / 2, r = W * .27, lit = power.on || touched;
+    /* Выключенный шар не серый: в нём видно, каким цветом лента
+       загорится, - бледно, без свечения. */
+    var lv = lit ? lvl : 0, h = hue(x);
+    var c = lit ? mix(PAL.lt ? BASE : DARK, h, .18 + .82 * lvl) : mix(BASE, h, PAL.lt ? .6 : .4);
     if (lit){
       var hr = Math.min(r * (1.45 + .5 * lv), W / 2 * .98);
       var halo = g.createRadialGradient(cx, cy, r * .7, cx, cy, hr);
       halo.addColorStop(0, css(h, .5 * lv)); halo.addColorStop(1, css(h, 0));
       g.fillStyle = halo; g.beginPath(); g.arc(cx, cy, hr, 0, 7); g.fill();
     }
-    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.arc(cx, cy + r * .1, r, 0, 7); g.fill();
+    g.fillStyle = PAL.shadow; g.beginPath(); g.arc(cx, cy + r * .1, r, 0, 7); g.fill();
     var body = g.createRadialGradient(cx - r * .32, cy - r * .36, r * .08, cx, cy, r * 1.04);
-    if (lit){ body.addColorStop(0, css(mix(c, [255,255,255], .25 * lv))); body.addColorStop(.6, css(mix(c, DARK, .25))); body.addColorStop(1, css(mix(c, DARK, .78))); }
-    else { body.addColorStop(0, '#585A60'); body.addColorStop(.6, '#2E2F34'); body.addColorStop(1, '#121316'); }
+    body.addColorStop(0, css(mix(c, [255,255,255], lit ? .25 * lv : (PAL.lt ? .45 : .18))));
+    body.addColorStop(.6, css(mix(c, DARK, .25)));
+    body.addColorStop(1, css(mix(c, DARK, PAL.lt ? .6 : .78)));
     g.fillStyle = body; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
     // соты
     var G = sphereGeo(9), cyw = Math.cos(rot.x), syw = Math.sin(rot.x), cp = Math.cos(rot.y), sp = Math.sin(rot.y);
@@ -1075,36 +1284,31 @@ function padSphere(node){
     });
     g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();
     g.lineJoin = 'round'; g.lineWidth = Math.max(.6, r / 160);
-    g.strokeStyle = lit ? css(mix(c, DARK, .5), .45) : 'rgba(150,152,158,.22)'; g.stroke(path);
+    g.strokeStyle = css(mix(c, DARK, .5), lit ? .45 : .3); g.stroke(path);
     var rim = g.createRadialGradient(cx, cy, r * .55, cx, cy, r);
-    rim.addColorStop(0, 'rgba(16,17,20,0)'); rim.addColorStop(1, 'rgba(16,17,20,.55)');
+    rim.addColorStop(0, css(DARK, 0)); rim.addColorStop(1, css(DARK, PAL.lt ? .35 : .55));
     g.fillStyle = rim; g.fillRect(cx - r, cy - r, 2 * r, 2 * r); g.restore();
     var spc = g.createRadialGradient(cx - r * .36, cy - r * .42, 0, cx - r * .36, cy - r * .42, r * .42);
-    spc.addColorStop(0, 'rgba(255,255,255,' + (lit ? .55 : .25) + ')'); spc.addColorStop(1, 'rgba(255,255,255,0)');
+    spc.addColorStop(0, 'rgba(255,255,255,' + (lit ? .55 : (PAL.lt ? .6 : .25)) + ')'); spc.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = spc; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
-    g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke();
+    g.strokeStyle = PAL.lt ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.14)'; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke();
     // шкалы: слева яркость, снизу теплота
     var R = r + Math.max(11, r * .12), sw = Math.max(3, r * .035), B0 = 165, B1 = 255, T0 = 140, T1 = 40;
     function rad(d){ return d * Math.PI / 180; }
     g.lineCap = 'round'; g.lineWidth = sw;
-    g.strokeStyle = 'rgba(255,255,255,.14)'; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B1)); g.stroke();
-    g.strokeStyle = lit ? '#F2A23A' : '#5A5C62'; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B0 + (B1 - B0) * lvl)); g.stroke();
+    g.strokeStyle = PAL.track; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B1)); g.stroke();
+    g.strokeStyle = lit ? '#F2A23A' : PAL.offKnob; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B0 + (B1 - B0) * lvl)); g.stroke();
     for (var i = 0; i < 22; i++){
       var f = i / 21, a = rad(T0 - (T0 - T1) * f);
-      g.fillStyle = lit ? css(hue(f)) : 'rgba(150,152,158,.35)';
+      // точки теплоты цветные всегда: по ним видно, какой будет свет
+      g.fillStyle = css(PAL.lt ? mix(hue(f), [90, 92, 100], .18) : hue(f), lit ? 1 : .8);
       g.beginPath(); g.arc(cx + R * Math.cos(a), cy + R * Math.sin(a), sw * .7, 0, 7); g.fill();
     }
     [T0 - (T0 - T1) * x, B0 + (B1 - B0) * lvl].forEach(function(d){
       var a = rad(d);
-      g.fillStyle = lit ? '#F2F2F4' : '#8A8C92'; g.strokeStyle = '#1C1D20'; g.lineWidth = 2;
+      g.fillStyle = lit ? PAL.knob : PAL.offKnob; g.strokeStyle = PAL.knobEdge; g.lineWidth = 2;
       g.beginPath(); g.arc(cx + R * Math.cos(a), cy + R * Math.sin(a), sw * 1.7, 0, 7); g.fill(); g.stroke();
     });
-    g.fillStyle = 'rgba(255,255,255,.5)'; g.font = '500 12px ' + getComputedStyle(document.body).fontFamily;
-    g.textAlign = 'center'; g.fillText('ярче', cx + R * Math.cos(rad(B1)), cy + R * Math.sin(rad(B1)) - 14);
-    g.textAlign = 'right'; g.fillText('тусклее', cx + R * Math.cos(rad(B0)) - 12, cy + R * Math.sin(rad(B0)) + 4);
-    g.textAlign = 'center';
-    g.fillText('холодный', cx + (R + 22) * Math.cos(rad(128)), cy + (R + 22) * Math.sin(rad(128)) + 12);
-    g.fillText('тёплый', cx + (R + 22) * Math.cos(rad(52)), cy + (R + 22) * Math.sin(rad(52)) + 12);
   }
 
   var timer = null;
@@ -1131,7 +1335,7 @@ function padSphere(node){
     var nx = clamp(x + (hasTemp ? ax / YAW : 0)), nl = clamp(lvl - ay / PITCH);
     rot.x += (nx - x) * YAW; rot.y -= (nl - lvl) * PITCH;
     x = nx; lvl = nl;
-    draw(); bright.repaint(); if (warm) warm.repaint();
+    draw(); paintVals();
   }
   var anim = null, vel = { x: 0, y: 0 }, last = null, touched = false;
   // крутят выключенную - на шаре сразу видно, каким будет свет
@@ -1143,7 +1347,7 @@ function padSphere(node){
   function at(ev){
     var p = evPoint(ev);
     if (!last || p.clientX === undefined) return;
-    var dx = p.clientX - last.x, dy = p.clientY - last.y, dt = Math.max(8, Date.now() - last.t), r = side * .3;
+    var dx = p.clientX - last.x, dy = p.clientY - last.y, dt = Math.max(8, Date.now() - last.t), r = side * .27;
     last = { x: p.clientX, y: p.clientY, t: Date.now() };
     if (!dx && !dy) return;
     move(dx / r, dy / r);
@@ -1246,7 +1450,9 @@ function padXY(node){
    скорость вентилятора. */
 function padAC(node){
   // С 1.15 у кондиционера колесо как на плитке; фанкойл живёт со старой дугой.
-  if(node.getAttribute('data-kind') === 'ac') return padDisk(node);
+  // look: classic - прежний пульт со шкалой, как до 1.15.
+  if(node.getAttribute('data-kind') === 'ac' && node.getAttribute('data-look') !== 'classic')
+    return padDisk(node);
   return padArc(node);
 }
 
@@ -1266,9 +1472,21 @@ function padDisk(node){
   var reloadT = null, busy = false, wired = false;
   var G = null, D = null, pos = 0, temp = 0, gest = null;
 
+  /* На ноутбуке пульт во весь экран выглядел плакатом. С 1.23 он не
+     больше плитки 4×4 (722 px): на телефоне и планшете на стене это всё
+     равно весь экран, на большом мониторе - карточка по центру. */
+  var PADMAX = 722;
+  function size(){
+    var w = Math.max(240, Math.min(Math.round(window.innerWidth), PADMAX));
+    var h = Math.max(200, Math.min(Math.round(window.innerHeight), PADMAX));
+    var boxed = w < window.innerWidth - 1 || h < window.innerHeight - 1;
+    wrap.classList.toggle('boxed', boxed);
+    wrap.style.width = boxed ? w + 'px' : '';
+    wrap.style.height = boxed ? h + 'px' : '';
+    return [w, h];
+  }
   function url(){
-    var w = Math.max(240, Math.round(window.innerWidth));
-    var h = Math.max(200, Math.round(window.innerHeight));
+    var sz = size(), w = sz[0], h = sz[1];
     return 'tile/' + encodeURIComponent(NAME) + '/' + node.getAttribute('data-i')
          + '.svg?w=' + w + '&h=' + h + '&view=pad' + themeQ();
   }
@@ -1751,10 +1969,13 @@ function padLevel(node){
   var H = Math.round(Math.min(window.innerHeight * 0.5, 380));
   var box = el('div'); box.id = 'lvl'; box.className = 'roll';
   box.style.width = W + 'px'; box.style.height = H + 'px';
-  var title = el('div','ttl', node.getAttribute('data-title') || 'Яркость');
-  var hint = el('div','hint','Крутите колесо вверх или вниз · стрелками по проценту');
-  var power = powerRow(node);
-  var lvl = parseFloat(node.getAttribute('data-level') || '0');
+  var hint = el('div','hint','Крутите колесо вверх или вниз · кнопками − / + по проценту');
+  // С 1.23: шапка как у кондиционера, под колесом «− число +».
+  var power = powerRow(node, true);
+  var head = padHead(node.getAttribute('data-title') || 'Яркость', power.el);
+  power.onPaint = function(){ head.sub.textContent = power.on ? 'Включено' : 'Выключено'; };
+  power.onPaint();
+  var lvl = parseFloat(node.getAttribute('data-level') || '0'), PAL = ovPal();
   var NS = 'http://www.w3.org/2000/svg', KW = Math.round(W * 0.56), KH = H - 8;
   var KX = Math.round((W - KW - 22) / 2), KY = 4;
   var svg = document.createElementNS(NS, 'svg');
@@ -1767,13 +1988,13 @@ function padLevel(node){
   mk('defs', {}).innerHTML = '<linearGradient id="lvcyl" x1="0" y1="0" x2="0" y2="1">'
     + '<stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset=".5" stop-color="#fff" stop-opacity=".1"/>'
     + '<stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>';
-  mk('rect', {x: KX - 5, y: KY - 4, width: KW + 10, height: KH + 8, rx: 7, fill: '#0E0F11',
-              stroke: 'rgba(255,255,255,.08)'});
-  mk('rect', {x: KX, y: KY, width: KW, height: KH, rx: 3, fill: '#3A3B40'});
+  mk('rect', {x: KX - 5, y: KY - 4, width: KW + 10, height: KH + 8, rx: 7, fill: PAL.slot,
+              stroke: PAL.faceEdge});
+  mk('rect', {x: KX, y: KY, width: KW, height: KH, rx: 3, fill: PAL.drum});
   var ribs = mk('g', {});
   mk('rect', {x: KX, y: KY, width: KW, height: KH, rx: 3, fill: 'url(#lvcyl)'});
   var BX = KX + KW + 18;
-  mk('rect', {x: BX, y: KY, width: 5, height: KH, rx: 2.5, fill: 'rgba(255,255,255,.12)'});
+  mk('rect', {x: BX, y: KY, width: 5, height: KH, rx: 2.5, fill: PAL.track});
   var bar = mk('rect', {x: BX, width: 5, rx: 2.5, fill: '#F2A23A'});
   box.appendChild(svg);
   var turn = lvl * 9;            // поворот колеса в шагах рёбер, копится за пальцем
@@ -1801,13 +2022,18 @@ function padLevel(node){
       .then(function(){ return pub(node.getAttribute('data-bright'), Math.round(lvl * bmax)); })
       .catch(function(e){ flash('Не удалось: ' + e.message); });
   }
-  var step = stepRow('Яркость', {
-    unit: ' %',
+  var srow = el('div', 'vals'), sMinus = hbtn('', '', null), sPlus = hbtn('', '', null), sNum = el('div');
+  sMinus.textContent = '−'; sPlus.textContent = '+';
+  srow.appendChild(sMinus); srow.appendChild(sNum); srow.appendChild(sPlus);
+  var step = {repaint: function(){ sNum.innerHTML = '<small>яркость</small>' + Math.round(lvl * 100) + ' %'; }};
+  step.repaint();
+  stepKeys(sMinus, sPlus, {
     read:  function(){ return Math.round(lvl * 100); },
     write: function(v){ turn += (v / 100 - lvl) * KH / 15; lvl = v / 100; place(); },
-    send:  send
+    send:  send,
+    paint: step.repaint
   });
-  openOv([title, box, step, power.el, hint]);
+  openOv([head, box, srow, hint]);
   var y0 = 0, l0 = 0, t0 = 0;
   function begin(ev){ var p = evPoint(ev); y0 = p.clientY; l0 = lvl; t0 = turn; }
   function at(ev){
@@ -1877,8 +2103,9 @@ function padCurtain(node, axis){
      пульта для этого не заводим - расходятся только ось и подписи. */
   var vert = axis === 'y';
   var i = node.getAttribute('data-i');
-  var w = Math.min(Math.round(window.innerWidth * 0.90), 1400);
-  var h = Math.min(Math.round(window.innerHeight * 0.62), 900);
+  // не больше плитки 4×4: на ноутбуке окно во всю ширину было плакатом
+  var w = Math.min(Math.round(window.innerWidth * 0.90), 722);
+  var h = Math.min(Math.round(window.innerHeight * 0.62), 560);
   var url = 'tile/' + encodeURIComponent(NAME) + '/' + i + '.svg?w=' + w + '&h=' + h + themeQ();
 
   var card = el('div','card'); card.textContent = '…';
@@ -2296,7 +2523,7 @@ function padThermostat(node){
   var value = parseFloat(node.getAttribute('data-target') || '20');
   var current = parseFloat(node.getAttribute('data-current') || 'NaN');
   var live = node.getAttribute('data-live') === '1';
-  var timer = null, dragging = false;
+  var timer = null, dragging = false, PAL = ovPal();
 
   var S = Math.min(window.innerWidth - 40, Math.round(window.innerHeight * 0.62), 460);
   var wrap = el('div'); wrap.id = 'tdial';
@@ -2358,25 +2585,25 @@ function padThermostat(node){
     var major = (v - t0) % every === 0, a = degOf(v);
     var p1 = pt(a, RA + S * 0.025), p2 = pt(a, RA + S * (major ? 0.057 : 0.043));
     mk('line', {x1: p1[0].toFixed(1), y1: p1[1].toFixed(1), x2: p2[0].toFixed(1), y2: p2[1].toFixed(1),
-                stroke: '#fff', 'stroke-opacity': major ? .8 : .4, 'stroke-width': major ? 2 : 1.2, 'stroke-linecap': 'round'});
+                stroke: PAL.ink, 'stroke-opacity': major ? .8 : .4, 'stroke-width': major ? 2 : 1.2, 'stroke-linecap': 'round'});
     if(major){
       var lp = pt(a, RA + S * 0.096 + LAB * 0.2);
       var tl = mk('text', {x: lp[0].toFixed(1), y: (lp[1] + LAB * 0.36).toFixed(1), 'text-anchor': 'middle',
-                           fill: 'rgba(255,255,255,.55)', 'font-size': LAB, 'font-weight': 600});
+                           fill: PAL.dim, 'font-size': LAB, 'font-weight': 600});
       tl.textContent = v;
     }
   }
-  var pBg = mk('path', {fill: 'none', stroke: 'rgba(255,255,255,.14)', 'stroke-width': TW, 'stroke-linecap': 'round',
+  var pBg = mk('path', {fill: 'none', stroke: PAL.track, 'stroke-width': TW, 'stroke-linecap': 'round',
                         d: arc(START, START + SWEEP, RA)});
   var pArc = mk('path', {fill: 'none', 'stroke-width': TW, 'stroke-linecap': 'round'});
-  var lCurH = mk('line', {stroke: '#1C1D20', 'stroke-width': Math.max(6, S * 0.025), 'stroke-linecap': 'round'});
-  var lCur = mk('line', {stroke: '#fff', 'stroke-width': Math.max(3, S * 0.0114), 'stroke-linecap': 'round'});
-  mk('circle', {cx: CX, cy: CY + S * 0.028, r: RK, fill: '#000', opacity: .22});
+  var lCurH = mk('line', {stroke: PAL.halo, 'stroke-width': Math.max(6, S * 0.025), 'stroke-linecap': 'round'});
+  var lCur = mk('line', {stroke: PAL.ink, 'stroke-width': Math.max(3, S * 0.0114), 'stroke-linecap': 'round'});
+  mk('circle', {cx: CX, cy: CY + S * 0.028, r: RK, fill: '#000', opacity: PAL.lt ? .12 : .22});
   var gd = gear(RK, Math.max(0.8, 0.8 * S / 280));
-  mk('path', {d: gd, fill: '#2E2F34', stroke: 'rgba(255,255,255,.08)'});
+  mk('path', {d: gd, fill: PAL.face, stroke: PAL.faceEdge});
   mk('path', {d: gd, fill: 'url(#tdgl)'});
   var lPtr = mk('line', {'stroke-width': Math.max(3, S * 0.013), 'stroke-linecap': 'round'});
-  var cKnob = mk('circle', {r: Math.max(6, S * 0.023), stroke: '#1C1D20', 'stroke-width': Math.max(2, S * 0.007)});
+  var cKnob = mk('circle', {r: Math.max(6, S * 0.023), stroke: PAL.knobEdge, 'stroke-width': Math.max(2, S * 0.007)});
   var tBig = mk('text', {'text-anchor': 'middle', 'class': 'tbig'});
   var tSub = mk('text', {'text-anchor': 'middle', 'class': 'tsub'});
   var tMode = mk('text', {'text-anchor': 'middle', 'class': 'tmode'});
@@ -2389,7 +2616,7 @@ function padThermostat(node){
   function paint(){
     // греет - оранжевая, включён и не греет - синяя, выключен - серая
     var enabled = node.getAttribute('data-enabled') !== '0';
-    var color = !enabled ? 'rgba(255,255,255,.42)' : (live ? '#FF8A3D' : '#3B8FD4');
+    var color = !enabled ? PAL.off : (live ? '#FF8A3D' : '#3B8FD4');
     var to = degOf(value);
     pArc.setAttribute('d', arc(START, to, RA));
     pArc.setAttribute('stroke', color);
@@ -2402,7 +2629,7 @@ function padThermostat(node){
     lPtr.setAttribute('stroke', color);
     var k = pt(to, RA);
     cKnob.setAttribute('cx', k[0].toFixed(1)); cKnob.setAttribute('cy', k[1].toFixed(1));
-    cKnob.setAttribute('fill', enabled ? '#F2F2F4' : '#8A8C92');
+    cKnob.setAttribute('fill', enabled ? PAL.knob : PAL.offKnob);
 
     tBig.setAttribute('x', CX); tBig.setAttribute('y', CY + S * 0.035);
     tBig.textContent = value.toFixed(digits) + '°';
@@ -2411,7 +2638,7 @@ function padThermostat(node){
     tSub.textContent = isNaN(current) ? '' : ('сейчас ' + current.toFixed(1) + '°');
     tMode.setAttribute('x', CX); tMode.setAttribute('y', S - S * 0.03);
     tMode.textContent = node.getAttribute('data-status') || '';
-    tMode.style.fill = enabled ? color : 'rgba(255,255,255,.55)';
+    tMode.style.fill = enabled ? color : PAL.dim;
   }
   /* Отправляем последнее значение, а не каждое движение пальца: головка
      иначе выстроит десяток команд в очередь. */
@@ -2433,29 +2660,39 @@ function padThermostat(node){
     paint(); send();
   }
 
-  var row = el('div','crow');
-  function button(text, cls, fn){
-    var b = el('span','cbtn' + (cls ? ' ' + cls : ''), text);
-    b.onclick = fn; row.appendChild(b); return b;
-  }
-  button('−', '', function(){ shift(-step); });
-  button('+', '', function(){ shift(step); });
-
+  /* С 1.23: шапка как у кондиционера - «назад», название, питание (если
+     задан канал режима); − и + у концов шкалы вместо ряда кнопок. */
   var power = null;
   if(node.getAttribute('data-mode-topic')){
-    var label = function(){
-      return node.getAttribute('data-enabled') === '1' ? 'Выключить' : 'Включить';
-    };
-    power = button(label(), node.getAttribute('data-enabled') === '1' ? 'on' : '', function(){
+    power = hbtn('hpw' + (node.getAttribute('data-enabled') === '1' ? ' on' : ''), hsvg(HICON.power), function(){
       toggleMode(node, function(){
         // Дальше состояние подтянет sync(): режим меняет прибор, и его
         // ответ может прийти позже нашего предположения.
-        power.textContent = label();
-        power.className = 'cbtn' + (node.getAttribute('data-enabled') === '1' ? ' on' : '');
+        power.classList.toggle('on', node.getAttribute('data-enabled') === '1');
         paint();
       });
     });
   }
+  var head = padHead(node.getAttribute('data-title') || 'Термостат', power);
+  var box = el('div', 'stagebox');
+  box.style.width = S + 'px'; box.style.height = S + 'px';
+  box.appendChild(wrap);
+  function corner(deg, text){
+    var p = pt(deg, RA + S * 0.02);
+    var b = hbtn('at', '', null); b.textContent = text;
+    // чуть внутрь от конца дуги: снаружи там подписи 14 и 30
+    var dx = (deg === START ? 1 : -1) * S * 0.055;
+    b.style.left = (p[0] + dx).toFixed(1) + 'px'; b.style.top = (p[1] + S * 0.08).toFixed(1) + 'px';
+    box.appendChild(b); return b;
+  }
+  var tMinus = corner(START, '−'), tPlus = corner(START + SWEEP, '+');
+  stepKeys(tMinus, tPlus, {
+    min: tlo, max: thi, step: step, delay: 350,
+    read:  function(){ return value; },
+    write: function(v){ value = Math.round(v / step) * step; quietUntil = Date.now() + 3000; },
+    send:  function(){ send(); },
+    paint: function(){ paint(); }
+  });
 
   /* refresh() заменяет разметку панели целиком, и ссылка на плитку
      становится битой: обновления состояния до пульта не доходят вовсе.
@@ -2477,10 +2714,7 @@ function padThermostat(node){
       var t = parseFloat(node.getAttribute('data-target') || 'NaN');
       if(!isNaN(t)) value = t;
     }
-    if(power){
-      power.textContent = node.getAttribute('data-enabled') === '1' ? 'Выключить' : 'Включить';
-      power.className = 'cbtn' + (node.getAttribute('data-enabled') === '1' ? ' on' : '');
-    }
+    if(power) power.classList.toggle('on', node.getAttribute('data-enabled') === '1');
     paint();
   }
   var ticker = setInterval(function(){
@@ -2491,7 +2725,7 @@ function padThermostat(node){
   }, 1200);
 
   paint();
-  openOv([wrap, row]);
+  openOv([head, box]);
   ovCleanup = function(){ clearInterval(ticker); };
 
   function at(ev){
@@ -2626,7 +2860,7 @@ var TVI = {
    Раскладка как у настоящего пульта (макет 15.10): сверху «назад», имя,
    вход и питание; колесо со стрелками и OK; «Назад» и «Меню» у нижних
    углов колеса; перемотка; громкость кнопками − / +, между ними без
-   звука; приложения внизу. Карточка тёмная во всех темах - как пульт в
+   звука; приложения внизу. Карточка тёмная, в светлых темах светлая (1.22) - как пульт в
    руке. Стрелки и громкость при удержании повторяют нажатие. Прежний
    светлый пульт - look: classic. */
 var TVX = {
@@ -2656,7 +2890,7 @@ function padTV(node){
   if(!base) return;
   var link = node.getAttribute('data-tv-link') === '1';
   var on = node.getAttribute('data-tv-on') === '1';
-  var dimmed = [];
+  var dimmed = [], PAL = ovPal();
 
   function press(control){
     pub(base + control + '/on', 1)
@@ -2744,12 +2978,12 @@ function padTV(node){
     arr += '<path class="ar" data-k="' + d[0] + '" d="M' + tip.join(',') + ' L' + b1.join(',') + ' L' + b2.join(',') + ' Z"/>';
   });
   wb.innerHTML = '<svg viewBox="0 0 260 260" width="260" height="260">'
-    + '<defs><radialGradient id="txface" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#4A4B52"/>'
-    + '<stop offset="1" stop-color="#232428"/></radialGradient>'
+    + '<defs><radialGradient id="txface" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="' + PAL.wheelA + '"/>'
+    + '<stop offset="1" stop-color="' + PAL.wheelB + '"/></radialGradient>'
     + '<radialGradient id="txok" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#FFB24D"/>'
     + '<stop offset="1" stop-color="#E08A2D"/></radialGradient></defs>'
-    + '<circle cx="' + C + '" cy="' + (C + 6) + '" r="' + R + '" fill="#000" opacity=".35"/>'
-    + '<path d="' + tvGear(C, C, R, 1.25) + '" fill="url(#txface)" stroke="rgba(255,255,255,.07)"/>'
+    + '<circle cx="' + C + '" cy="' + (C + 6) + '" r="' + R + '" fill="#000" opacity="' + (PAL.lt ? .14 : .35) + '"/>'
+    + '<path d="' + tvGear(C, C, R, 1.25) + '" fill="url(#txface)" stroke="' + PAL.wheelEdge + '"/>'
     + arr
     + '<circle cx="' + C + '" cy="' + (C + 3) + '" r="' + OK + '" fill="#000" opacity=".35"/>'
     + '<circle class="okb" data-k="ok" cx="' + C + '" cy="' + C + '" r="' + OK + '" fill="url(#txok)"/>'

@@ -1005,7 +1005,7 @@
     <path d="{{ k.b_track }}" class="lvl-track sph-arc" stroke-width="{{ k.sw }}"/>
     {% if k.b_fill %}<path d="{{ k.b_fill }}" class="sph-fill" stroke-width="{{ k.sw }}"/>{% endif %}
     {% for d in k.dots %}
-    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ k.dot_r }}" fill="{{ d.c }}" opacity="{{ '.95' if t.on else '.35' }}"/>
+    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ k.dot_r }}" fill="{{ d.c }}" opacity="{{ '.95' if t.on else '.8' }}"/>
     {% endfor %}
     <circle cx="{{ k.knob_t.x }}" cy="{{ k.knob_t.y }}" r="{{ k.knob_r }}" class="sph-knob"/>
     <circle cx="{{ k.knob_b.x }}" cy="{{ k.knob_b.y }}" r="{{ k.knob_r }}" class="sph-knob"/>

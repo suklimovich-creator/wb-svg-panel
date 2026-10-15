@@ -94,7 +94,8 @@ class Light(Tile):
             sphere = sphere_tile(float(ctx.opt("inner_w") or 170), float(ctx.opt("chart_h") or 170),
                                  (brightness or 0.0) / 100.0,
                                  dot_x if dot_x is not None else 0.5, on, cold, warm,
-                                 float(ctx.opt("inner_w") or 170) < 156)
+                                 float(ctx.opt("inner_w") or 170) < 156,
+                                 light=ctx.opt("theme") not in ("dark", "graphite"))
         return {
             "on": on,
             "sphere": sphere,

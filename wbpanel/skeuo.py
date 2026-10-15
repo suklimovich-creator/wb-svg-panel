@@ -321,8 +321,11 @@ def sphere_seams(cx, cy, r, yaw, pitch, freq):
     return " ".join(out)
 
 
-def sphere_tile(w, h, level, temp, on, cold, warm, compact):
-    """Шар ленты на плитке: место, цвета, соты и шкалы вокруг."""
+def sphere_tile(w, h, level, temp, on, cold, warm, compact, light=False):
+    """Шар ленты на плитке: место, цвета, соты и шкалы вокруг.
+
+    Выключенный шар не серый (1.22): в нём бледно виден цвет, которым лента
+    загорится. light - светлая тема: тени и «стекло» светло-серые."""
     if w >= h * 1.6:
         kind = "wide"
         r = h / 2.0 - 17
@@ -354,7 +357,12 @@ def sphere_tile(w, h, level, temp, on, cold, warm, compact):
 
     hue = light_hue(temp, cold, warm)
     lv = level if on else 0.0
-    col = _mix(_DARK, hue, 0.18 + 0.82 * (level if on else 0.25))
+    dark = (92, 94, 102) if light else _DARK
+    base = (206, 207, 212) if light else (46, 47, 52)
+    if on:
+        col = _mix(base if light else _DARK, hue, 0.18 + 0.82 * level)
+    else:
+        col = _mix(base, hue, 0.6 if light else 0.4)
     yaw = (temp - 0.5) * SPHERE_YAW
     pitch = -(level - 0.5) * SPHERE_PITCH
     freq = max(3, min(8, int(round(r / 11.0))))
@@ -382,11 +390,11 @@ def sphere_tile(w, h, level, temp, on, cold, warm, compact):
         "led": {"x": _r(led["x"]), "y": _r(led["y"])} if led else None,
         "text_x": _r(text_x) if text_x else None,
         "hue": _css(hue), "halo_op": round(0.5 * lv, 2), "halo_r": _r(r * (1.45 + 0.5 * lv)),
-        "c0": _css(_mix(col, (255, 255, 255), 0.25 * lv)) if on else "#585A60",
-        "c1": _css(_mix(col, _DARK, 0.25)) if on else "#2E2F34",
-        "c2": _css(_mix(col, _DARK, 0.78)) if on else "#121316",
-        "seam": _css(_mix(col, _DARK, 0.5)) if on else "#96989E",
-        "seam_op": 0.45 if on else 0.22, "seam_w": _r(max(0.5, r / 160.0)),
+        "c0": _css(_mix(col, (255, 255, 255), 0.25 * lv if on else (0.45 if light else 0.18))),
+        "c1": _css(_mix(col, dark, 0.25)),
+        "c2": _css(_mix(col, dark, 0.6 if light else 0.78)),
+        "seam": _css(_mix(col, dark, 0.5)),
+        "seam_op": 0.45 if on else 0.3, "seam_w": _r(max(0.5, r / 160.0)),
         "seams": sphere_seams(cx, cy, r, yaw, pitch, freq),
         "b_track": arc_d(B0, B1, R), "b_fill": arc_d(B0, B0 + (B1 - B0) * level, R),
         "dots": dots, "dot_r": _r(sw * 0.62), "sw": _r(sw),

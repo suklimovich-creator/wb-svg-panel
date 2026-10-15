@@ -620,7 +620,10 @@ def build_ac(tile, state):
         # колесо не помещается: половинной высоты и мелких.
         # Кегль колеса - по меньшей стороне: на высокой плитке fs считается
         # от высоты, и цифры в узкую ширину не влезали.
-        "disk": build_disk(tile.get("inner_w") or 170, tile.get("chart_h") or 170,
+        # look: classic (с 1.23) - прежние дуга на плитке и пульт со
+        # шкалой, как до 1.15.
+        "disk": None if tile.get("look") == "classic" else build_disk(
+                           tile.get("inner_w") or 170, tile.get("chart_h") or 170,
                            min(float(tile.get("fs") or 1),
                                max(1.0, (tile.get("inner_w") or 170) / 170.0)),
                            mode, on, tgt, cur, lo, hi,
@@ -635,7 +638,7 @@ def build_ac(tile, state):
                                swing=swing if swing_snap["known"] else None,
                                swing_h=swing_h if swing_h_snap["known"] else None,
                                step=float(tile.get("step", 1) or 1))
-                  if tile.get("view") == "pad" else None,
+                  if tile.get("view") == "pad" and tile.get("look") != "classic" else None,
         "enabled": on,
         "reach": None,
         "snaps": snaps,
@@ -751,6 +754,7 @@ class Ac(Tile):
             "ac_mode_now": data.get("mode", ""),
             "ac_fan_now": (ctx.dev("fan_mode") or "").strip(),
             "ac_quiet_now": "1" if "тихий" in (data.get("status") or "") else "0",
+            "look": "classic" if ctx.opt("look") == "classic" else None,
         }
 
 

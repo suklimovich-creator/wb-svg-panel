@@ -11,11 +11,14 @@
 незачем, для этого у плитки есть fields и commands.
 """
 
+import time
+
 from .geometry import _fmt, field_color, text_width
 from .registry import Tile, Zone, tile
 from .tiles import DIAL_START, DIAL_SWEEP, HEAT_MODE, HEAT_NOW, build_dial
 from .state import to_float
-from .skeuo import dimmer_layout, knob_dial
+from .skeuo import dimmer_layout, knob_dial, sphere_tile
+from .sky import drapes, roman, scene, weather_now
 
 
 def _percent(ctx, role, default_max=100.0):
@@ -82,13 +85,25 @@ class Light(Tile):
         if kelvin is not None:
             bits.append("%d K" % round(kelvin))
 
+        cold = ctx.opt("cold_color") or field_color(k_max)
+        warm = ctx.opt("warm_color") or field_color(k_min)
+        # С 1.18 лента - светящийся шар в сотах (look: classic - прежнее
+        # поле). Яркость и теплота помнятся и у выключенной.
+        sphere = None
+        if ctx.opt("look", "sphere") != "classic":
+            sphere = sphere_tile(float(ctx.opt("inner_w") or 170), float(ctx.opt("chart_h") or 170),
+                                 (brightness or 0.0) / 100.0,
+                                 dot_x if dot_x is not None else 0.5, on, cold, warm,
+                                 float(ctx.opt("inner_w") or 170) < 156)
         return {
             "on": on,
+            "sphere": sphere,
+            "low_x": sphere["text_x"] if sphere and sphere["kind"] == "wide" else None,
             "dot_x": dot_x,
             "dot_y": dot_y,
             "has_dot": dot_x is not None and dot_y is not None,
-            "cold": ctx.opt("cold_color") or field_color(k_max),
-            "warm": ctx.opt("warm_color") or field_color(k_min),
+            "cold": cold,
+            "warm": warm,
             "color": field_color(kelvin if kelvin is not None else 3000),
             "short": " · ".join(bits),
             # на узкой плитке (w: 1) полная подпись не влезает
@@ -110,6 +125,13 @@ class Light(Tile):
 
     def pad(self, ctx, data):
         out = {"bright_max": str(to_float(ctx.meta("bright", "max"), 100.0) or 100.0)}
+        if ctx.opt("look") == "classic":
+            out["look"] = "classic"
+        else:
+            # шар крутится от текущего положения, даже если цвета нет
+            out.update({"dot_x": "%.3f" % (data["dot_x"] if data.get("dot_x") is not None else 0.5),
+                        "dot_y": "%.3f" % (data["dot_y"] if data.get("dot_y") is not None else 0.5),
+                        "cold": data.get("cold", "#56AAFF"), "warm": data.get("warm", "#FF9337")})
         if ctx.has("temp"):
             out.update({
                 "temp_max": str(to_float(ctx.meta("temp", "max"), 100.0) or 100.0),
@@ -181,6 +203,20 @@ class Dimmer(Tile):
         return out
 
 
+def _window(ctx, kind):
+    """Вид за окном для штор нового вида; None - прежний вид (look: classic)."""
+    if ctx.opt("look") == "classic":
+        return None
+    w = float(ctx.opt("inner_w") or 170)
+    h = float(ctx.opt("chart_h") or 170)
+    fs = float(ctx.opt("fs") or 1.0)
+    lat, lon = ctx.opt("sky_location") or (None, None)
+    now = time.time()
+    return scene(w, h, now=now, lat=lat, lon=lon, facing=ctx.opt("facing"),
+                 weather=weather_now(ctx.state, ctx.opt("weather"), now),
+                 seed="%s|%s" % (kind, ctx.opt("title") or ""), fs=fs)
+
+
 @tile("curtain")
 class Curtain(Tile):
     """
@@ -217,10 +253,19 @@ class Curtain(Tile):
         if code is not None and int(code) in (0, 1):
             moving = "Закрывается" if int(code) == 0 else "Открывается"
 
+        lo = 0.0 if left is None else max(0.0, min(100.0, left)) / 100.0
+        ro = 0.0 if right is None else max(0.0, min(100.0, right)) / 100.0
+        sky = _window(ctx, "curtain")
         return {
             "moving": moving,
-            "left_open": 0.0 if left is None else max(0.0, min(100.0, left)) / 100.0,
-            "right_open": 0.0 if right is None else max(0.0, min(100.0, right)) / 100.0,
+            "sky": sky,
+            "drape": drapes(float(ctx.opt("inner_w") or 170), float(ctx.opt("chart_h") or 170),
+                            lo, ro, float(ctx.opt("fs") or 1.0)) if sky else None,
+            "low_x": 20 if sky else None,
+            # Процент - строкой под названием: в углу над небом он терялся.
+            "always_status": bool(sky) and float(ctx.opt("chart_h") or 170) >= 117,
+            "left_open": lo,
+            "right_open": ro,
             "known": avg is not None,
             "on": bool(avg and avg > 1),
             "status": moving or (("Открыто %d%%" % round(avg)) if avg is not None
@@ -299,9 +344,16 @@ class Roller(Tile):
         if moving and goal is not None:
             status = "%s до %d%%" % (moving, round(goal))
 
+        op = 0.0 if pos is None else max(0.0, min(100.0, pos)) / 100.0
+        sky = _window(ctx, "roller")
         return {
             "moving": moving,
-            "open": 0.0 if pos is None else max(0.0, min(100.0, pos)) / 100.0,
+            "sky": sky,
+            "roman": roman(float(ctx.opt("inner_w") or 170), float(ctx.opt("chart_h") or 170),
+                           op, float(ctx.opt("fs") or 1.0)) if sky else None,
+            "low_x": 20 if sky else None,
+            "always_status": bool(sky) and float(ctx.opt("chart_h") or 170) >= 117,
+            "open": op,
             "goal": None if goal is None else max(0.0, min(100.0, goal)) / 100.0,
             "known": pos is not None,
             "on": bool(pos and pos > 1),

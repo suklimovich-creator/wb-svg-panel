@@ -23,6 +23,7 @@ from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
                        grid_bounds, hour_ticks, label_color, label_digits, nice_step,
                        parse_duration, smooth_path, text_width)
 from .ac_disk import build_disk, build_screen
+from .skeuo import tv_tile
 from .registry import Tile, Zone, tile
 from .state import is_on, to_float
 from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
@@ -840,6 +841,16 @@ def build_tv(tile, state):
     }
 
 
+def _fit_text(text, width, size):
+    """Обрезать строку по ширине с многоточием."""
+    if text_width(text, size) <= width:
+        return text
+    out = text
+    while out and text_width(out + "…", size) > width:
+        out = out[:-1]
+    return out.rstrip() + "…"
+
+
 @tile("tv")
 class Tv(Tile):
     """
@@ -883,6 +894,18 @@ class Tv(Tile):
     def prepare(self, ctx):
         data = build_tv(ctx.conf, ctx.state)
         ctx.snaps.extend(data.pop("snaps", []) or [])
+        # С 1.21 плитка - колесо пульта со стрелками и OK, «назад» и
+        # «домой» рядом; на крупной плитке ими можно пользоваться прямо с
+        # панели. look: classic - прежний значок с подписью.
+        if ctx.opt("look") != "classic" and ctx.opt("device"):
+            w = float(ctx.opt("inner_w") or 170)
+            h = float(ctx.opt("chart_h") or 170)
+            tvk = tv_tile(w, h, compact=w < 156)
+            data["tvk"] = tvk
+            if tvk["kind"] == "low":
+                width = tvk["text_w"]
+                data["low_title"] = _fit_text(ctx.opt("title", "") or "Телевизор", width, 15)
+                data["low_sub"] = _fit_text(data.get("status") or "", width, 13.5)
         return data
 
     def zones(self, ctx, data):
@@ -907,4 +930,5 @@ class Tv(Tile):
             "tv_state": data.get("state_ru", ""),
             "tv_app": data.get("app", ""),
             "tv_apps": ";".join("%s|%s" % (c, t) for c, t in apps),
+            "look": "classic" if ctx.opt("look") == "classic" else None,
         }

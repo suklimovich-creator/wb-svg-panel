@@ -56,6 +56,79 @@
 {% endmacro %}
 
 
+{#- ---- сцены сеткой (1.19) ----
+    Каждая клавиша - своя кнопка с data-topic: нажатие пишет значение
+    сцены, страница подсвечивает клавишу (класс fired), как одиночную. -#}
+{% macro tile_scenes(t) %}
+  {{ base.plate(t) }}
+  <text x="16" y="27" class="name">{{ t.title or 'Сцены' }}</text>
+  {% for k in t.skeys %}
+  <g class="skey" data-kind="scene" data-topic="{{ k.topic }}" data-on="{{ k.value }}"
+     data-off="{{ k.value }}" data-state="0">
+    <rect x="{{ k.x }}" y="{{ k.y + 3 }}" width="{{ k.w }}" height="{{ k.h }}" rx="12" class="key-sh" opacity=".25"/>
+    <rect x="{{ k.x }}" y="{{ k.y }}" width="{{ k.w }}" height="{{ k.h }}" rx="12" class="key skey-face"/>
+    <rect x="{{ k.x }}" y="{{ k.y }}" width="{{ k.w }}" height="{{ k.h }}" rx="12" fill="url(#{{ uid }}gl)"/>
+    <rect x="{{ k.x }}" y="{{ k.y }}" width="{{ k.w }}" height="{{ k.h }}" rx="12"
+          fill="url(#{{ uid }}sglow)" opacity="{{ k.glow * 2 }}"/>
+    <use href="#{{ uid }}ic-{{ k.icon }}" xlink:href="#{{ uid }}ic-{{ k.icon }}" class="skey-ic"
+         x="{{ k.x + k.w / 2 - k.isize / 2 }}" y="{{ k.y + k.h * 0.40 - k.isize / 2 }}"
+         width="{{ k.isize }}" height="{{ k.isize }}"/>
+    <text x="{{ k.x + k.w / 2 }}" y="{{ k.y + k.h * 0.82 }}" font-size="{{ k.font }}"
+          text-anchor="middle" class="skey-t">{{ k.title }}</text>
+    {% for d in k.dots %}
+    <circle cx="{{ k.x + k.w - 10 }}" cy="{{ k.y + 34 - loop.index0 * 6 }}" r="1.7"
+            class="skey-dot{{ ' on' if d }}"/>
+    {% endfor %}
+  </g>
+  {% endfor %}
+{% endmacro %}
+
+{#- Телевизор нового вида (1.21): колесо пульта - зубчатый обод, стрелки,
+    OK; «назад» и «домой» круглыми кнопками. На крупной плитке у стрелок,
+    OK и кнопок есть зоны tv:<клавиша> - нажатие уходит прямо в мост, пульт
+    не открывается. Мимо них - пульт, как раньше. -#}
+{% macro tile_tv(t) %}
+  {% set k = t.tvk %}
+  {% set wh = k.wheel %}
+  {{ base.plate(t) }}
+  <g class="tvw{{ '' if t.on else ' off' }}">
+    <circle cx="{{ wh.cx }}" cy="{{ wh.cy + wh.sh * 2 }}" r="{{ wh.R }}" class="key-sh" opacity=".10"/>
+    <circle cx="{{ wh.cx }}" cy="{{ wh.cy + wh.sh }}" r="{{ wh.R }}" class="key-sh" opacity=".18"/>
+    <path d="{{ wh.gear }}" class="key"/>
+    <path d="{{ wh.gear }}" fill="url(#{{ uid }}gl)"/>
+    {% for a in wh.arrows %}<path d="{{ a.tri }}" class="tvw-ar" data-k="{{ a.key }}"/>{% endfor %}
+    <circle cx="{{ wh.cx }}" cy="{{ wh.cy + wh.sh * 0.6 }}" r="{{ wh.ok }}" class="key-sh" opacity=".25"/>
+    <circle cx="{{ wh.cx }}" cy="{{ wh.cy }}" r="{{ wh.ok }}" class="tvw-ok" data-k="ok"/>
+    <circle cx="{{ wh.cx }}" cy="{{ wh.cy }}" r="{{ wh.ok }}" fill="url(#{{ uid }}gl)"/>
+    {% if wh.R >= 30 %}
+    <text x="{{ wh.cx }}" y="{{ wh.cy + wh.ok_font * 0.36 }}" font-size="{{ wh.ok_font }}"
+          text-anchor="middle" class="tvw-okt">OK</text>
+    {% endif %}
+    {% for b in k.buttons %}
+    <circle cx="{{ b.cx }}" cy="{{ b.cy + 1.5 }}" r="{{ b.r }}" class="key-sh" opacity=".22"/>
+    <circle cx="{{ b.cx }}" cy="{{ b.cy }}" r="{{ b.r }}" class="key" data-k="{{ b.key }}"/>
+    <use href="#{{ uid }}ic-{{ 'undo' if b.key == 'back' else 'home' }}"
+         xlink:href="#{{ uid }}ic-{{ 'undo' if b.key == 'back' else 'home' }}"
+         x="{{ b.cx - b.icon / 2 }}" y="{{ b.cy - b.icon / 2 }}" width="{{ b.icon }}" height="{{ b.icon }}"
+         class="tvw-ic"/>
+    {% endfor %}
+  </g>
+  {% if k.kind == 'low' %}
+  <text x="18" y="{{ t.h / 2 - 2 }}" class="name">{{ t.low_title }}</text>
+  <text x="18" y="{{ t.h / 2 + 16 }}" class="status{{ ' tv-app' if t.on and t.app }}">{{ t.low_sub }}</text>
+  {% else %}
+  {{ base.caption(t, t.status) }}
+  {% endif %}
+  {% if k.keys %}
+  {#- зоны поверх всего: нажатие ловит самый верхний элемент -#}
+  {% for a in wh.arrows %}<path d="{{ a.zone }}" fill="transparent" data-zone="tv:{{ a.key }}"/>{% endfor %}
+  <circle cx="{{ wh.cx }}" cy="{{ wh.cy }}" r="{{ wh.ok }}" fill="transparent" data-zone="tv:ok"/>
+  {% endif %}
+  {% for b in k.buttons %}
+  <circle cx="{{ b.cx }}" cy="{{ b.cy }}" r="{{ b.r + 6 }}" fill="transparent" data-zone="tv:{{ b.key }}"/>
+  {% endfor %}
+{% endmacro %}
+
 {% macro tile_link(t) %}
   {{ base.plate(t) }}
   {{ base.icon_c(t, t.icon or 'door', 26) }}

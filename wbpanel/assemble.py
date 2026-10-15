@@ -12,6 +12,7 @@ from .const import INV_SKIP, STALE_AFTER, THEME_STYLE
 from .geometry import _fmt, cells, layout, text_width
 from .status import build_status, place_chips
 from .registry import resolve_type
+from .sky import facing_of, location_of
 from .tiles import from_registry
 
 # Текущий конфиг. Заполняется в web.main() при старте: сюда сборка плиток
@@ -185,6 +186,18 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
         config.get("look") if config else None)
     if look:
         conf["look"] = look
+    # Шторы (с 1.20) рисуют вид за окном: где дом, куда смотрит окно и
+    # откуда брать погоду. Тоже по цепочке плитка -> панель -> корень;
+    # координаты ещё и из theme_auto, чтобы не задавать их дважды.
+    if tile["kind"] in ("curtain", "roller"):
+        glob = config or {}
+        pc = panel_conf or {}
+        conf["sky_location"] = location_of(
+            conf.get("location"), pc.get("location"), glob.get("location"),
+            (glob.get("theme_auto") or {}).get("location"))
+        conf["facing"] = facing_of(conf.get("facing", pc.get("facing", glob.get("facing"))))
+        wx = conf.get("weather", pc.get("weather", glob.get("weather", "weather")))
+        conf["weather"] = wx if isinstance(wx, str) and wx else None
     # Тема нужна графику: подписи значений красятся под цвет подложки, а
     # она разная. CSS-переменная тут не подходит - цвет у каждой серии свой.
     conf["theme"] = (panel_conf or {}).get("theme") or (

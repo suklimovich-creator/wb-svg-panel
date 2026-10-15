@@ -138,6 +138,8 @@
  #lvl .val{position:absolute;left:0;right:0;bottom:14px;text-align:center;
            color:#fff;font-size:26px;font-weight:600}
  /* пульт диммера с 1.17: колесо в прорези, шкала рядом, число над ним */
+ #sphstage{margin:0 auto;touch-action:none}
+ #sphstage canvas{display:block;width:100%;height:100%}
  #lvl.roll{background:transparent;border-radius:0;overflow:visible}
  #lvl.roll svg{display:block;width:100%;height:100%}
  /* Шаг числом. Двумя процентами на ночь пальцем по полю не попасть: один
@@ -239,6 +241,49 @@
        font-size:17px;font-weight:600;color:#1C1C1E;cursor:pointer;
        user-select:none;touch-action:manipulation}
  #ov .tvdim{opacity:.45}
+ /* Пульт телевизора с 1.21: тёмный во всех темах, как пульт в руке.
+    Кнопки - выпуклые кружки, без размытия; колесо рисуется SVG. */
+ #ov .tvx{width:340px;max-width:94vw;box-sizing:border-box;background:#1D1E22;
+       padding:14px 16px 18px;border-radius:26px;color:#F2F2F4;touch-action:manipulation}
+ #ov .tvx .txhead{display:flex;align-items:center;gap:10px;margin:0 0 6px;text-align:left}
+ #ov .tvx .txname{flex:1;min-width:0}
+ #ov .tvx .txttl{font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .tvx .txsub{font-size:12.5px;color:#9A9AA2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .tvx .tx{flex:0 0 58px;width:58px;height:58px;border-radius:50%;box-sizing:border-box;
+       background:radial-gradient(circle at 35% 30%,#45464C,#2A2B30 70%);
+       border:1px solid rgba(255,255,255,.07);box-shadow:0 4px 8px rgba(0,0,0,.45);
+       display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none}
+ #ov .tvx .tx.sm{flex:0 0 46px;width:46px;height:46px}
+ #ov .tvx .tx.down{transform:translateY(1px);box-shadow:0 2px 4px rgba(0,0,0,.5);filter:brightness(1.2)}
+ #ov .tvx .tx svg{width:22px;height:22px;fill:none;stroke:#E8E8EC;stroke-width:2.2;
+       stroke-linecap:round;stroke-linejoin:round}
+ #ov .tvx .tx svg.fl{fill:#E8E8EC;stroke:none}
+ #ov .tvx .tx.txpw.on{background:radial-gradient(circle at 40% 35%,#FFB24D,#E08A2D 75%)}
+ #ov .tvx .tx.txpw.on svg{stroke:#2A1A08}
+ #ov .tvx .txwrap{position:relative;height:300px;margin:4px 0 0}
+ #ov .tvx .txwheel{position:absolute;left:50%;top:0;margin-left:-130px;width:260px;height:260px}
+ #ov .tvx .txwheel svg{display:block;cursor:pointer;touch-action:none}
+ #ov .tvx .txwheel .ar{fill:#ECECF0;opacity:.9}
+ #ov .tvx .txwheel .hit{opacity:.45}
+ #ov .tvx .txwheel .okt{fill:#2A1A08;font-size:24px;font-weight:700;pointer-events:none}
+ #ov .tvx .txl{position:absolute;bottom:0;display:flex;flex-direction:column;align-items:center;gap:4px}
+ #ov .tvx .txl.l{left:0} #ov .tvx .txl.r{right:0}
+ #ov .tvx .txlab{font-size:12px;color:#9A9AA2}
+ #ov .tvx .txrow{display:flex;justify-content:center;gap:30px;margin:16px 0 12px}
+ #ov .tvx .txvol{display:flex;align-items:center;justify-content:space-between;height:64px;
+       border-radius:32px;background:#2A2B30;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 4px 8px rgba(0,0,0,.4);
+       padding:0 8px;margin:8px 0 14px}
+ #ov .tvx .txv{flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+       cursor:pointer;user-select:none;border-radius:28px}
+ #ov .tvx .txv.down{background:rgba(255,255,255,.06)}
+ #ov .tvx .txv b{font-size:26px;font-weight:500;line-height:24px}
+ #ov .tvx .txv span{font-size:11px;color:#9A9AA2}
+ #ov .tvx .txapps{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+ #ov .tvx .txapp{height:44px;border-radius:22px;background:#2C2D32;display:flex;align-items:center;
+       justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer;padding:0 6px;
+       box-shadow:0 3px 6px rgba(0,0,0,.35);user-select:none}
+ #ov .tvx .txapp.now{background:#F0A33A;color:#2A1A08}
+ #ov .tvx .tvdim{opacity:.4}
  #ov .acbtn{display:block;flex:1 1 0;min-width:0;margin:0;padding:9px 4px;border-radius:12px;
             border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);
             font-size:14px;font-weight:600;cursor:pointer;text-align:center;
@@ -922,7 +967,205 @@ function expand(node){
 }
 
 /* ---------- пульт ленты: X - температура, Y - яркость ---------- */
+/* ---------- пульт ленты: шар (с 1.18) ----------
+   Шар светится цветом ленты и покрыт сотами. Провести вверх-вниз - шар
+   поворачивается, яркость меняется; влево-вправо - теплота. Толчок -
+   катится по инерции и замедляется, на краю шкалы упирается. Команда
+   уходит, когда шар остановился. Ниже - шаг числом и питание, как было. */
+var SPH = null;
+function sphereGeo(F){
+  if (SPH && SPH.F === F) return SPH;
+  var p = (1 + Math.sqrt(5)) / 2;
+  var I = [[-1,p,0],[1,p,0],[-1,-p,0],[1,-p,0],[0,-1,p],[0,1,p],[0,-1,-p],[0,1,-p],[p,0,-1],[p,0,1],[-p,0,-1],[-p,0,1]];
+  var T = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+           [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+  function nrm(v){ var n = Math.hypot(v[0], v[1], v[2]); return [v[0]/n, v[1]/n, v[2]/n]; }
+  var V = [], key = {}, tris = [];
+  function vid(v){ v = nrm(v); var k = v.map(function(x){ return x.toFixed(5); }).join(','); if (key[k] === undefined){ key[k] = V.length; V.push(v); } return key[k]; }
+  T.forEach(function(t){
+    var A = I[t[0]], B = I[t[1]], C = I[t[2]], g = [], i, j;
+    for (i = 0; i <= F; i++){ g.push([]); for (j = 0; j <= F - i; j++)
+      g[i].push(vid([0,1,2].map(function(k){ return A[k] + (B[k]-A[k])*i/F + (C[k]-A[k])*j/F; }))); }
+    for (i = 0; i < F; i++) for (j = 0; j < F - i; j++){
+      tris.push([g[i][j], g[i+1][j], g[i][j+1]]);
+      if (j < F - i - 1) tris.push([g[i+1][j], g[i+1][j+1], g[i][j+1]]);
+    }
+  });
+  var C = tris.map(function(t){ return nrm([0,1,2].map(function(k){ return V[t[0]][k] + V[t[1]][k] + V[t[2]][k]; })); });
+  var adj = V.map(function(){ return []; });
+  tris.forEach(function(t, k){ t.forEach(function(v){ adj[v].push(k); }); });
+  var cells = V.map(function(d, vi){
+    var u = Math.abs(d[0]) < .9 ? [1,0,0] : [0,1,0];
+    var e1 = nrm([d[1]*u[2]-d[2]*u[1], d[2]*u[0]-d[0]*u[2], d[0]*u[1]-d[1]*u[0]]);
+    var e2 = [d[1]*e1[2]-d[2]*e1[1], d[2]*e1[0]-d[0]*e1[2], d[0]*e1[1]-d[1]*e1[0]];
+    function a(k){ var c = C[k]; return Math.atan2(c[0]*e2[0]+c[1]*e2[1]+c[2]*e2[2], c[0]*e1[0]+c[1]*e1[1]+c[2]*e1[2]); }
+    return { c: vi, ring: adj[vi].slice().sort(function(x, y){ return a(x) - a(y); }) };
+  });
+  SPH = { F: F, V: V, C: C, cells: cells };
+  return SPH;
+}
+
+function padSphere(node){
+  var PITCH = 2.6, YAW = 3.2;     // те же, что в skeuo.py
+  var x = parseFloat(node.getAttribute('data-dot-x') || '0.5');        // 0 холодный - 1 тёплый
+  var lvl = 1 - parseFloat(node.getAttribute('data-dot-y') || '0.5');  // яркость
+  var hasTemp = !!node.getAttribute('data-temp');
+  var on = node.getAttribute('data-state') === '1';
+  var rot = { x: (x - .5) * YAW, y: -(lvl - .5) * PITCH };
+  function hex(c){ c = (c || '#888888').replace('#', ''); return [0, 2, 4].map(function(i){ return parseInt(c.substr(i, 2), 16); }); }
+  var COLD = hex(node.getAttribute('data-cold') || '#56AAFF'), WARM = hex(node.getAttribute('data-warm') || '#FF9337');
+  var MID = [236, 230, 220], DARK = [20, 21, 24];
+  function mix(a, b, f){ return a.map(function(v, i){ return v + (b[i] - v) * f; }); }
+  function css(a, al){ return 'rgba(' + a.map(Math.round).join(',') + ',' + (al === undefined ? 1 : al) + ')'; }
+  function hue(t){ return t < .5 ? mix(COLD, MID, t * 2) : mix(MID, WARM, (t - .5) * 2); }
+
+  var side = Math.round(Math.min(window.innerWidth * 0.86, window.innerHeight * 0.5, 420));
+  var stage = el('div'); stage.id = 'sphstage';
+  stage.style.width = side + 'px'; stage.style.height = side + 'px';
+  var cv = document.createElement('canvas'); stage.appendChild(cv);
+  var title = el('div', 'ttl', node.getAttribute('data-title') || 'Подсветка');
+  var hint = el('div', 'hint', 'Крутите шар: вверх-вниз — яркость, влево-вправо — теплота');
+  var power = powerRow(node);
+  var rows = [];
+  var bright = stepRow('Яркость', {
+    unit: ' %',
+    read:  function(){ return Math.round(lvl * 100); },
+    write: function(v){ rot.y -= (v / 100 - lvl) * PITCH; lvl = v / 100; draw(); },
+    send:  function(){ return send(); }
+  });
+  rows.push(bright);
+  var warm = null;
+  if (hasTemp){
+    warm = stepRow('Тёплый', {
+      unit: ' %',
+      read:  function(){ return Math.round(x * 100); },
+      write: function(v){ rot.x += (v / 100 - x) * YAW; x = v / 100; draw(); },
+      send:  function(){ return send(); }
+    });
+    rows.push(warm);
+  }
+  openOv([title, stage].concat(rows, [power.el, hint]));
+
+  function draw(){
+    var dpr = window.devicePixelRatio || 1, W = side, H = side;
+    if (cv.width !== Math.round(W * dpr)){ cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    var cx = W / 2, cy = H / 2, r = W * .3, lit = power.on || touched;
+    var lv = lit ? lvl : 0, h = hue(x), c = mix(DARK, h, .18 + .82 * (lit ? lvl : .25));
+    if (lit){
+      var hr = Math.min(r * (1.45 + .5 * lv), W / 2 * .98);
+      var halo = g.createRadialGradient(cx, cy, r * .7, cx, cy, hr);
+      halo.addColorStop(0, css(h, .5 * lv)); halo.addColorStop(1, css(h, 0));
+      g.fillStyle = halo; g.beginPath(); g.arc(cx, cy, hr, 0, 7); g.fill();
+    }
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.arc(cx, cy + r * .1, r, 0, 7); g.fill();
+    var body = g.createRadialGradient(cx - r * .32, cy - r * .36, r * .08, cx, cy, r * 1.04);
+    if (lit){ body.addColorStop(0, css(mix(c, [255,255,255], .25 * lv))); body.addColorStop(.6, css(mix(c, DARK, .25))); body.addColorStop(1, css(mix(c, DARK, .78))); }
+    else { body.addColorStop(0, '#585A60'); body.addColorStop(.6, '#2E2F34'); body.addColorStop(1, '#121316'); }
+    g.fillStyle = body; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+    // соты
+    var G = sphereGeo(9), cyw = Math.cos(rot.x), syw = Math.sin(rot.x), cp = Math.cos(rot.y), sp = Math.sin(rot.y);
+    function P(v){ var X = v[0]*cyw + v[2]*syw, Z = -v[0]*syw + v[2]*cyw; return [X, v[1]*cp - Z*sp, v[1]*sp + Z*cp]; }
+    var pc = G.C.map(P), pv = G.V.map(P), path = new Path2D();
+    G.cells.forEach(function(cell){
+      if (pv[cell.c][2] < .03) return;
+      for (var k = 0; k < cell.ring.length; k++) if (pc[cell.ring[k]][2] < 0) return;
+      cell.ring.forEach(function(i, k){ var q = pc[i]; if (k) path.lineTo(cx + q[0]*r, cy - q[1]*r); else path.moveTo(cx + q[0]*r, cy - q[1]*r); });
+      path.closePath();
+    });
+    g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();
+    g.lineJoin = 'round'; g.lineWidth = Math.max(.6, r / 160);
+    g.strokeStyle = lit ? css(mix(c, DARK, .5), .45) : 'rgba(150,152,158,.22)'; g.stroke(path);
+    var rim = g.createRadialGradient(cx, cy, r * .55, cx, cy, r);
+    rim.addColorStop(0, 'rgba(16,17,20,0)'); rim.addColorStop(1, 'rgba(16,17,20,.55)');
+    g.fillStyle = rim; g.fillRect(cx - r, cy - r, 2 * r, 2 * r); g.restore();
+    var spc = g.createRadialGradient(cx - r * .36, cy - r * .42, 0, cx - r * .36, cy - r * .42, r * .42);
+    spc.addColorStop(0, 'rgba(255,255,255,' + (lit ? .55 : .25) + ')'); spc.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = spc; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke();
+    // шкалы: слева яркость, снизу теплота
+    var R = r + Math.max(11, r * .12), sw = Math.max(3, r * .035), B0 = 165, B1 = 255, T0 = 140, T1 = 40;
+    function rad(d){ return d * Math.PI / 180; }
+    g.lineCap = 'round'; g.lineWidth = sw;
+    g.strokeStyle = 'rgba(255,255,255,.14)'; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B1)); g.stroke();
+    g.strokeStyle = lit ? '#F2A23A' : '#5A5C62'; g.beginPath(); g.arc(cx, cy, R, rad(B0), rad(B0 + (B1 - B0) * lvl)); g.stroke();
+    for (var i = 0; i < 22; i++){
+      var f = i / 21, a = rad(T0 - (T0 - T1) * f);
+      g.fillStyle = lit ? css(hue(f)) : 'rgba(150,152,158,.35)';
+      g.beginPath(); g.arc(cx + R * Math.cos(a), cy + R * Math.sin(a), sw * .7, 0, 7); g.fill();
+    }
+    [T0 - (T0 - T1) * x, B0 + (B1 - B0) * lvl].forEach(function(d){
+      var a = rad(d);
+      g.fillStyle = lit ? '#F2F2F4' : '#8A8C92'; g.strokeStyle = '#1C1D20'; g.lineWidth = 2;
+      g.beginPath(); g.arc(cx + R * Math.cos(a), cy + R * Math.sin(a), sw * 1.7, 0, 7); g.fill(); g.stroke();
+    });
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.font = '500 12px ' + getComputedStyle(document.body).fontFamily;
+    g.textAlign = 'center'; g.fillText('ярче', cx + R * Math.cos(rad(B1)), cy + R * Math.sin(rad(B1)) - 14);
+    g.textAlign = 'right'; g.fillText('тусклее', cx + R * Math.cos(rad(B0)) - 12, cy + R * Math.sin(rad(B0)) + 4);
+    g.textAlign = 'center';
+    g.fillText('холодный', cx + (R + 22) * Math.cos(rad(128)), cy + (R + 22) * Math.sin(rad(128)) + 12);
+    g.fillText('тёплый', cx + (R + 22) * Math.cos(rad(52)), cy + (R + 22) * Math.sin(rad(52)) + 12);
+  }
+
+  var timer = null;
+  function send(){
+    var bmax = parseFloat(node.getAttribute('data-bright-max') || '100');
+    var jobs = [pub(node.getAttribute('data-bright'), Math.round(lvl * bmax))];
+    var tTopic = node.getAttribute('data-temp');
+    if (tTopic){
+      var unit = node.getAttribute('data-temp-unit');
+      var tmax = parseFloat(node.getAttribute('data-temp-max') || '100');
+      var lo = parseFloat(node.getAttribute('data-temp-lo') || '2700');
+      var hi = parseFloat(node.getAttribute('data-temp-hi') || '6500');
+      jobs.push(pub(tTopic, unit === 'percent' ? Math.round((1 - x) * tmax) : Math.round(hi - x * (hi - lo))));
+    }
+    return power.ensureOn()
+      .then(function(){ return Promise.all(jobs); })
+      .then(function(){ draw(); })
+      .catch(function(e){ flash('Не удалось: ' + e.message); });
+  }
+  function later(){ clearTimeout(timer); timer = setTimeout(send, 250); }
+
+  function clamp(v){ return Math.max(0, Math.min(1, v)); }
+  function move(ax, ay){
+    var nx = clamp(x + (hasTemp ? ax / YAW : 0)), nl = clamp(lvl - ay / PITCH);
+    rot.x += (nx - x) * YAW; rot.y -= (nl - lvl) * PITCH;
+    x = nx; lvl = nl;
+    draw(); bright.repaint(); if (warm) warm.repaint();
+  }
+  var anim = null, vel = { x: 0, y: 0 }, last = null, touched = false;
+  // крутят выключенную - на шаре сразу видно, каким будет свет
+  function begin(ev){
+    touched = true;
+    cancelAnimationFrame(anim); clearTimeout(timer);
+    var p = evPoint(ev); last = { x: p.clientX, y: p.clientY, t: Date.now() }; vel = { x: 0, y: 0 };
+  }
+  function at(ev){
+    var p = evPoint(ev);
+    if (!last || p.clientX === undefined) return;
+    var dx = p.clientX - last.x, dy = p.clientY - last.y, dt = Math.max(8, Date.now() - last.t), r = side * .3;
+    last = { x: p.clientX, y: p.clientY, t: Date.now() };
+    if (!dx && !dy) return;
+    move(dx / r, dy / r);
+    vel = { x: dx / r / dt * 16, y: dy / r / dt * 16 };
+  }
+  function done(){
+    var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce){ later(); return; }
+    (function step(){
+      vel.x *= .92; vel.y *= .92;
+      if (Math.abs(vel.x) + Math.abs(vel.y) > .0008){ move(vel.x, vel.y); anim = requestAnimationFrame(step); }
+      else { anim = null; later(); }
+    })();
+  }
+  ovCleanup = function(){ cancelAnimationFrame(anim); };
+  power.el.addEventListener('click', function(){ touched = false; setTimeout(draw, 500); });
+  draw();
+  drag(stage, at, done, begin);
+}
+
 function padXY(node){
+  if (node.getAttribute('data-look') !== 'classic') return padSphere(node);
   var pad = el('div'); pad.id='pad';
   var side = Math.round(Math.min(window.innerWidth*0.78, window.innerHeight*0.6));
   pad.style.width = side + 'px'; pad.style.height = side + 'px';
@@ -1956,6 +2199,8 @@ function bind(root){
       if(!tapOk(press.t0)) press.moved = true;
       if(!press.long && !press.moved){
         if(href) { location.href = href + Q(); }
+        // Колесо телевизора на плитке: стрелки, OK, «назад», «домой».
+        else if(press.zone && press.zone.indexOf('tv:') === 0) tvKey(this, press.zone.slice(3));
         else if(press.zone) stepTarget(this, press.zone);
         // Термостат: по краям плитки шаг уставки, в центре - открыть пульт.
         // Режим короткое нажатие не трогает: случайно выключить отопление
@@ -2377,7 +2622,242 @@ var TVI = {
   input: '<path d="M4 6h16v10H4z"/><path d="M9 20h6"/>'
 };
 
+/* ---------- пульт телевизора (с 1.21) ----------
+   Раскладка как у настоящего пульта (макет 15.10): сверху «назад», имя,
+   вход и питание; колесо со стрелками и OK; «Назад» и «Меню» у нижних
+   углов колеса; перемотка; громкость кнопками − / +, между ними без
+   звука; приложения внизу. Карточка тёмная во всех темах - как пульт в
+   руке. Стрелки и громкость при удержании повторяют нажатие. Прежний
+   светлый пульт - look: classic. */
+var TVX = {
+  back: '<path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-3"/>',
+  menu: '<path d="M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z"/>',
+  chev: '<path d="M15 5l-7 7 7 7"/>'
+};
+function tvGear(cx, cy, r, k){
+  var tw = 7 * k, tth = 6 * k, n = Math.max(18, Math.round(2 * Math.PI * r / (16 * k)));
+  var hw = tw / 2 / r, pts = [];
+  function p(rad, a){ pts.push((cx + rad * Math.cos(a)).toFixed(1) + ',' + (cy + rad * Math.sin(a)).toFixed(1)); }
+  for(var i = 0; i < n; i++){
+    var a0 = 2 * Math.PI * i / n;
+    p(r, a0 - hw);
+    for(var f = 0; f < 9; f++){
+      var ff = Math.PI * f / 8, x = -tw / 2 * Math.cos(ff);
+      var rad = (r - tth + tw / 2) - (tw / 2) * Math.sin(ff);
+      p(rad, a0 + x / rad);
+    }
+    p(r, a0 + hw); p(r, a0 + Math.PI / n);
+  }
+  return 'M ' + pts.join(' L ') + ' Z';
+}
 function padTV(node){
+  if(node.getAttribute('data-look') === 'classic') return padTVFlat(node);
+  var base = node.getAttribute('data-tv-base');
+  if(!base) return;
+  var link = node.getAttribute('data-tv-link') === '1';
+  var on = node.getAttribute('data-tv-on') === '1';
+  var dimmed = [];
+
+  function press(control){
+    pub(base + control + '/on', 1)
+      .catch(function(e){ flash('Не удалось: ' + e.message); });
+  }
+  function pressPower(){
+    var want = on ? 0 : 1;
+    pub(base + 'power/on', want).then(function(){
+      on = !on; pw.classList.toggle('on', on);
+      sub.textContent = on ? 'Включается…' : 'Выключается…';
+      setTimeout(refresh, 800); setTimeout(refresh, 3000);
+    }).catch(function(e){ flash('Не удалось: ' + e.message); });
+  }
+  /* Нажатие с повтором: первое сразу, при удержании - через 450 мс и
+     дальше каждые 160 мс. Для стрелок и громкости; OK, «Назад» и
+     приложения не повторяются - дважды выбранное не отменить. */
+  function hold(elm, fire, repeat){
+    var t1 = null, t2 = null;
+    function stop(){ clearTimeout(t1); clearInterval(t2); t1 = t2 = null; elm.classList.remove('down'); }
+    function start(e){
+      if(e && e.preventDefault) e.preventDefault();
+      stop(); elm.classList.add('down'); fire(e);
+      var again = typeof repeat === 'function' ? repeat() : repeat;
+      if(again) t1 = setTimeout(function(){ t2 = setInterval(function(){ fire(e, true); }, 160); }, 450);
+    }
+    if(window.PointerEvent){
+      elm.addEventListener('pointerdown', start);
+      ['pointerup','pointercancel','pointerleave'].forEach(function(n){ elm.addEventListener(n, stop); });
+    } else {
+      elm.addEventListener('touchstart', start); elm.addEventListener('mousedown', start);
+      ['touchend','touchcancel','mouseup','mouseleave'].forEach(function(n){ elm.addEventListener(n, stop); });
+    }
+    return elm;
+  }
+  function svgIcon(path, fill){
+    return '<svg viewBox="0 0 24 24" class="' + (fill ? 'fl' : '') + '">' + path + '</svg>';
+  }
+  function key(cls, control, icon, opts){
+    opts = opts || {};
+    var b = el('div', 'tx ' + cls);
+    if(icon) b.innerHTML = icon;
+    if(control === 'power') b.onclick = pressPower;
+    else hold(b, function(){ press(control); }, opts.repeat);
+    if(opts.needs !== false) dimmed.push(b);
+    return b;
+  }
+  function labeled(b, text){
+    var w = el('div', 'txl'); w.appendChild(b); w.appendChild(el('div', 'txlab', text)); return w;
+  }
+  function setLive(live){
+    link = live;
+    for(var k = 0; k < dimmed.length; k++) dimmed[k].classList.toggle('tvdim', !live);
+  }
+
+  var card = el('div', 'card tvx');
+
+  /* шапка */
+  var head = el('div', 'txhead');
+  var close = el('div', 'tx sm', ''); close.innerHTML = svgIcon(TVX.chev);
+  close.onclick = function(){ closeOv(); };
+  head.appendChild(close);
+  var name = el('div', 'txname');
+  name.appendChild(el('div', 'txttl', node.getAttribute('data-tv-title') || 'Телевизор'));
+  var app = node.getAttribute('data-tv-app') || '';
+  var sub = el('div', 'txsub', (node.getAttribute('data-tv-state') || '') + (app ? ' · ' + app : '')
+                               + (link ? '' : ' · доступно только включение'));
+  name.appendChild(sub);
+  head.appendChild(name);
+  head.appendChild(key('sm', 'source', svgIcon(TVI.input)));
+  var pw = key('sm txpw' + (on ? ' on' : ''), 'power', svgIcon(TVI.power), {needs: false});
+  head.appendChild(pw);
+  card.appendChild(head);
+
+  /* колесо: стрелки по сторонам, OK в центре. Что нажато, решает точка
+     касания: ближе к центру - OK, дальше - стрелка той четверти. */
+  var R = 116, C = 130, OK = 44;
+  var wb = el('div', 'txwheel');
+  var arr = '', dirs = [['up', -90], ['right', 0], ['down', 90], ['left', 180]];
+  dirs.forEach(function(d){
+    var a = d[1] * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a), vx = -uy, vy = ux;
+    var dd = R * 0.70, sz = 13;
+    var tip = [C + ux * (dd + sz * .65), C + uy * (dd + sz * .65)];
+    var b1 = [C + ux * (dd - sz * .5) + vx * sz, C + uy * (dd - sz * .5) + vy * sz];
+    var b2 = [C + ux * (dd - sz * .5) - vx * sz, C + uy * (dd - sz * .5) - vy * sz];
+    arr += '<path class="ar" data-k="' + d[0] + '" d="M' + tip.join(',') + ' L' + b1.join(',') + ' L' + b2.join(',') + ' Z"/>';
+  });
+  wb.innerHTML = '<svg viewBox="0 0 260 260" width="260" height="260">'
+    + '<defs><radialGradient id="txface" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#4A4B52"/>'
+    + '<stop offset="1" stop-color="#232428"/></radialGradient>'
+    + '<radialGradient id="txok" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#FFB24D"/>'
+    + '<stop offset="1" stop-color="#E08A2D"/></radialGradient></defs>'
+    + '<circle cx="' + C + '" cy="' + (C + 6) + '" r="' + R + '" fill="#000" opacity=".35"/>'
+    + '<path d="' + tvGear(C, C, R, 1.25) + '" fill="url(#txface)" stroke="rgba(255,255,255,.07)"/>'
+    + arr
+    + '<circle cx="' + C + '" cy="' + (C + 3) + '" r="' + OK + '" fill="#000" opacity=".35"/>'
+    + '<circle class="okb" data-k="ok" cx="' + C + '" cy="' + C + '" r="' + OK + '" fill="url(#txok)"/>'
+    + '<text x="' + C + '" y="' + (C + 8) + '" text-anchor="middle" class="okt">OK</text></svg>';
+  var wsvg = wb.firstChild;
+  dimmed.push(wsvg);
+  function which(e){
+    var pt = evPoint(e), r = wsvg.getBoundingClientRect();
+    var x = (pt.clientX - r.left) * 260 / r.width - C, y = (pt.clientY - r.top) * 260 / r.height - C;
+    var d = Math.sqrt(x * x + y * y);
+    if(d <= OK + 4) return 'ok';
+    if(d > R + 6) return null;
+    var a = Math.atan2(y, x) * 180 / Math.PI;
+    return a >= -135 && a < -45 ? 'up' : a >= -45 && a < 45 ? 'right' : a >= 45 && a < 135 ? 'down' : 'left';
+  }
+  var cur = null;
+  hold(wsvg, function(e, again){
+    if(!again) cur = which(e);
+    if(!cur) return;
+    var n = wsvg.querySelector('[data-k="' + cur + '"]');
+    if(n){ n.classList.add('hit'); setTimeout(function(){ n.classList.remove('hit'); }, 140); }
+    press(cur);
+  }, function(){ return cur && cur !== 'ok'; });   // OK удержанием не повторяется
+  var wrapW = el('div', 'txwrap');
+  wrapW.appendChild(wb);
+  var lb = labeled(key('', 'back', svgIcon(TVX.back)), 'Назад'); lb.className += ' l';
+  var rb = labeled(key('', 'home', svgIcon(TVX.menu, true)), 'Меню'); rb.className += ' r';
+  wrapW.appendChild(lb); wrapW.appendChild(rb);
+  card.appendChild(wrapW);
+
+  /* перемотка и плей-пауза */
+  var media = el('div', 'txrow');
+  media.appendChild(key('', 'rewind', svgIcon(TVI.rew, true)));
+  media.appendChild(key('', 'play_pause', svgIcon(TVI.playpause, true)));
+  media.appendChild(key('', 'forward', svgIcon(TVI.fwd, true)));
+  card.appendChild(media);
+
+  /* громкость: мы не знаем, сколько сейчас, поэтому только шаги */
+  var vol = el('div', 'txvol');
+  var vd = el('div', 'txv'); vd.innerHTML = '<b>−</b><span>тише</span>';
+  var vu = el('div', 'txv'); vu.innerHTML = '<b>+</b><span>громче</span>';
+  hold(vd, function(){ press('vol_down'); }, true);
+  hold(vu, function(){ press('vol_up'); }, true);
+  dimmed.push(vd); dimmed.push(vu);
+  vol.appendChild(vd); vol.appendChild(key('sm', 'mute', svgIcon(TVI.mute))); vol.appendChild(vu);
+  card.appendChild(vol);
+
+  /* приложения */
+  var appsRaw = node.getAttribute('data-tv-apps') || '';
+  if(appsRaw){
+    var grid = el('div', 'txapps');
+    appsRaw.split(';').forEach(function(item){
+      var parts = item.split('|');
+      if(!parts[0]) return;
+      var title = parts[1] || parts[0];
+      var b = el('div', 'txapp' + (title === app ? ' now' : ''), title);
+      b.onclick = (function(c, nd){ return function(){
+        press(c);
+        var all = grid.querySelectorAll('.txapp');
+        for(var k = 0; k < all.length; k++) all[k].classList.remove('now');
+        nd.classList.add('now');
+      }; })(parts[0], b);
+      dimmed.push(b);
+      grid.appendChild(b);
+    });
+    card.appendChild(grid);
+  }
+  setLive(link);
+
+  function sync(){
+    var q = Q();
+    fetch(NAME + '.svg' + q + (q ? '&' : '?') + 't=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.text() : null; })
+      .then(function(text){
+        if(!text) return;
+        var doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+        var g = doc.querySelector('[data-tv-base="' + base + '"]');
+        if(!g) return;
+        on = g.getAttribute('data-tv-on') === '1';
+        pw.classList.toggle('on', on);
+        var st = g.getAttribute('data-tv-state') || '';
+        var now = g.getAttribute('data-tv-app') || '';
+        var live = g.getAttribute('data-tv-link') === '1';
+        sub.textContent = st + (now ? ' · ' + now : '') + (live ? '' : ' · доступно только включение');
+        if(live !== link) setLive(live);
+        var chips = card.querySelectorAll('.txapp');
+        for(var i = 0; i < chips.length; i++) chips[i].classList.toggle('now', chips[i].textContent === now);
+      })
+      .catch(function(){});
+  }
+  var timer = setInterval(sync, 2000);
+  ovCleanup = function(){ clearInterval(timer); };
+  openOv([card]);
+}
+
+/* Кнопка колеса на плитке (зона tv:<клавиша>): нажатие уходит прямо в
+   мост, пульт не открывается. Нажатое на миг гаснет - иначе непонятно,
+   дошло ли касание до плитки. */
+function tvKey(node, control){
+  var base = node.getAttribute('data-tv-base');
+  if(!base) return;
+  var parts = node.querySelectorAll('[data-k="' + control + '"]');
+  for(var i = 0; i < parts.length; i++) parts[i].style.opacity = '.45';
+  setTimeout(function(){ for(var i = 0; i < parts.length; i++) parts[i].style.opacity = ''; }, 180);
+  pub(base + control + '/on', 1).catch(function(e){ flash('Не удалось: ' + e.message); });
+}
+
+function padTVFlat(node){
   var base = node.getAttribute('data-tv-base');
   if(!base) return;
   var link = node.getAttribute('data-tv-link') === '1';

@@ -203,3 +203,288 @@ def diode_box(kx, ky, kw, kh, horiz):
         return {"x": _r(kx + kw - 18 - dw / 2), "y": _r(ky + kh / 2 - dh / 2), "w": dw, "h": _r(dh)}
     dw, dh = min(26.0, kw * 0.42), 6.5
     return {"x": _r(kx + kw / 2 - dw / 2), "y": _r(ky + min(22.0, kh * 0.13) - dh / 2), "w": _r(dw), "h": dh}
+
+
+# ---------------------------------------------------------------- шар ленты
+#
+# Шар светится цветом ленты: слева холодный, справа тёплый (цвета поля
+# прежней плитки), посередине нейтральный белый. Яркость - сила свечения.
+# По шару мелкие соты - геодезическая сетка: видно, что он повёрнут.
+# Поворот задают сами значения: вверх-вниз - яркость, влево-вправо -
+# теплота; пульт крутит шар за пальцем от этого же положения.
+
+#: Поворот шара на всю шкалу, радианы. Те же числа в пульте (wrapper.html).
+SPHERE_PITCH = 2.6
+SPHERE_YAW = 3.2
+_DARK = (0x14, 0x15, 0x18)
+_MID = (0xEC, 0xE6, 0xDC)
+_GEO = {}
+
+
+def _hex(c):
+    c = c.lstrip("#")
+    return tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _mix(a, b, f):
+    return tuple(a[i] + (b[i] - a[i]) * f for i in range(3))
+
+
+def _css(c):
+    return "#%02X%02X%02X" % tuple(int(round(max(0, min(255, v)))) for v in c)
+
+
+def light_hue(temp, cold, warm):
+    """Цвет света: temp 0 - холодный, 1 - тёплый."""
+    cold, warm = _hex(cold), _hex(warm)
+    return _mix(cold, _MID, temp * 2) if temp < 0.5 else _mix(_MID, warm, (temp - 0.5) * 2)
+
+
+def geodesic(freq):
+    """Соты на шаре: ячейки вокруг вершин дробного икосаэдра."""
+    if freq in _GEO:
+        return _GEO[freq]
+    p = (1 + 5 ** 0.5) / 2
+    ico = [(-1, p, 0), (1, p, 0), (-1, -p, 0), (1, -p, 0), (0, -1, p), (0, 1, p), (0, -1, -p),
+           (0, 1, -p), (p, 0, -1), (p, 0, 1), (-p, 0, -1), (-p, 0, 1)]
+    faces = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4),
+             (11, 10, 2), (10, 7, 6), (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8),
+             (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]
+
+    def nrm(v):
+        n = math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+        return (v[0] / n, v[1] / n, v[2] / n)
+
+    verts, index, tris = [], {}, []
+
+    def vid(v):
+        v = nrm(v)
+        key = tuple(round(x, 5) for x in v)
+        if key not in index:
+            index[key] = len(verts)
+            verts.append(v)
+        return index[key]
+
+    F = freq
+    for a, b, c in faces:
+        A, B, C = ico[a], ico[b], ico[c]
+        grid = []
+        for i in range(F + 1):
+            row = []
+            for j in range(F + 1 - i):
+                row.append(vid(tuple(A[k] + (B[k] - A[k]) * i / F + (C[k] - A[k]) * j / F
+                                     for k in range(3))))
+            grid.append(row)
+        for i in range(F):
+            for j in range(F - i):
+                tris.append((grid[i][j], grid[i + 1][j], grid[i][j + 1]))
+                if j < F - i - 1:
+                    tris.append((grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]))
+    cen = [nrm(tuple(verts[t[0]][k] + verts[t[1]][k] + verts[t[2]][k] for k in range(3)))
+           for t in tris]
+    adj = [[] for _ in verts]
+    for k, t in enumerate(tris):
+        for v in t:
+            adj[v].append(k)
+    cells = []
+    for vi, d in enumerate(verts):
+        u = (1, 0, 0) if abs(d[0]) < 0.9 else (0, 1, 0)
+        e1 = nrm((d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]))
+        e2 = (d[1] * e1[2] - d[2] * e1[1], d[2] * e1[0] - d[0] * e1[2], d[0] * e1[1] - d[1] * e1[0])
+
+        def ang(k):
+            c = cen[k]
+            return math.atan2(sum(c[i] * e2[i] for i in range(3)), sum(c[i] * e1[i] for i in range(3)))
+        cells.append((vi, sorted(adj[vi], key=ang)))
+    _GEO[freq] = (verts, cen, cells)
+    return _GEO[freq]
+
+
+def sphere_seams(cx, cy, r, yaw, pitch, freq):
+    """Швы сот на видимой стороне шара одним путём."""
+    verts, cen, cells = geodesic(freq)
+    cy1, sy1, cx1, sx1 = math.cos(yaw), math.sin(yaw), math.cos(pitch), math.sin(pitch)
+
+    def P(v):
+        x = v[0] * cy1 + v[2] * sy1
+        z = -v[0] * sy1 + v[2] * cy1
+        y = v[1]
+        return (x, y * cx1 - z * sx1, y * sx1 + z * cx1)
+
+    pc = [P(c) for c in cen]
+    out = []
+    for vi, ring in cells:
+        if P(verts[vi])[2] < 0.03 or any(pc[k][2] < 0 for k in ring):
+            continue
+        out.append("M " + " L ".join("%.1f,%.1f" % (cx + pc[k][0] * r, cy - pc[k][1] * r)
+                                     for k in ring) + " Z")
+    return " ".join(out)
+
+
+def sphere_tile(w, h, level, temp, on, cold, warm, compact):
+    """Шар ленты на плитке: место, цвета, соты и шкалы вокруг."""
+    if w >= h * 1.6:
+        kind = "wide"
+        r = h / 2.0 - 17
+        R = r + max(6.0, r * 0.18)
+        cx, cy = 8 + R + 2, h / 2.0
+        led = {"x": w - 26, "y": 13}
+        text_x = cx + R + 10
+    elif h < 140:
+        kind = "small"
+        r = min(w / 2.0 - 14, (h - 22) / 2.0 - 10)
+        R = r + max(5.0, r * 0.18)
+        cx, cy = w / 2.0, 8 + (h - 30) / 2.0
+        led, text_x = None, None
+    elif w >= h * 0.8:
+        kind = "square"
+        r = min(w, h) * 0.27
+        R = r + max(7.0, r * 0.16)
+        cx, cy = w / 2.0, h * 0.45
+        led = {"x": w / 2.0, "y": 14}
+        text_x = None
+    else:
+        kind = "tall"
+        top, bottom = 26.0, h - (40 if compact else 50)
+        r = min(w / 2.0 - 14, (bottom - top) / 2.0 - 10)
+        R = r + max(6.0, r * 0.18)
+        cx, cy = w / 2.0, (top + bottom) / 2.0
+        led = {"x": w / 2.0, "y": 13}
+        text_x = None
+
+    hue = light_hue(temp, cold, warm)
+    lv = level if on else 0.0
+    col = _mix(_DARK, hue, 0.18 + 0.82 * (level if on else 0.25))
+    yaw = (temp - 0.5) * SPHERE_YAW
+    pitch = -(level - 0.5) * SPHERE_PITCH
+    freq = max(3, min(8, int(round(r / 11.0))))
+    sw = max(2.0, r * 0.06)
+
+    def arc_d(d0, d1, rad):
+        x0, y0 = _pt(cx, cy, rad, d0)
+        x1, y1 = _pt(cx, cy, rad, d1)
+        if abs(d1 - d0) < 0.5:
+            return ""
+        return "M %.1f,%.1f A %.1f,%.1f 0 %d %d %.1f,%.1f" % (
+            x0, y0, rad, rad, 1 if abs(d1 - d0) > 180 else 0, 1 if d1 > d0 else 0, x1, y1)
+
+    B0, B1, T0, T1 = 165.0, 255.0, 140.0, 40.0
+    n = 14 if r < 30 else 22
+    dots = []
+    for i in range(n):
+        f = i / float(n - 1)
+        x, y = _pt(cx, cy, R, T0 - (T0 - T1) * f)
+        dots.append({"x": _r(x), "y": _r(y), "c": _css(light_hue(f, cold, warm))})
+    bx, by = _pt(cx, cy, R, B0 + (B1 - B0) * level)
+    tx, ty = _pt(cx, cy, R, T0 - (T0 - T1) * temp)
+    return {
+        "kind": kind, "cx": _r(cx), "cy": _r(cy), "r": _r(r), "R": _r(R),
+        "led": {"x": _r(led["x"]), "y": _r(led["y"])} if led else None,
+        "text_x": _r(text_x) if text_x else None,
+        "hue": _css(hue), "halo_op": round(0.5 * lv, 2), "halo_r": _r(r * (1.45 + 0.5 * lv)),
+        "c0": _css(_mix(col, (255, 255, 255), 0.25 * lv)) if on else "#585A60",
+        "c1": _css(_mix(col, _DARK, 0.25)) if on else "#2E2F34",
+        "c2": _css(_mix(col, _DARK, 0.78)) if on else "#121316",
+        "seam": _css(_mix(col, _DARK, 0.5)) if on else "#96989E",
+        "seam_op": 0.45 if on else 0.22, "seam_w": _r(max(0.5, r / 160.0)),
+        "seams": sphere_seams(cx, cy, r, yaw, pitch, freq),
+        "b_track": arc_d(B0, B1, R), "b_fill": arc_d(B0, B0 + (B1 - B0) * level, R),
+        "dots": dots, "dot_r": _r(sw * 0.62), "sw": _r(sw),
+        "knob_b": {"x": _r(bx), "y": _r(by)}, "knob_t": {"x": _r(tx), "y": _r(ty)},
+        "knob_r": _r(sw * 1.55),
+    }
+
+
+# ------------------------------------------------------------- телевизор
+def _sector(cx, cy, r0, r1, a0, a1):
+    """Четверть кольца между r0 и r1 - зона стрелки на колесе."""
+    p = lambda r, a: (cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a)))
+    o0, o1, i1, i0 = p(r1, a0), p(r1, a1), p(r0, a1), p(r0, a0)
+    return ("M %.1f,%.1f A %.1f,%.1f 0 0 1 %.1f,%.1f L %.1f,%.1f "
+            "A %.1f,%.1f 0 0 0 %.1f,%.1f Z") % (o0 + (r1, r1) + o1 + i1 + (r0, r0) + i0)
+
+
+def tv_wheel(cx, cy, R, fs=1.0):
+    """Колесо пульта: зубчатый обод, стрелки по сторонам, OK в центре."""
+    ok = R * 0.36
+    d = R * 0.70
+    s = max(4.0, R * 0.13)
+    arrows = []
+    for name, ang in (("up", -90), ("right", 0), ("down", 90), ("left", 180)):
+        a = math.radians(ang)
+        ux, uy = math.cos(a), math.sin(a)          # наружу
+        vx, vy = -uy, ux                            # поперёк
+        tip = (cx + ux * (d + s * 0.65), cy + uy * (d + s * 0.65))
+        b1 = (cx + ux * (d - s * 0.5) + vx * s, cy + uy * (d - s * 0.5) + vy * s)
+        b2 = (cx + ux * (d - s * 0.5) - vx * s, cy + uy * (d - s * 0.5) - vy * s)
+        arrows.append({
+            "key": name,
+            "tri": "M %.1f,%.1f L %.1f,%.1f L %.1f,%.1f Z" % (tip + b1 + b2),
+            "zone": _sector(cx, cy, ok, R + 2, ang - 45, ang + 45),
+        })
+    return {"cx": _r(cx), "cy": _r(cy), "R": _r(R), "ok": _r(ok),
+            "gear": gear_path(cx, cy, R, max(0.55, min(1.4, R / 70.0)) * fs),
+            "sh": _r(max(1.5, R * 0.05)), "arrows": arrows,
+            "ok_font": _r(max(9.0, ok * 0.62))}
+
+
+def tv_tile(w, h, compact=False):
+    """
+    Плитка телевизора нового вида (1.21). Раскладки:
+
+      square - колесо сверху, «назад» и «домой» по нижним углам колеса,
+               подпись под ними (макет 15.10);
+      wide   - колесо справа, кнопки слева от него;
+      tall   - 0.5×1: колесо и под ним две кнопки;
+      low    - половинная высота: подпись слева, малое колесо справа;
+      small  - 0.5×0.5: только малое колесо.
+
+    Нажимать по колесу можно, только когда оно достаточно крупное (keys):
+    промах по стрелке в полтора десятка пикселей дороже, чем лишнее
+    открытие пульта.
+    """
+    m = min(w, h)
+    if h < 117:
+        kind = "small" if compact else "low"
+    elif compact:
+        kind = "tall"
+    elif w >= 1.6 * h:
+        kind = "wide"
+    else:
+        kind = "square"
+
+    btn = None
+    if kind == "square":
+        R = min(w * 0.29, (h - 78) / 2.0)
+        wh = tv_wheel(w / 2, 12 + R, R)
+        by = wh["cy"] + R * 0.78
+        br = max(11.0, R * 0.21)
+        btn = [{"key": "back", "cx": _r(max(br + 12, w / 2 - R * 1.05)), "cy": _r(by), "r": _r(br)},
+               {"key": "home", "cx": _r(min(w - br - 12, w / 2 + R * 1.05)), "cy": _r(by), "r": _r(br)}]
+    elif kind == "wide":
+        R = h * 0.36
+        wh = tv_wheel(w - 22 - R, h / 2, R)
+        br = max(12.0, R * 0.22)
+        bx = wh["cx"] - R - 14 - br
+        btn = [{"key": "back", "cx": _r(bx), "cy": _r(h / 2 - br - 5), "r": _r(br)},
+               {"key": "home", "cx": _r(bx), "cy": _r(h / 2 + br + 5), "r": _r(br)}]
+    elif kind == "tall":
+        R = w * 0.38
+        wh = tv_wheel(w / 2, 14 + R, R)
+        br = 11.0
+        by = wh["cy"] + R + 8 + br
+        btn = [{"key": "back", "cx": _r(w / 2 - br - 4), "cy": _r(by), "r": _r(br)},
+               {"key": "home", "cx": _r(w / 2 + br + 4), "cy": _r(by), "r": _r(br)}]
+    elif kind == "low":
+        R = h * 0.30
+        wh = tv_wheel(w - 12 - R, h / 2, R)
+    else:
+        R = m * 0.30
+        wh = tv_wheel(w / 2, h * 0.40, R)
+    # Стрелки и OK - только на крупном колесе; «назад» и «домой» всегда:
+    # у них своя зона с запасом вокруг кружка.
+    keys = R >= 40
+    for b in btn or []:
+        b["icon"] = max(10.0, b["r"] * 1.05)
+    return {"kind": kind, "wheel": wh, "buttons": btn or [], "keys": keys,
+            "text_w": _r((wh["cx"] - R - 12 - 18) if kind == "low" else 0)}

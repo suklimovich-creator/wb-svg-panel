@@ -17,6 +17,7 @@ from .geometry import _fmt
 from .registry import Tile, Zone, tile
 from .state import is_on
 from .skeuo import diode_box, switch_layout
+from .tiles import command_topic
 from .state import to_float
 
 
@@ -105,6 +106,83 @@ class Scene(Tile):
         # что сюда попадёт on - но пусть и второй путь ведёт туда же.
         value = self._form(ctx)
         return [Zone("toggle", "all", "value", {"on": value, "off": value})]
+
+
+@tile("scenes")
+class Scenes(Tile):
+    """
+    Сцены одной плиткой (с 1.19): клавиши сеткой 3×3, от 10 до 12 - 4×3.
+
+    Порядок - как в конфиге: задумано от тусклых к ярким, первой «выключить
+    всё». Чем дальше клавиша, тем теплее её лицо, точки в углу - яркость
+    сцены (можно задать level: 0…1 у пункта). Каждая клавиша - отдельная
+    кнопка: нажал - сработало, как у одиночной плитки scene.
+
+        - type: scenes
+          title: "Сцены"
+          w: 1.5
+          h: 1.5
+          items:
+            - {title: "Выкл. всё", icon: power, channel: "lightingScenes/off_all"}
+            - {title: "Спать",     icon: moon,  channel: "lightingScenes/bedtime"}
+    """
+
+    roles = ()
+
+    @staticmethod
+    def _items(conf):
+        return [i for i in (conf.get("items") or []) if isinstance(i, dict) and i.get("channel")]
+
+    @staticmethod
+    def channels(conf):
+        return set(i["channel"] for i in Scenes._items(conf))
+
+    @staticmethod
+    def writes(conf):
+        out = set()
+        for i in Scenes._items(conf):
+            t = command_topic(i["channel"], i.get("command_topic"))
+            if t:
+                out.add(t)
+        return out
+
+    def prepare(self, ctx):
+        items = self._items(ctx.conf)
+        n = len(items)
+        w = float(ctx.opt("inner_w") or 262)
+        h = float(ctx.opt("chart_h") or 262)
+        cols = 3 if n <= 9 else 4
+        rows = max(1, -(-n // cols))
+        pad, gap, top = 12.0, 8.0, 40.0
+        kw = (w - 2 * pad - (cols - 1) * gap) / cols
+        kh = (h - top - pad - (rows - 1) * gap) / rows
+        keys = []
+        for k, item in enumerate(items):
+            snap = ctx.state.snapshot(item["channel"])
+            ctx.snaps.append(snap)
+            raw = str(snap.get("raw") or "").strip().lower()
+            on = str(item.get("command_on")) if item.get("command_on") is not None \
+                else Scene.FORMS.get(raw, ("1", "0"))[0]
+            lv = item.get("level")
+            if lv is None:
+                lv = k / float(max(1, n - 1))
+            lv = max(0.0, min(1.0, float(lv)))
+            x = pad + (k % cols) * (kw + gap)
+            y = top + (k // cols) * (kh + gap)
+            keys.append({
+                "x": round(x, 1), "y": round(y, 1), "w": round(kw, 1), "h": round(kh, 1),
+                "title": str(item.get("title") or ""), "icon": item.get("icon") or "bulb",
+                "topic": command_topic(item["channel"], item.get("command_topic")),
+                "value": on, "level": round(lv, 2),
+                "glow": round(0.05 + 0.4 * lv, 2),
+                "dots": [lv >= (d + 0.5) / 5.0 for d in range(5)],
+                "isize": round(min(28.0, kh * 0.3, kw * 0.32), 1),
+                "font": round(min(13.0, kw / 7.2), 1),
+            })
+        return {"on": False, "skeys": keys, "status": ""}
+
+    def zones(self, ctx, data):
+        return []
 
 
 @tile("value")

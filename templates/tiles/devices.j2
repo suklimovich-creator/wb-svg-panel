@@ -19,6 +19,11 @@
      светлая линия, какой стала бы, взявшись от цвета текста. */
   .pleat line{ stroke: #000; stroke-width: calc(1px * var(--fs)); opacity: .13; }
   .hem{ fill: #000; opacity: .22; }
+  /* шторы нового вида (1.20): приглушённая ткань, переплёт окна, ручка */
+  .drape{ fill: var(--drape); }
+  .sash line{ stroke: var(--sash); stroke-width: calc(4px * var(--fs)); }
+  .sash .bar{ stroke-width: calc(3px * var(--fs)); }
+  .handle{ fill: var(--active); }
   /* цель хода. Оранжевый, как у всего действующего на панели, и пунктир -
      чтобы не спутать с кромкой полотна, которая сплошная. */
   .goal{ stroke: var(--active); stroke-width: calc(1.8px * var(--fs));
@@ -90,7 +95,112 @@
     Створки занимают всю плитку и едут от краёв к центру. Ширина каждой
     пропорциональна тому, насколько она НЕ открыта. К низу картинка гаснет
     до цвета подложки - там лежат подписи. -#}
+{#- Вид за окном (шторы, с 1.20): небо по высоте солнца, солнце и луна
+    на своих местах, облака, осадки. Градиенты объявлены здесь же: цвета
+    у них свои на каждое время суток. Фильтров нет - мягкость даёт
+    радиальный градиент, размытие на плитку панели не по карману. -#}
+{% macro window(t) %}
+  {% set k = t.sky %}
+  {% set id = uid ~ 'w' ~ t.i %}
+  <defs>
+    <linearGradient id="{{ id }}sky" x1="0" y1="0" x2="0" y2="{{ k.horizon }}" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="{{ k.sky[0] }}"/>
+      <stop offset=".62" stop-color="{{ k.sky[1] }}"/>
+      <stop offset="1" stop-color="{{ k.sky[2] }}"/>
+    </linearGradient>
+    {% if k.sun %}
+    <radialGradient id="{{ id }}sun">
+      <stop offset="0" stop-color="{{ k.sun.color }}" stop-opacity="{{ k.sun.glow }}"/>
+      <stop offset=".35" stop-color="{{ k.sun.color }}" stop-opacity="{{ (k.sun.glow * 0.45)|round(2) }}"/>
+      <stop offset="1" stop-color="{{ k.sun.color }}" stop-opacity="0"/>
+    </radialGradient>
+    {% endif %}
+    {% if k.moon %}
+    <radialGradient id="{{ id }}moon">
+      <stop offset="0" stop-color="#DDE6F2" stop-opacity="{{ k.moon.glow }}"/>
+      <stop offset="1" stop-color="#DDE6F2" stop-opacity="0"/>
+    </radialGradient>
+    {% endif %}
+    {% if k.clouds %}
+    <radialGradient id="{{ id }}cl">
+      <stop offset="0" stop-color="{{ k.cloud_color }}" stop-opacity="{{ k.cloud_op }}"/>
+      <stop offset=".55" stop-color="{{ k.cloud_color }}" stop-opacity="{{ (k.cloud_op * 0.75)|round(2) }}"/>
+      <stop offset="1" stop-color="{{ k.cloud_color }}" stop-opacity="0"/>
+    </radialGradient>
+    {% endif %}
+    {% if k.fog %}
+    <linearGradient id="{{ id }}fog" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="{{ k.fog_color }}" stop-opacity="0"/>
+      <stop offset=".45" stop-color="{{ k.fog_color }}" stop-opacity="{{ (k.fog * 0.75)|round(2) }}"/>
+      <stop offset="1" stop-color="{{ k.fog_color }}" stop-opacity="{{ (k.fog * 0.9)|round(2) }}"/>
+    </linearGradient>
+    {% endif %}
+  </defs>
+  <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ id }}sky)"/>
+  {% for s in k.stars %}<circle cx="{{ s.x }}" cy="{{ s.y }}" r="{{ s.r }}" fill="#FFFFFF" opacity="{{ s.op }}"/>{% endfor %}
+  {% if k.moon %}
+  {% if k.moon.glow > 0.01 %}<circle cx="{{ k.moon.x }}" cy="{{ k.moon.y }}" r="{{ k.moon.g }}" fill="url(#{{ id }}moon)"/>{% endif %}
+  <circle cx="{{ k.moon.x }}" cy="{{ k.moon.y }}" r="{{ k.moon.r }}" fill="#9AA6B8" opacity="{{ (k.moon.op * 0.12)|round(2) }}"/>
+  <path d="{{ k.moon.path }}" fill="#EEF2F8" opacity="{{ k.moon.op }}"/>
+  {% endif %}
+  {% if k.sun %}
+  <circle cx="{{ k.sun.x }}" cy="{{ k.sun.y }}" r="{{ k.sun.g }}" fill="url(#{{ id }}sun)"/>
+  {% if k.sun.disc > 0.02 %}<circle cx="{{ k.sun.x }}" cy="{{ k.sun.y }}" r="{{ k.sun.r }}" fill="{{ k.sun.color }}" opacity="{{ k.sun.disc }}"/>{% endif %}
+  {% endif %}
+  {% for c in k.clouds %}<ellipse cx="{{ c.cx }}" cy="{{ c.cy }}" rx="{{ c.rx }}" ry="{{ c.ry }}" fill="url(#{{ id }}cl)"/>{% endfor %}
+  {% for hl in k.hills %}<path d="{{ hl.d }}" fill="{{ hl.fill }}"/>{% endfor %}
+  {% if k.fog %}<rect y="{{ (t.h * 0.3)|round(1) }}" width="{{ t.w }}" height="{{ (t.h * 0.7)|round(1) }}" fill="url(#{{ id }}fog)"/>{% endif %}
+  {% if k.rain %}<g stroke="{{ k.rain_color }}" stroke-width="{{ (1.1 * (fs|float))|round(2) }}" stroke-linecap="round" opacity=".55">
+  {% for r in k.rain %}<line x1="{{ r.x1 }}" y1="{{ r.y1 }}" x2="{{ r.x2 }}" y2="{{ r.y2 }}"/>{% endfor %}
+  </g>{% endif %}
+  {% if k.snow %}<g fill="#FFFFFF" opacity=".85">
+  {% for f in k.snow %}<circle cx="{{ f.x }}" cy="{{ f.y }}" r="{{ f.r }}"/>{% endfor %}
+  </g>{% endif %}
+{% endmacro %}
+
+{#- Подпись нового вида: состояние строкой под названием. На весь экран
+    кегль растёт, и строки разводятся на столько же - иначе налезают. -#}
+{% macro sky_caption(t) %}
+  {% set f = fs|float %}
+  {% if f > 1 and t.always_status and not t.compact %}
+  <text x="{{ (20 * f)|round(1) }}" y="{{ (t.h - 42 * f)|round(1) }}" class="name">{{ t.title }}</text>
+  <text x="{{ (20 * f)|round(1) }}" y="{{ (t.h - 18 * f)|round(1) }}" class="status">{{ t.status }}</text>
+  {% else %}
+  {{ base.caption(t, t.status) }}
+  {% endif %}
+{% endmacro %}
+
+{#- Подложка под подписи нового вида: у полной плитки - к низу, у
+    половинной - слева, где стоит текст. -#}
+{% macro sky_scrim(t) %}
+  {% if t.h < base.LOW and not t.compact %}
+  <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}scrimL)"/>
+  {% else %}
+  <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}scrim2)"/>
+  {% endif %}
+{% endmacro %}
+
 {% macro tile_curtain(t) %}
+  {% if t.sky %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    {{ window(t) }}
+    <g class="sash">
+      <line x1="{{ t.w / 2 }}" y1="0" x2="{{ t.w / 2 }}" y2="{{ t.h }}"/>
+      <line x1="0" y1="{{ (t.h * 0.42)|round(1) }}" x2="{{ t.w }}" y2="{{ (t.h * 0.42)|round(1) }}" class="bar"/>
+    </g>
+    {% for p in t.drape.panels %}
+    <rect x="{{ p.x }}" y="0" width="{{ p.w }}" height="{{ t.h }}" class="drape"/>
+    {% for x in p.stripes %}<rect x="{{ x }}" y="0" width="{{ p.sw }}" height="{{ t.h }}" fill="url(#{{ uid }}plt)"/>{% endfor %}
+    {% endfor %}
+    {{ sky_scrim(t) }}
+    {% set hd = t.drape.handle %}
+    <rect x="{{ hd.x }}" y="{{ hd.y }}" width="{{ hd.w }}" height="{{ hd.h }}" rx="{{ hd.w / 2 }}" class="handle"/>
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="rim {{ 'on' if t.on }}"/>
+  {{ sky_caption(t) }}
+  {% else %}
   {% set half = t.w / 2.0 %}
   {% set lw = half * (1 - t.left_open) %}
   {% set rw = half * (1 - t.right_open) %}
@@ -137,6 +247,7 @@
   {{ base.icon_c(t, t.icon or 'blind', 22) }}
   {{ base.value_tr(t) }}
   {{ base.caption(t, t.status) }}
+  {% endif %}
 {% endmacro %}
 
 {#- ---- рулонные и римские шторы ----
@@ -151,6 +262,29 @@
     пока она меньше обычного. Так у поднятой шторы видно стопку у
     карниза, а у опущенной - ровные ряды карманов под рейки. -#}
 {% macro tile_roller(t) %}
+  {% if t.sky %}
+  {{ base.plate(t) }}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    {{ window(t) }}
+    <g class="sash">
+      <line x1="{{ t.w / 2 }}" y1="0" x2="{{ t.w / 2 }}" y2="{{ t.h }}"/>
+    </g>
+    {% for d in t.roman.folds %}
+    <path d="{{ d }}" class="drape"/>
+    <path d="{{ d }}" fill="url(#{{ uid }}rfold)"/>
+    {% endfor %}
+    {{ sky_scrim(t) }}
+    {% if t.goal is not none %}
+    <line class="goal" x1="0" y1="{{ '%.1f'|format(t.h * (1 - t.goal)) }}"
+          x2="{{ t.w }}" y2="{{ '%.1f'|format(t.h * (1 - t.goal)) }}"/>
+    {% endif %}
+    {% set hd = t.roman.handle %}
+    <rect x="{{ hd.x }}" y="{{ hd.y }}" width="{{ hd.w }}" height="{{ hd.h }}" rx="{{ hd.h / 2 }}" class="handle"/>
+  </g>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        class="rim {{ 'on' if t.on }}"/>
+  {{ sky_caption(t) }}
+  {% else %}
   {% set stack = t.h * (0.06 + 0.10 * t.open) %}
   {% set drop = [t.h * (1 - t.open), stack]|max %}
   {% set step = [t.h * 0.15, [drop / 3.0, 3.0]|max]|min %}
@@ -214,6 +348,7 @@
   {{ base.icon_c(t, t.icon or 'blind', 22) }}
   {{ base.value_tr(t) }}
   {{ base.caption(t, t.status) }}
+  {% endif %}
 {% endmacro %}
 
 {#- ---- светодиодная лента ----
@@ -222,6 +357,18 @@
       Y: сверху ярко, снизу темно
     Точка показывает фактическое положение, оранжевая рамка - что лента включена. -#}
 {% macro tile_light(t) %}
+  {% if t.sphere %}
+  {{ base.plate(t) }}
+  {{ base.sphere(t) }}
+  {% if t.compact and t.sphere.kind == 'tall' and t.on and t.short_min %}
+  <text x="{{ t.w / 2 }}" y="{{ t.h - 31 }}" class="status" text-anchor="middle">{{ t.short_min }}</text>
+  {% endif %}
+  {% if not t.compact and t.sphere.kind != 'wide' %}
+  {% set label = t.short if t.w >= 260 else t.short_min %}
+  {% if label %}<text x="{{ t.w - 20 }}" y="41" class="badge" text-anchor="end">{{ label }}</text>{% endif %}
+  {% endif %}
+  {{ base.caption(t, t.status) }}
+  {% else %}
   {{ base.plate(t) }}
   <linearGradient id="{{ uid }}cct{{ t.i }}" x1="0" y1="0" x2="1" y2="0">
     <stop offset="0" stop-color="{{ t.cold }}"/>
@@ -266,6 +413,7 @@
     {% endif %}
     {{ base.caption(t, t.status) }}
   </g>
+  {% endif %}
 {% endmacro %}
 
 {#- ---- диммируемый светильник ----

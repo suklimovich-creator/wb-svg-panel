@@ -44,6 +44,8 @@
     --stroke:      #6E6E75;   /* иконки */
     --window:      #B4BCC7;   /* «улица» за шторой */
     --fabric:      #F0ECE5;   /* ткань */
+    --drape:       #9E978C;   /* штора нового вида - приглушённая */
+    --sash:        #F4F2EE;   /* переплёт окна */
     /* Подложка включённой плитки. В светлой и тёмной та же, что у
        выключенной - там о включении говорит рамка; ретро и мягкая
        подкрашивают саму плитку. */
@@ -94,6 +96,8 @@
     --stroke:      #C6C6CC;
     --window:      #39404A;
     --fabric:      #7B7568;
+    --drape:       #4A4741;   /* штора нового вида - приглушённая */
+    --sash:        #141518;   /* переплёт окна */
     /* Отсвет плиток из левого верхнего угла: белёсый у всех, тёплый у
        включённой. У графита свои, построже. */
     --sheen:       rgba(255,255,255,.065);
@@ -134,6 +138,8 @@
     --stroke:      #B8B9BF;
     --window:      #2F353D;
     --fabric:      #6E6A60;
+    --drape:       #403F3B;   /* штора нового вида - приглушённая */
+    --sash:        #111214;   /* переплёт окна */
     --sheen:       rgba(255,255,255,.075);
     --sheen-on:    rgba(242,162,58,.34);
     --section:     #232427;
@@ -173,6 +179,8 @@
     --stroke:      #4A423A;
     --window:      #CFC7BC;
     --fabric:      #F6F1EA;
+    --drape:       #A39484;   /* штора нового вида - приглушённая */
+    --sash:        #F7F4EF;   /* переплёт окна */
     --shadow:      #4A3420;
     --cool:        #4F7C8A;
     --inv-tile:    #8A4A20;
@@ -208,6 +216,8 @@
     --stroke:      #3E4757;
     --window:      #C7CFCB;
     --fabric:      #F6EFE2;
+    --drape:       #9C9583;   /* штора нового вида - приглушённая */
+    --sash:        #F6F1E6;   /* переплёт окна */
     --shadow:      #5A4026;
     --cool:        #5E8C6A;
     --inv-tile:    #2F3A4F;
@@ -243,6 +253,8 @@
     --stroke:      #34302C;
     --window:      #C9C2B7;
     --fabric:      #EEE8DE;
+    --drape:       #958C80;   /* штора нового вида - приглушённая */
+    --sash:        #F3F0EA;   /* переплёт окна */
     --shadow:      #2A2420;
     --cool:        #5F7280;
     --inv-tile:    #262321;
@@ -300,6 +312,29 @@
   .lvl        { fill: var(--ink-dim); }
   .roller.on .lvl { fill: var(--active); }
   .inv .lvl-track { fill: var(--inv-ink); }
+  /* колесо пульта телевизора (1.21) */
+  .tvw-ar     { fill: var(--ink); opacity: .8; }
+  .tvw-ok     { fill: var(--active); }
+  .tvw-okt    { fill: #FFFFFF; font-weight: 700; letter-spacing: .3px; }
+  .tvw-ic     { color: var(--ink); }
+  .tvw.off .tvw-ok { fill: var(--ink-dim); opacity: .55; }
+  .skey       { cursor: pointer; }
+  .skey-ic    { color: var(--ink); }
+  .skey-t     { fill: var(--ink); font-weight: 500; }
+  .skey-dot   { fill: var(--ink); opacity: .22; }
+  .skey-dot.on { fill: var(--active); opacity: .95; }
+  .skey.fired .skey-face { stroke: var(--active); stroke-width: 2; }
+  .skey.fired .skey-ic { color: var(--active); }
+  .skey.busy  { opacity: .6; }
+  .sph-arc    { fill: none; stroke: var(--ink); stroke-linecap: round; }
+  .sph-fill   { fill: none; stroke: var(--ink-dim); stroke-linecap: round; }
+  .sphere.on .sph-fill { stroke: var(--active); }
+  .sph-knob   { fill: var(--ink-dim); stroke: var(--tile); stroke-width: 2; }
+  .sphere.on .sph-knob { fill: var(--ink); }
+  .inv .sph-arc { stroke: var(--inv-ink); }
+  .inv .sphere.on .sph-fill { stroke: var(--inv-accent); }
+  .inv .sph-knob { stroke: var(--inv-tile); }
+  .inv .sphere.on .sph-knob { fill: var(--inv-ink); }
   .inv .roller.on .lvl { fill: var(--inv-accent); }
   /* Сетка графика на угольном фоне читается вдвое ярче, чем на сером. */
   .graphite .tick, .graphite .hline { opacity: .07; }
@@ -489,6 +524,20 @@
     <stop offset="0" stop-color="var(--active)" stop-opacity=".45"/>
     <stop offset="1" stop-color="var(--active)" stop-opacity="0"/>
   </linearGradient>
+  {#- шар ленты: блик и тень к краю -#}
+  <radialGradient id="{{ uid }}spec" cx=".32" cy=".29" r=".42">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".55"/>
+    <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="{{ uid }}sprim" cx=".5" cy=".5" r=".5">
+    <stop offset=".55" stop-color="#101114" stop-opacity="0"/>
+    <stop offset="1" stop-color="#101114" stop-opacity=".55"/>
+  </radialGradient>
+  {#- клавиша сцены: тёплый свет снизу, тем сильнее, чем ярче сцена -#}
+  <radialGradient id="{{ uid }}sglow" cx=".5" cy="1" r=".9">
+    <stop offset="0" stop-color="#FFC27A" stop-opacity=".5"/>
+    <stop offset="1" stop-color="#FFC27A" stop-opacity="0"/>
+  </radialGradient>
   <radialGradient id="{{ uid }}halo" cx=".5" cy=".5" r=".5">
     <stop offset="0" stop-color="var(--active)" stop-opacity=".55"/>
     <stop offset="1" stop-color="var(--active)" stop-opacity="0"/>
@@ -583,12 +632,47 @@
     <stop offset="1" stop-color="#000" stop-opacity=".20"/>
   </linearGradient>
 
+  <!-- шторы нового вида (1.20): складка - полоса светотени, у римской
+       тень к нижней кромке каждой складки; подложка под подписи легче
+       прежней - вид за окном должен оставаться видом -->
+  <linearGradient id="{{ uid }}plt" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000" stop-opacity=".26"/>
+    <stop offset=".3" stop-color="#000" stop-opacity="0"/>
+    <stop offset=".55" stop-color="#FFF" stop-opacity=".12"/>
+    <stop offset=".8" stop-color="#000" stop-opacity="0"/>
+    <stop offset="1" stop-color="#000" stop-opacity=".2"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}rfold" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFF" stop-opacity=".10"/>
+    <stop offset=".55" stop-color="#000" stop-opacity="0"/>
+    <stop offset="1" stop-color="#000" stop-opacity=".32"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}scrim2" x1="0" y1="0" x2="0" y2="1">
+    <stop offset=".55" stop-color="var(--tile)" stop-opacity="0"/>
+    <stop offset=".80" stop-color="var(--tile)" stop-opacity=".72"/>
+    <stop offset="1"   stop-color="var(--tile)" stop-opacity=".9"/>
+  </linearGradient>
+
+  <linearGradient id="{{ uid }}scrimL" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0"   stop-color="var(--tile)" stop-opacity=".9"/>
+    <stop offset=".42" stop-color="var(--tile)" stop-opacity=".7"/>
+    <stop offset=".75" stop-color="var(--tile)" stop-opacity="0"/>
+  </linearGradient>
+
   <pattern id="{{ uid }}weave" width="7" height="7" patternUnits="userSpaceOnUse">
     <rect width="7" height="7" fill="var(--fabric)"/>
     <line x1="0" y1="0" x2="0" y2="7" stroke="rgba(0,0,0,.09)" stroke-width="1.6"/>
   </pattern>
 
   <!-- иконки: единый бокс 24x24, только штрихи -->
+  <symbol id="{{ uid }}ic-undo" viewBox="0 0 24 24">
+    <path class="icon" d="M9 7L5 11l4 4"/>
+    <path class="icon" d="M5 11h9a5 5 0 0 1 0 10h-3"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-home" viewBox="0 0 24 24">
+    <path class="icon" d="M4 11l8-7 8 7"/>
+    <path class="icon" d="M6.5 9.5V20h11V9.5"/>
+  </symbol>
   <symbol id="{{ uid }}ic-power" viewBox="0 0 24 24">
     <path class="icon" d="M12 3.5v8"/>
     <path class="icon" d="M7.2 6.6a7.2 7.2 0 1 0 9.6 0"/>
@@ -889,6 +973,45 @@
     <line x1="{{ k.kx + 8 }}" y1="{{ k.ky + k.kh / 2 }}" x2="{{ k.kx + k.kw - 8 }}" y2="{{ k.ky + k.kh / 2 }}" class="key-split"/>
     {% endif %}
     {{ diode(k.led, not t.on, k.horiz) }}
+  </g>
+{% endmacro %}
+
+{#- Шар ленты (1.18): светится цветом света, по нему соты, вокруг
+    слева дуга яркости, снизу точки теплоты. -#}
+{% macro sphere(t) %}
+  {% set k = t.sphere %}
+  <defs>
+    <radialGradient id="{{ uid }}sb{{ t.i }}" cx=".34" cy=".32" r=".72">
+      <stop offset="0" stop-color="{{ k.c0 }}"/>
+      <stop offset=".6" stop-color="{{ k.c1 }}"/>
+      <stop offset="1" stop-color="{{ k.c2 }}"/>
+    </radialGradient>
+    <radialGradient id="{{ uid }}sh{{ t.i }}" cx=".5" cy=".5" r=".5">
+      <stop offset=".45" stop-color="{{ k.hue }}" stop-opacity="{{ k.halo_op }}"/>
+      <stop offset="1" stop-color="{{ k.hue }}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g class="sphere {{ 'on' if t.on }}">
+    {% if t.on %}
+    <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ k.halo_r }}" fill="url(#{{ uid }}sh{{ t.i }})"/>
+    {% endif %}
+    <circle cx="{{ k.cx }}" cy="{{ k.cy + k.r * 0.1 }}" r="{{ k.r }}" class="key-sh" opacity=".35"/>
+    <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ k.r }}" fill="url(#{{ uid }}sb{{ t.i }})"/>
+    <path d="{{ k.seams }}" fill="none" stroke="{{ k.seam }}" stroke-opacity="{{ k.seam_op }}"
+          stroke-width="{{ k.seam_w }}" stroke-linejoin="round"/>
+    <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ k.r }}" fill="url(#{{ uid }}sprim)"/>
+    <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ k.r }}" fill="url(#{{ uid }}spec)"/>
+    <circle cx="{{ k.cx }}" cy="{{ k.cy }}" r="{{ k.r }}" fill="none" stroke="#FFFFFF" stroke-opacity=".14"/>
+    <path d="{{ k.b_track }}" class="lvl-track sph-arc" stroke-width="{{ k.sw }}"/>
+    {% if k.b_fill %}<path d="{{ k.b_fill }}" class="sph-fill" stroke-width="{{ k.sw }}"/>{% endif %}
+    {% for d in k.dots %}
+    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ k.dot_r }}" fill="{{ d.c }}" opacity="{{ '.95' if t.on else '.35' }}"/>
+    {% endfor %}
+    <circle cx="{{ k.knob_t.x }}" cy="{{ k.knob_t.y }}" r="{{ k.knob_r }}" class="sph-knob"/>
+    <circle cx="{{ k.knob_b.x }}" cy="{{ k.knob_b.y }}" r="{{ k.knob_r }}" class="sph-knob"/>
+    {% if k.led %}
+    {{ diode({'x': k.led.x - 13, 'y': k.led.y - 3.25, 'w': 26, 'h': 6.5}, not t.on) }}
+    {% endif %}
   </g>
 {% endmacro %}
 

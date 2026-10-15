@@ -26,10 +26,13 @@
 """
 
 import glob
+import hashlib
+import json
 import logging
 import os
 import re
 import time
+from collections import OrderedDict
 
 import yaml
 
@@ -68,6 +71,11 @@ _TRANSLIT = dict(zip(
 ALIASES = {"bg": "bg-bottom", "accent": "active", "heat": "ac-seg-heat", "card": "inv-tile"}
 
 _THEMES = {}
+#: Черновики редактора (с 1.29): тема, которую ещё правят на /themes.
+#: В меню и в списках их нет; живут в памяти, последние DRAFT_MAX.
+_DRAFTS = OrderedDict()
+DRAFT_MAX = 16
+DRAFT_PREFIX = "draft-"
 _PROBLEMS = []          # [(файл, текст)] - для /check
 _STATE = {"dir": None, "sig": None, "checked": 0.0, "version": 0}
 
@@ -107,6 +115,9 @@ def _theme(data, name, builtin, where):
             continue
         out[key] = value
     theme["vars"] = out
+    # Что задано в самом файле, до расчёта производных: с этого редактор
+    # начинает правку своей темы (с 1.29).
+    theme["raw"] = dict(out)
     return theme
 
 
@@ -251,11 +262,15 @@ def names():
 
 
 def exists(name):
-    return name in _THEMES
+    return name in _THEMES or name in _DRAFTS
+
+
+def is_draft(name):
+    return name in _DRAFTS
 
 
 def get(name):
-    return _THEMES.get(name) or _THEMES.get("light") or {
+    return _THEMES.get(name) or _DRAFTS.get(name) or _THEMES.get("light") or {
         "name": "light", "title": "light", "extends": None, "props": {}, "vars": {},
         "builtin": True, "file": None}
 
@@ -351,23 +366,25 @@ def menu():
     """Для страницы: [{name, title, dark, bg, own, acc…}] в порядке меню.
     Цвета пультов (с 1.27): акцент, он же светлее для выпуклых кнопок,
     текст на акценте, нагрев и холод - из темы, а не свои у страницы."""
-    out = []
-    for n in names():
-        v = css_vars(n)
-        tile = _parse(v.get("--tile"), v) or (217, 217, 220)
-        acc = _solid(v.get("--active"), v, tile) or (224, 155, 45)
-        heat = _solid(v.get("--ac-seg-heat"), v, tile) or (224, 102, 26)
-        cool = _solid(v.get("--cool"), v, tile) or (59, 143, 212)
-        page = info(n)["page_bg"]
-        # Нагрев и холод на пульте - и дуга, и надпись: должны читаться на поле.
-        field = _parse(page, v) or tile
-        heat, cool = _lift(heat, field), _lift(cool, field)
-        out.append({"name": n, "title": get(n)["title"], "dark": is_dark(n),
-                    "bg": page, "own": not get(n)["builtin"],
-                    "acc": _hex(acc), "acc2": _hex(_mix(acc, _WHITE, 0.28)),
-                    "accInk": _hex(_readable_on(acc, (255, 250, 242), (42, 26, 8))),
-                    "heat": _hex(heat), "cool": _hex(cool)})
-    return out
+    return [menu_entry(n) for n in names()]
+
+
+def menu_entry(n):
+    """Одна тема для страницы: цвета полей и пультов (см. menu)."""
+    v = css_vars(n)
+    tile = _parse(v.get("--tile"), v) or (217, 217, 220)
+    acc = _solid(v.get("--active"), v, tile) or (224, 155, 45)
+    heat = _solid(v.get("--ac-seg-heat"), v, tile) or (224, 102, 26)
+    cool = _solid(v.get("--cool"), v, tile) or (59, 143, 212)
+    page = info(n)["page_bg"]
+    # Нагрев и холод на пульте - и дуга, и надпись: должны читаться на поле.
+    field = _parse(page, v) or tile
+    heat, cool = _lift(heat, field), _lift(cool, field)
+    return {"name": n, "title": get(n)["title"], "dark": is_dark(n),
+            "bg": page, "own": not get(n)["builtin"],
+            "acc": _hex(acc), "acc2": _hex(_mix(acc, _WHITE, 0.28)),
+            "accInk": _hex(_readable_on(acc, (255, 250, 242), (42, 26, 8))),
+            "heat": _hex(heat), "cool": _hex(cool)}
 
 
 #: Основные цвета темы для страницы /themes: (ключ, переменная, подпись).
@@ -395,10 +412,13 @@ def describe(name):
         if c:
             swatches.append({"key": key, "title": title, "color": _hex(c)})
     ink = _parse(v.get("--ink"), v)
-    # У встроенных тем ошибок не бывает, а имя файла у них может совпасть
-    # со своим (light.yaml в themes/) - не приписываем им чужое.
-    own = [text for where, text in _PROBLEMS
-           if not theme["builtin"] and where == theme["file"]]
+    if "problems" in theme:                    # черновик редактора
+        own = list(theme["problems"])
+    else:
+        # У встроенных тем ошибок не бывает, а имя файла у них может
+        # совпасть со своим (light.yaml в themes/) - не приписываем чужое.
+        own = [text for where, text in _PROBLEMS
+               if not theme["builtin"] and where == theme["file"]]
     return {"name": theme["name"], "title": theme["title"],
             "own": not theme["builtin"],
             "file": os.path.basename(theme["file"]) if theme["file"] else "",
@@ -406,7 +426,17 @@ def describe(name):
             "mode": i["mode"], "on_style": "card" if i["card"] else "rim",
             "swatches": swatches,
             "contrast": round(contrast(tuple(ink) + (1.0,), tuple(tile) + (1.0,)), 1) if ink else None,
-            "problems": own}
+            "problems": own,
+            # Все основные цвета - и карточка, и тень, даже если тема их не
+            # показывает: от них редактор начинает новую тему (с 1.29).
+            "keys": dict((short, _hex(c)) for short, c in (
+                (short, _solid(v.get("--" + full), v, tile)) for short, full in KEY_VARS) if c),
+            # Своя тема как она записана в файле - редактор правит её с этого.
+            "src": None if theme["builtin"] else {
+                "extends": theme.get("extends") or "",
+                "props": dict((k, v) for k, v in theme["props"].items()
+                              if k in ("mode", "on_style", "sheen", "inv_kinds", "shadow", "chart")),
+                "vars": dict((k[2:], v) for k, v in theme.get("raw", {}).items())}}
 
 
 def stray_problems():
@@ -688,7 +718,7 @@ def _derive_order(user):
 
 
 def _derive(name):
-    theme = _THEMES[name]
+    theme = get(name)
     own = set(theme["vars"])
     changed = set(own)
     merged = css_vars(name)
@@ -714,5 +744,144 @@ def _derive(name):
         changed.add(target)
     theme["vars"] = dict(theme["vars"], **derived)
     theme["derived"] = sorted(k[2:] for k in derived)
+
+# ------------------------------------------------- редактор тем (1.29)
+#: Ключи основных цветов в файле: короткое имя -> переменная.
+KEY_VARS = (("bg", "bg-bottom"), ("tile", "tile"), ("ink", "ink"), ("accent", "active"),
+            ("heat", "ac-seg-heat"), ("cool", "cool"), ("shadow", "shadow"),
+            ("card", "inv-tile"))
+_KEY_NOTES = {"bg": "фон страницы и поля вокруг панели", "tile": "плитка",
+              "ink": "текст", "accent": "рамка включённого, дуги, ручки",
+              "heat": "тепло: нагрев", "cool": "холод: охлаждение, «не греет»",
+              "shadow": "тени", "card": "тёмная карточка (on_style: card)"}
+_VAR_KEY_RE = re.compile(r"^[a-z0-9-]{1,40}$")
+
+
+def _clean_draft(data):
+    """Тема из редактора -> словарь как из файла. Лишнее отбрасываем:
+    запрос приходит со страницы, доверять его виду нельзя."""
+    if not isinstance(data, dict):
+        raise ValueError("ожидался словарь темы")
+    out = {}
+    title = str(data.get("title") or "").strip()[:60] or "моя тема"
+    out["title"] = title
+    raw_name = str(data.get("name") or "").strip()
+    out["name"] = raw_name if _NAME_RE.match(raw_name) else (slug(raw_name or title) or "my-theme")
+    parent = str(data.get("extends") or "")
+    out["extends"] = parent if parent in _THEMES else None
+    for key in ("mode", "on_style"):
+        if data.get(key) is not None:
+            out[key] = str(data[key])
+    for key in ("sheen", "inv_kinds", "shadow", "chart"):
+        if key in data:
+            out[key] = data[key]
+    vars_ = data.get("vars") or {}
+    if not isinstance(vars_, dict) or len(vars_) > 120:
+        raise ValueError("vars: ожидался словарь до 120 переменных")
+    out["vars"] = dict((str(k), str(v)) for k, v in vars_.items()
+                       if _VAR_KEY_RE.match(str(k)) and len(str(v)) <= 80)
+    return out
+
+
+def draft(data):
+    """
+    Черновик редактора: тема в памяти под именем draft-<хэш>. Считается
+    так же, как файл в themes/: наследование, производные цвета, проверки.
+    Возвращает имя черновика; ошибки - в describe(имя)["problems"].
+    """
+    data = _clean_draft(data)
+    blob = json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    name = DRAFT_PREFIX + hashlib.sha1(blob).hexdigest()[:12]
+    if name in _DRAFTS:
+        _DRAFTS.move_to_end(name)
+        return name, data
+    mark = len(_PROBLEMS)
+    where = "черновик"
+    known = set()
+    for theme in _THEMES.values():
+        if theme["builtin"]:
+            known.update(theme["vars"])
+    theme = _theme(data, name, False, where)
+    theme["title"] = data["title"]
+    extra = sorted(k[2:] for k in theme["vars"] if k not in known)
+    if extra:
+        _PROBLEMS.append((where, "таких переменных нет, ни на что не влияют: %s"
+                                 % ", ".join(extra)))
+    if theme["props"].get("mode") not in (None, "light", "dark"):
+        theme["props"].pop("mode")
+    if theme["props"].get("on_style") not in (None, "rim", "card"):
+        theme["props"].pop("on_style")
+    if theme["props"].get("chart") is not None:
+        theme["props"]["chart"] = _clean_chart(theme["props"]["chart"], where)
+    if not theme["extends"]:
+        theme["extends"] = "dark" if theme["props"].get("mode") == "dark" else "light"
+    if data["name"] in _THEMES and _THEMES[data["name"]]["builtin"]:
+        _PROBLEMS.append((where, "имя %r занято встроенной темой - задайте другое"
+                                 % data["name"]))
+    _DRAFTS[name] = theme
+    _derive(name)
+    _contrast(name)
+    theme["problems"] = [text for _w, text in _PROBLEMS[mark:]]
+    del _PROBLEMS[mark:]
+    while len(_DRAFTS) > DRAFT_MAX:
+        _DRAFTS.popitem(last=False)
+    return name, data
+
+
+def _q(value):
+    """Строка в кавычках, годная и для YAML: «"», «\\» и переводы строк
+    экранируются так же, как в JSON."""
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def to_yaml(data, stamp=""):
+    """Файл темы для папки themes/: основные цвета короткими именами и с
+    пояснениями, остальное как есть. data - как из _clean_draft."""
+    data = _clean_draft(data)
+    lines = ["# Тема «%s» для wb-svg-panel%s." % (data["title"].replace("\n", " "),
+                                                   (" - собрана в редакторе /themes " + stamp)
+                                                   if stamp else ""),
+             "# Положите файл в папку themes/ рядом с config.yaml: панель увидит",
+             "# его сама, через пару секунд. Что не задано - как у темы из extends,",
+             "# производные цвета (приглушённый текст, кнопки, колесо",
+             "# кондиционера) панель рассчитает из основных.",
+             "",
+             "name: %s" % data["name"],
+             "title: %s" % _q(data["title"])]
+    if data.get("extends"):
+        lines.append("extends: %s" % data["extends"])
+    if data.get("mode") in ("light", "dark"):
+        lines.append("mode: %s           # light | dark" % data["mode"])
+    if data.get("on_style") in ("rim", "card"):
+        lines.append("on_style: %s        # rim - рамка у включённой, card - тёмная карточка"
+                     % data["on_style"].ljust(4))
+    for key in ("sheen", "inv_kinds", "shadow"):
+        if key in data:
+            lines.append("%s: %s" % (key, json.dumps(data[key], ensure_ascii=False)))
+    if data.get("chart"):
+        lines.append("chart:")
+        for k, v in data["chart"].items():
+            lines.append("  %s: %s" % (k, json.dumps(v, ensure_ascii=False)))
+    vars_ = dict(data["vars"])
+    lines += ["", "vars:"]
+    keyed = False
+    for short, full in KEY_VARS:
+        for name in (short, full):
+            if name in vars_:
+                value = vars_.pop(name)
+                if not keyed:
+                    lines.append("  # основные цвета")
+                    keyed = True
+                lines.append("  %s %s# %s" % ((short + ":").ljust(8), _q(value).ljust(12),
+                                              _KEY_NOTES[short]))
+                break
+    if vars_:
+        lines.append("  # остальное - как задано")
+        for k in sorted(vars_):
+            lines.append("  %s: %s" % (k, _q(vars_[k])))
+    if len(lines) and lines[-1] == "vars:":
+        lines[-1] = "vars: {}"
+    return "\n".join(lines) + "\n"
+
 
 load()

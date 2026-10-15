@@ -1,27 +1,29 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Темы</title>
-<!-- Страница /themes (с 1.28): все плитки и пульты в любой теме.
-     Подстановка - одна метка __DATA__ (web.themes_page), как у wrapper.html. -->
+<!-- Страница /themes: все плитки и пульты в любой теме (с 1.28) и
+     редактор своих тем (с 1.29). Подстановка - одна метка __DATA__
+     (web.themes_page), как у wrapper.html. -->
 <style>
  :root{--ink:#2C2C30;--dim:#86868C;--line:rgba(60,60,67,.14);--card:#fff;
-       --acc:#E09B2D;--bad:#C0392B;--page:#F1F1F3}
+       --acc:#E09B2D;--bad:#C0392B;--page:#F1F1F3;--field:#F6F6F8}
  *{box-sizing:border-box}
  body{font:14px/1.5 -apple-system,'Segoe UI',Inter,system-ui,sans-serif;margin:0;
       padding:20px 22px 40px;background:var(--page);color:var(--ink)}
  a{color:inherit}
+ button,input,select{font:inherit;color:inherit}
  .top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
  .back{color:var(--dim);text-decoration:none;font-size:13px}
  .back:hover{color:var(--ink)}
  h1{font-size:24px;margin:0;letter-spacing:-.01em}
  .sub{color:var(--dim);margin:4px 0 16px;max-width:760px}
- .sub code,.info code{font:12.5px ui-monospace,Menlo,monospace;background:#E8E8EC;
-       padding:1px 5px;border-radius:5px}
+ code{font:12.5px ui-monospace,Menlo,monospace;background:#E8E8EC;
+      padding:1px 5px;border-radius:5px}
 
  /* выбор темы */
  #chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
- .chip{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:600;
-       background:var(--card);color:var(--ink);border:1.5px solid var(--line);
+ .chip{display:inline-flex;align-items:center;gap:8px;font-weight:600;
+       background:var(--card);border:1.5px solid var(--line);
        border-radius:12px;padding:6px 12px 6px 7px;cursor:pointer}
  .chip:hover{border-color:rgba(60,60,67,.35)}
  .chip.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset}
@@ -39,6 +41,11 @@
         font-size:13.5px;color:var(--dim);user-select:none}
  .seg b.on{background:var(--ink);color:#fff}
  .hint{color:var(--dim);font-size:12.5px}
+ .btn{background:var(--card);border:1.5px solid var(--line);border-radius:10px;
+      padding:6px 13px;font-weight:600;font-size:13.5px;cursor:pointer}
+ .btn:hover{border-color:rgba(60,60,67,.4)}
+ .btn.main{background:var(--ink);border-color:var(--ink);color:#fff}
+ .btn.main:hover{background:#000}
 
  /* сведения о теме */
  .info{background:var(--card);border:1.5px solid var(--line);border-radius:16px;
@@ -49,10 +56,11 @@
  .sw div{display:flex;align-items:center;gap:8px;font-size:12.5px}
  .sw i{width:26px;height:26px;border-radius:8px;box-shadow:0 0 0 1px rgba(0,0,0,.12) inset}
  .sw span{display:block;color:var(--dim);font:11.5px ui-monospace,Menlo,monospace}
+ .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
  .probs{margin:10px 0 0;padding:9px 12px;border-radius:10px;background:#FBEDEB;
         color:#7A2117;font-size:13px}
  .probs ul{margin:4px 0 0;padding-left:18px}
- .ok{color:#2E7D4F} .sw .warn{color:var(--bad)}
+ .ok{color:#2E7D4F} .warn{color:var(--bad)}
 
  /* живая панель и пульты */
  .stage{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
@@ -62,11 +70,51 @@
  .frame iframe{border:0;display:block;transform-origin:0 0;background:transparent}
  .cap{color:var(--dim);font-size:12.5px;margin-top:8px;max-width:390px}
  .pads{display:grid;grid-template-columns:repeat(3,auto);gap:16px 14px;flex:none}
+ .editing .pads{grid-template-columns:repeat(2,auto)}
  .pad{cursor:pointer}
  .pad .frame{border-radius:14px}
  .pad .frame::after{content:'';position:absolute;inset:0}   /* нажатие - по миниатюре */
  .pad:hover .frame{box-shadow:0 0 0 2px var(--ink),0 10px 30px rgba(0,0,0,.10)}
  .pad b{display:block;font-size:12.5px;margin-top:6px;text-align:center;color:var(--dim)}
+
+ /* редактор */
+ .ed{flex:0 1 400px;min-width:300px;max-width:100%;background:var(--card);
+     border:1.5px solid var(--line);border-radius:16px;padding:16px}
+ .ed h2{font-size:17px;margin:0 0 12px}
+ .ed h3{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+        color:var(--dim);margin:18px 0 8px}
+ .ed label.f{display:block;margin-bottom:9px}
+ .ed label.f span{display:block;font-size:12.5px;color:var(--dim);margin-bottom:3px}
+ .ed input[type=text],.ed select{width:100%;background:var(--field);
+     border:1.5px solid var(--line);border-radius:9px;padding:6px 9px}
+ .ed input[type=text]:focus,.ed select:focus{outline:none;border-color:var(--ink)}
+ .ed .two{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 6px}
+ .ed .note{font-size:12.5px;color:var(--dim);margin:4px 0 0}
+ .gen{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+ .pick{width:38px;height:32px;padding:0;border:1.5px solid var(--line);border-radius:9px;
+       background:none;cursor:pointer;flex:none}
+ .pick::-webkit-color-swatch-wrapper{padding:3px}
+ .pick::-webkit-color-swatch{border:none;border-radius:6px}
+ .pick::-moz-color-swatch{border:none;border-radius:6px}
+ .photo{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+ .photo img{height:44px;border-radius:8px}
+ .photo i{width:30px;height:30px;border-radius:8px;cursor:pointer;
+          box-shadow:0 0 0 1px rgba(0,0,0,.14) inset}
+ .photo i.on{box-shadow:0 0 0 2px var(--ink)}
+ .row{display:flex;align-items:center;gap:9px;padding:5px 0;border-top:1px solid #F0F0F2}
+ .row:first-of-type{border-top:none}
+ .row .nm{flex:1;min-width:0;font-size:13.5px;line-height:1.25}
+ .row .nm small{display:block;color:var(--dim);font-size:11.5px}
+ .row input[type=text]{width:96px;flex:none;font:12.5px ui-monospace,Menlo,monospace;padding:5px 7px}
+ .row .st{width:84px;flex:none;font-size:11.5px;color:var(--dim);text-align:right}
+ .row .st a{color:var(--ink);cursor:pointer;text-decoration:underline dotted}
+ .row.off{opacity:.45}
+ .cts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+ .cts span{font-size:12px;border-radius:7px;padding:2px 8px;background:#EEF6F0;color:#22573A}
+ .cts span.bad{background:#FBEDEB;color:#7A2117}
+ .ed pre{background:var(--field);border:1.5px solid var(--line);border-radius:10px;
+         padding:10px;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:auto;max-height:340px}
+ .busy{opacity:.6}
 
  /* все темы рядом */
  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
@@ -80,9 +128,11 @@
 
  .stray{margin-top:26px;max-width:760px}
  [hidden]{display:none!important}
+ @media (max-width:480px){ .row .nm small{display:none} }
  @media (max-width:860px){
    body{padding:16px 16px 32px}
-   .pads{grid-template-columns:repeat(2,auto)}
+   .pads,.editing .pads{grid-template-columns:repeat(2,auto)}
+   .ed{flex-basis:100%}
  }
 </style></head><body>
 <div class="top">
@@ -92,21 +142,23 @@
 <p class="sub">Все плитки и пульты на одной выдуманной панели — в любой теме.
 Нажатия здесь ничего не включают дома: приборы витрины ненастоящие.
 Своя тема — файл в папке <code id="dir">themes/</code>, панель перечитывает
-её на ходу (как написать — <a href="docs#own-themes">/docs, «Свои темы»</a>).</p>
+её на ходу (как написать — <a href="docs#own-themes">/docs, «Свои темы»</a>).
+Собрать тему можно и здесь, в редакторе.</p>
 
 <nav id="chips"></nav>
 <div class="bar">
   <div class="seg" id="width"><b data-v="phone">Телефон</b><b data-v="tablet">Планшет</b></div>
-  <div class="seg" id="mode"><b data-v="one">Одна тема</b><b data-v="all">Все рядом</b></div>
+  <div class="seg" id="mode"><b data-v="one">Одна тема</b><b data-v="all">Все рядом</b><b data-v="edit">Редактор</b></div>
   <span class="hint" id="hint"></span>
 </div>
 
 <section id="one">
   <div class="info" id="info"></div>
   <div class="stage">
+    <div class="ed" id="ed" hidden></div>
     <div class="live">
       <div class="frame" id="liveBox"><iframe id="live" title="Панель-витрина"></iframe></div>
-      <div class="cap">Живая панель: плитки нажимаются, пульты открываются.
+      <div class="cap" id="cap">Живая панель: плитки нажимаются, пульты открываются.
         Через десять минут без нажатий витрина возвращается к началу.</div>
     </div>
     <div class="pads" id="pads"></div>
@@ -137,11 +189,11 @@ var state = {
     return BY[t] ? t : (BY[DATA.theme] ? DATA.theme : THEMES[0].name);
   })(),
   width: q('w') === 'tablet' ? 'tablet' : 'phone',
-  mode: q('mode') === 'all' ? 'all' : 'one'
+  mode: ({all: 'all', edit: 'edit'})[q('mode')] || 'one'
 };
 function remember(){
   var s = '?theme=' + state.theme + (state.width === 'tablet' ? '&w=tablet' : '') +
-          (state.mode === 'all' ? '&mode=all' : '');
+          (state.mode !== 'one' ? '&mode=' + state.mode : '');
   try { history.replaceState(null, '', s); } catch(e) {}
 }
 function esc(s){
@@ -152,11 +204,15 @@ function dot(t){
   return '<i class="dot" style="background:linear-gradient(135deg,' + t.bg + ' 0 50%,' +
          (t.acc || '#E09B2D') + ' 50% 100%)"></i>';
 }
+/* Что показывает витрина: в редакторе - черновик, иначе выбранную тему. */
+function shown(){
+  return state.mode === 'edit' && ED && ED.draft ? ED.draft : state.theme;
+}
 
 function drawChips(){
   document.getElementById('chips').innerHTML = THEMES.map(function(t){
-    return '<button class="chip' + (t.name === state.theme ? ' on' : '') + '" data-n="' +
-           esc(t.name) + '">' + dot(t) + esc(t.title) +
+    return '<button class="chip' + (t.name === state.theme && state.mode !== 'edit' ? ' on' : '') +
+           '" data-n="' + esc(t.name) + '">' + dot(t) + esc(t.title) +
            (t.own ? ' <span class="tag">своя</span>' : '') +
            (t.problems && t.problems.length ? ' <span class="warn">●</span>' : '') +
            '</button>';
@@ -190,15 +246,18 @@ function drawInfo(){
     probs = '<div class="probs"><b>Что не так с файлом</b><ul>' +
             t.problems.map(function(p){ return '<li>' + esc(p) + '</li>'; }).join('') +
             '</ul></div>';
+  var acts = '<div class="acts">' +
+    (t.own ? '<button class="btn main" data-ed="edit">Править эту тему</button>' : '') +
+    '<button class="btn' + (t.own ? '' : ' main') + '" data-ed="new">Новая тема на её основе</button></div>';
   document.getElementById('info').innerHTML =
     '<h2>' + esc(t.title) + ' <code>' + esc(t.name) + '</code></h2>' +
     '<div class="meta">' + meta.join(' · ') + '</div>' +
-    '<div class="sw">' + sw + ct + '</div>' + probs;
+    '<div class="sw">' + sw + ct + '</div>' + probs + acts;
 }
 
 /* Живая панель: та же страница, что на планшете, только на витрине. */
 function demoUrl(extra){
-  return '_demo.html?theme=' + state.theme +
+  return '_demo.html?theme=' + shown() +
          '&cols=' + (state.width === 'tablet' ? 4 : 2) + (extra || '');
 }
 function fitLive(){
@@ -211,9 +270,20 @@ function fitLive(){
   box.style.width = Math.round(sz[0] * k) + 'px';
   box.style.height = Math.round(sz[1] * k) + 'px';
 }
+/* Перезагрузка витрины не уводит её к началу: в редакторе цвет меняют,
+   разглядывая кондиционер внизу, - прокрутка остаётся на месте. */
 function loadLive(extra){
-  var f = document.getElementById('live');
+  var f = document.getElementById('live'), y = 0;
+  try { y = f.contentWindow.scrollY || 0; } catch(e) {}
   fitLive();
+  f.onload = function(){
+    if (!y) return;
+    var tries = 0;
+    (function again(){
+      try { f.contentWindow.scrollTo(0, y); } catch(e) { return; }
+      if (++tries < 6) setTimeout(again, 150);
+    })();
+  };
   f.src = demoUrl(extra);
 }
 
@@ -228,13 +298,13 @@ function drawPads(){
            'px;height:' + h + 'px"><iframe tabindex="-1" style="width:390px;height:844px;' +
            'transform:scale(' + MINI + ')"></iframe></div><b>' + esc(p[1]) + '</b></div>';
   }).join('');
-  var frames = host.getElementsByTagName('iframe'), i = 0;
+  var frames = host.getElementsByTagName('iframe'), i = 0, theme = shown();
   (function next(){
     if (seq !== padSeq || i >= frames.length) return;
     var f = frames[i], kind = PADS[i][0];
     i += 1;
     f.onload = function(){ setTimeout(next, 150); };
-    f.src = '_demo.html?theme=' + state.theme + '&cols=2&still=1&pad=' + kind;
+    f.src = '_demo.html?theme=' + theme + '&cols=2&still=1&pad=' + kind;
   })();
 }
 
@@ -261,11 +331,18 @@ function drawStray(){
 
 function draw(full){
   drawChips(); drawSeg('width', state.width); drawSeg('mode', state.mode);
-  document.getElementById('one').hidden = state.mode !== 'one';
+  var editing = state.mode === 'edit';
+  document.getElementById('one').hidden = state.mode === 'all';
   document.getElementById('all').hidden = state.mode !== 'all';
+  document.getElementById('info').hidden = editing;
+  document.getElementById('ed').hidden = !editing;
+  document.getElementById('one').className = editing ? 'editing' : '';
   document.getElementById('hint').textContent = state.mode === 'all'
     ? 'Нажмите на тему, чтобы рассмотреть её вблизи.' : '';
-  if (state.mode === 'one') {
+  if (editing) {
+    if (!ED) startEditor(restoreEditor() || freshEditor(state.theme, false));
+    else if (full) { drawEditor(); preview(true); }
+  } else if (state.mode === 'one') {
     drawInfo();
     if (full) { loadLive(); drawPads(); }
   } else if (full) {
@@ -278,7 +355,7 @@ document.getElementById('chips').onclick = function(ev){
   var b = ev.target.closest ? ev.target.closest('.chip') : null;
   if (!b) return;
   state.theme = b.getAttribute('data-n');
-  if (state.mode === 'all') state.mode = 'one';
+  if (state.mode !== 'one') state.mode = 'one';
   draw(true);
 };
 document.getElementById('grid').onclick = function(ev){
@@ -297,6 +374,13 @@ document.getElementById('mode').onclick = function(ev){
   if (!v || v === state.mode) return;
   state.mode = v; draw(true);
 };
+document.getElementById('info').onclick = function(ev){
+  var a = ev.target.getAttribute && ev.target.getAttribute('data-ed');
+  if (!a) return;
+  state.mode = 'edit';
+  startEditor(freshEditor(state.theme, a === 'edit'));
+  draw(false);
+};
 /* Миниатюра пульта - открыть этот пульт на живой панели. */
 document.getElementById('pads').onclick = function(ev){
   var p = ev.target.closest ? ev.target.closest('.pad') : null;
@@ -306,6 +390,472 @@ var fitTimer = null;
 window.addEventListener('resize', function(){
   clearTimeout(fitTimer); fitTimer = setTimeout(fitLive, 120);
 });
+
+/* =====================================================================
+   Редактор (с 1.29). Тема собирается здесь, сервер считает из неё
+   черновик - со всеми производными цветами и проверками, как у файла в
+   themes/, - и витрина показывает черновик. Готовую тему скачивают
+   файлом и кладут в themes/ сами: на контроллер страница не пишет.
+   ===================================================================== */
+
+/* Основные цвета: ключ в файле, переменная, подпись, пояснение. */
+var KEYS = [['bg', 'bg-bottom', 'Фон', 'страница и поля вокруг панели'],
+            ['tile', 'tile', 'Плитка', ''],
+            ['ink', 'ink', 'Текст', 'из него - приглушённый текст и значки'],
+            ['accent', 'active', 'Акцент', 'рамка включённого, дуги, ручки, кнопки'],
+            ['heat', 'ac-seg-heat', 'Тепло', 'нагрев'],
+            ['cool', 'cool', 'Холод', 'охлаждение, «не греет»'],
+            ['shadow', 'shadow', 'Тень', 'цвет теней плиток'],
+            ['card', 'inv-tile', 'Карточка', 'включённая плитка при «тёмной карточке»']];
+var ED = null, edTimer = null, padTimer = null, edSeq = 0, lastResp = null;
+var DRAFT_KEY = 'wb-panel-theme-editor';
+
+/* --- цвета: hex <-> rgb <-> hsl, контраст WCAG --- */
+function hexRgb(h){
+  h = String(h || '').trim();
+  var m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(h);
+  if (!m) return null;
+  h = m[1];
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function rgbHex(c){
+  return '#' + c.map(function(v){
+    v = Math.max(0, Math.min(255, Math.round(v))); return (v < 16 ? '0' : '') + v.toString(16);
+  }).join('').toUpperCase();
+}
+function rgbHsl(c){
+  var r = c[0] / 255, g = c[1] / 255, b = c[2] / 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, h = 0, s = 0;
+  if (mx !== mn) {
+    var d = mx - mn;
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
+}
+function hsl(h, s, l){
+  h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(1, s)); l = Math.max(0, Math.min(1, l));
+  function f(n){ var k = (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+                 return 255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))); }
+  return rgbHex([f(0), f(8), f(4)]);
+}
+function lum(c){
+  function ch(v){ v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+  return 0.2126 * ch(c[0]) + 0.7152 * ch(c[1]) + 0.0722 * ch(c[2]);
+}
+function contrast(a, b){
+  a = hexRgb(a); b = hexRgb(b);
+  if (!a || !b) return null;
+  var x = lum(a), y = lum(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+/* Довести цвет до нужного контраста с подложкой, меняя только светлоту. */
+function legible(hex, bg, need){
+  var c = rgbHsl(hexRgb(hex)), dark = lum(hexRgb(bg)) < 0.4, out = hex;
+  for (var i = 0; i < 20 && contrast(out, bg) < need; i++) {
+    c[2] += dark ? 0.035 : -0.035;
+    out = hsl(c[0], c[1], c[2]);
+  }
+  return out;
+}
+
+/* --- генерация: тема из одного акцента ---
+   Фон и плитка - оттенок акцента, почти без цвета; текст - тот же оттенок
+   у края светлоты; тепло и холод - свои, но тянутся к акценту, если он сам
+   тёплый или холодный. Тень и карточка - глубокий тон акцента. */
+function fromAccent(acc, dark, tint){
+  var a = rgbHsl(hexRgb(acc)), h = a[0], s = a[1];
+  var th = tint ? tint[0] : h, ts = tint ? tint[1] : s;
+  var out = {};
+  if (dark) {
+    out.bg = hsl(th, Math.min(0.14, ts * 0.3), 0.065);
+    out.tile = hsl(th, Math.min(0.12, ts * 0.25), 0.155);
+    out.ink = hsl(h, Math.min(0.10, s * 0.2), 0.93);
+    out.shadow = '#000000';
+    out.card = hsl(h, Math.min(0.30, s * 0.4), 0.28);
+  } else {
+    out.bg = hsl(th, Math.min(0.20, ts * 0.35), 0.865);
+    out.tile = hsl(th, Math.min(0.22, ts * 0.3), 0.975);
+    out.ink = hsl(h, Math.min(0.22, s * 0.3), 0.13);
+    out.shadow = hsl(h, Math.min(0.30, s * 0.4), 0.16);
+    out.card = hsl(h, Math.min(0.45, s * 0.6), 0.23);
+  }
+  out.accent = legible(rgbHex(hexRgb(acc)), out.tile, dark ? 3 : 2.6);
+  var warm = h <= 50 || h >= 330, cold = h >= 170 && h <= 250;
+  out.heat = hsl(warm ? Math.max(8, Math.min(h, 40)) : 22, warm ? Math.max(0.65, s) : 0.78,
+                 dark ? 0.6 : 0.48);
+  out.cool = hsl(cold ? h : 205, cold ? Math.max(0.35, Math.min(0.7, s)) : 0.55,
+                 dark ? 0.62 : 0.42);
+  // Тепло не должно сливаться с акцентом: оранжевый акцент - тепло краснее.
+  var hh = rgbHsl(hexRgb(out.heat))[0], ah = rgbHsl(hexRgb(out.accent))[0];
+  if (Math.abs(hh - ah) < 14 || Math.abs(hh - ah) > 346)
+    out.heat = hsl(ah >= 22 ? ah - 20 : ah + 22, 0.8, dark ? 0.6 : 0.47);
+  out.heat = legible(out.heat, out.tile, 2.6);
+  out.cool = legible(out.cool, out.tile, 2.6);
+  return out;
+}
+
+/* --- генерация: цвета с фото ---
+   Картинка ужимается до сотни точек по длинной стороне, цвета - k-средними
+   на восемь групп. Акцент - самый «живой» из заметных: насыщенный, не
+   слишком тёмный и не слишком светлый. Оттенок фона - от самой большой
+   группы. Тёмное фото - тёмная тема. Всё на месте, фото никуда не уходит. */
+function photoColors(img){
+  var k = Math.min(1, 100 / Math.max(img.naturalWidth, img.naturalHeight));
+  var w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+  var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  var g = cv.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+  var px = g.getImageData(0, 0, w, h).data, pts = [], L = 0;
+  for (var i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 128) continue;
+    var p = [px[i], px[i + 1], px[i + 2]];
+    pts.push(p); L += rgbHsl(p)[2];
+  }
+  if (!pts.length) return null;
+  pts.sort(function(a, b){ return lum(a) - lum(b); });
+  var K = Math.min(8, pts.length), cs = [];
+  for (var c = 0; c < K; c++) cs.push(pts[Math.floor((c + 0.5) * pts.length / K)].slice());
+  var own = new Array(pts.length);
+  for (var it = 0; it < 10; it++) {
+    var sum = cs.map(function(){ return [0, 0, 0, 0]; });
+    for (var j = 0; j < pts.length; j++) {
+      var best = 0, bd = 1e9;
+      for (var c2 = 0; c2 < K; c2++) {
+        var dr = pts[j][0] - cs[c2][0], dg = pts[j][1] - cs[c2][1], db = pts[j][2] - cs[c2][2];
+        var d = dr * dr * 0.3 + dg * dg * 0.59 + db * db * 0.11;
+        if (d < bd) { bd = d; best = c2; }
+      }
+      own[j] = best;
+      sum[best][0] += pts[j][0]; sum[best][1] += pts[j][1]; sum[best][2] += pts[j][2]; sum[best][3]++;
+    }
+    for (var c3 = 0; c3 < K; c3++)
+      if (sum[c3][3]) cs[c3] = [sum[c3][0] / sum[c3][3], sum[c3][1] / sum[c3][3], sum[c3][2] / sum[c3][3]];
+  }
+  var count = cs.map(function(){ return 0; });
+  own.forEach(function(o){ count[o]++; });
+  var groups = cs.map(function(col, n){
+    return {hex: rgbHex(col), hsl: rgbHsl(col), share: count[n] / pts.length};
+  }).filter(function(x){ return x.share > 0.01; });
+  groups.sort(function(a, b){ return b.share - a.share; });
+  var acc = null, score = -1;
+  groups.forEach(function(x){
+    var v = x.hsl[1] * (1 - Math.abs(x.hsl[2] - 0.5) * 1.5) * Math.pow(x.share, 0.3);
+    if (x.hsl[1] > 0.18 && x.hsl[2] > 0.18 && x.hsl[2] < 0.82 && v > score) { score = v; acc = x; }
+  });
+  if (!acc) acc = groups.slice().sort(function(a, b){ return b.hsl[1] - a.hsl[1]; })[0];
+  return {groups: groups, accent: acc.hex, tint: groups[0].hsl, dark: L / pts.length < 0.36};
+}
+
+/* --- состояние редактора ---
+   vars - переменные темы полными именами (bg-bottom, active…), как в
+   файле после чтения; основные цвета - тоже здесь. Чего в vars нет, то
+   берётся у основы. */
+function freshEditor(name, editOwn){
+  var t = BY[name] || THEMES[0];
+  if (editOwn && t.src) {
+    var p = t.src.props || {};
+    return {editing: t.name, title: t.title, name: t.name, nameSet: true,
+            extends: t.src.extends || 'light', mode: p.mode || '', on_style: p.on_style || '',
+            vars: JSON.parse(JSON.stringify(t.src.vars || {})),
+            keep: JSON.parse(JSON.stringify((function(){
+              var o = {}; ['sheen', 'inv_kinds', 'shadow', 'chart'].forEach(function(k){
+                if (k in p) o[k] = p[k]; }); return o; })())),
+            gen: null};
+  }
+  return {editing: '', title: 'Моя тема', name: '', nameSet: false, extends: t.name,
+          mode: '', on_style: '', vars: {}, keep: {}, gen: null};
+}
+function saveEditor(){
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(ED)); } catch(e) {}
+}
+function restoreEditor(){
+  try {
+    var e = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+    if (e && e.vars && BY[e.extends]) { e.draft = null; return e; }
+  } catch(err) {}
+  return null;
+}
+function startEditor(e){
+  ED = e; ED.draft = null; lastResp = null;
+  drawEditor(); preview(true);
+}
+function base(){ return BY[ED.extends] || THEMES[0]; }
+function baseMode(){ return ED.mode || base().mode; }
+function baseStyle(){ return ED.on_style || base().on_style; }
+function value(k){
+  var v = ED.vars[k[1]] !== undefined ? ED.vars[k[1]] : ED.vars[k[0]];
+  return v !== undefined ? v : null;
+}
+function shownColor(k){
+  var v = value(k);
+  if (v && hexRgb(v)) return rgbHex(hexRgb(v));
+  var info = lastResp && lastResp.info && lastResp.info.keys;
+  return (info && info[k[0]]) || (base().keys || {})[k[0]] || '#888888';
+}
+function setVar(k, v){
+  delete ED.vars[k[0]];
+  if (v === null) delete ED.vars[k[1]]; else ED.vars[k[1]] = v;
+}
+
+function drawEditor(){
+  var host = document.getElementById('ed'), b = base();
+  var opts = THEMES.filter(function(t){ return t.name !== ED.editing; }).map(function(t){
+    return '<option value="' + esc(t.name) + '"' + (t.name === ED.extends ? ' selected' : '') + '>' +
+           esc(t.title) + (t.own ? ' (своя)' : '') + '</option>';
+  }).join('');
+  var rows = KEYS.map(function(k){
+    var v = value(k), mine = v !== null, off = k[0] === 'card' && baseStyle() !== 'card';
+    return '<div class="row' + (off ? ' off' : '') + '" data-k="' + k[0] + '">' +
+      '<input type="color" class="pick" value="' + shownColor(k) + '">' +
+      '<div class="nm">' + k[2] + (k[3] ? '<small>' + k[3] + '</small>' : '') + '</div>' +
+      '<input type="text" spellcheck="false" value="' + esc(mine ? v : '') +
+      '" placeholder="' + esc(shownColor(k)) + '">' +
+      '<div class="st">' + (mine ? 'своё · <a data-reset="1">сбросить</a>' : 'как у основы') + '</div></div>';
+  }).join('');
+  host.innerHTML =
+    '<h2>' + (ED.editing ? 'Правка «' + esc(ED.title) + '»' : 'Новая тема') + '</h2>' +
+    '<label class="f"><span>Название — так тема называется в меню</span>' +
+    '<input type="text" id="e-title" value="' + esc(ED.title) + '"></label>' +
+    '<label class="f"><span>Имя латиницей — для config.yaml и имени файла</span>' +
+    '<input type="text" id="e-name" spellcheck="false" value="' + esc(ED.nameSet ? ED.name : '') +
+    '" placeholder="' + esc(autoName()) + '"></label>' +
+    '<label class="f"><span>На основе — чего тема не задаёт, берётся отсюда</span>' +
+    '<select id="e-base">' + opts + '</select></label>' +
+    '<div class="two"><div class="seg" id="e-mode"><b data-v="light">Светлая</b><b data-v="dark">Тёмная</b></div>' +
+    '<div class="seg" id="e-style"><b data-v="rim">Рамка</b><b data-v="card">Тёмная карточка</b></div></div>' +
+    '<div class="note">Включённая плитка: рамкой акцента или тёмной карточкой.</div>' +
+
+    '<h3>Собрать за раз</h3>' +
+    '<div class="gen"><input type="color" class="pick" id="e-acc" value="' + shownColor(KEYS[3]) + '">' +
+    '<button class="btn" id="e-gen">Собрать из акцента</button>' +
+    '<button class="btn" id="e-photo">Из фото…</button>' +
+    '<input type="file" id="e-file" accept="image/*" hidden></div>' +
+    '<div class="photo" id="e-sw"></div>' +
+    '<div class="note">Все основные цвета считаются из одного: фон и плитка — его оттенок, ' +
+    'текст — контрастный, тепло и холод — в тон. Фото не покидает браузер: из него берутся ' +
+    'только цвета; нажмите на цвет с фото, чтобы сделать его акцентом.</div>' +
+
+    '<h3>Основные цвета</h3>' + rows +
+    '<div class="cts" id="e-cts"></div>' +
+    '<div class="note">Остальное — приглушённый текст, кнопки, колесо кондиционера, текст ' +
+    'на карточке — панель рассчитает из этих цветов сама.</div>' +
+    '<div id="e-probs"></div>' +
+
+    '<h3>Файл</h3>' +
+    '<div class="acts"><button class="btn main" id="e-save">Скачать <span id="e-fn"></span></button>' +
+    '<button class="btn" id="e-show">Показать файл</button>' +
+    '<button class="btn" id="e-new">Начать заново</button></div>' +
+    '<div class="note" id="e-where"></div>' +
+    '<pre id="e-yaml" hidden></pre>';
+  drawSeg('e-mode', baseMode()); drawSeg('e-style', baseStyle());
+  if (ED.gen && ED.gen.photo) drawPhoto(ED.gen.photo);
+  bindEditor();
+  drawChecks();
+}
+
+function autoName(){
+  if (lastResp && !ED.nameSet) return lastResp.name;
+  return ED.name || 'moya-tema';
+}
+function drawChecks(){
+  var c = {}; KEYS.forEach(function(k){ c[k[0]] = shownColor(k); });
+  var list = [['текст на плитке', contrast(c.ink, c.tile), 4.5],
+              ['текст на фоне', contrast(c.ink, c.bg), 4.5],
+              ['акцент на плитке', contrast(c.accent, c.tile), 2.2]];
+  document.getElementById('e-cts').innerHTML = list.map(function(x){
+    if (x[1] === null) return '';
+    var ok = x[1] >= x[2];
+    return '<span class="' + (ok ? '' : 'bad') + '">' + x[0] + ' ' + x[1].toFixed(1) +
+           (ok ? ' ✓' : ' — нужно от ' + x[2]) + '</span>';
+  }).join('');
+}
+/* Правят свою тему - файл тот же, что лежит в папке: иначе рядом лёг бы
+   второй с тем же именем темы. */
+function fileName(){
+  if (!lastResp) return '';
+  var t = ED.editing && BY[ED.editing];
+  return t && lastResp.name === ED.editing && t.file ? t.file : lastResp.filename;
+}
+function drawProblems(){
+  var p = (lastResp && lastResp.info && lastResp.info.problems) || [];
+  document.getElementById('e-probs').innerHTML = p.length
+    ? '<div class="probs"><b>Проверка темы</b><ul>' +
+      p.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '';
+  var fn = fileName();
+  document.getElementById('e-fn').textContent = fn;
+  var exists = lastResp && BY[lastResp.name] && BY[lastResp.name].own;
+  document.getElementById('e-where').innerHTML = fn
+    ? 'Положите файл в <code>' + esc(DATA.dir_name) + '/' + esc(fn) + '</code> рядом с ' +
+      '<code>config.yaml</code> — панель подхватит тему сама, через пару секунд.' +
+      (exists && lastResp.name !== ED.editing
+        ? ' <span class="warn">Такая тема уже есть — файл её заменит.</span>' : '')
+    : '';
+  if (!document.getElementById('e-yaml').hidden)
+    document.getElementById('e-yaml').textContent = lastResp ? lastResp.yaml : '';
+  var name = document.getElementById('e-name');
+  if (name && !ED.nameSet && lastResp) name.placeholder = lastResp.name;
+}
+function drawPhoto(ph){
+  var host = document.getElementById('e-sw');
+  host.innerHTML = (ph.src ? '<img src="' + ph.src + '" alt="">' : '') +
+    ph.groups.map(function(g){
+      return '<i data-c="' + g.hex + '" title="' + g.hex + '" style="background:' + g.hex + '"' +
+             (g.hex === ph.accent ? ' class="on"' : '') + '></i>';
+    }).join('');
+}
+
+/* Собрать из акцента: все основные цвета разом. Карточка - только если
+   включённая плитка - карточка; тень - только у светлых. */
+/* Светлая или тёмная. Основа - встроенная другой светлоты: берём ту, что
+   той же светлоты (светлую или тёмную), - у неё и тени, и отсвет, и цвета
+   графиков под эту светлоту. Своя основа остаётся, светлота задаётся явно. */
+function setMode(mode){
+  if (base().mode !== mode && !base().own) { ED.extends = mode; ED.mode = ''; }
+  else ED.mode = base().mode === mode ? '' : mode;
+}
+function generate(acc, photo){
+  var dark = baseMode() === 'dark';
+  var out = fromAccent(acc, dark, photo ? photo.tint : null);
+  KEYS.forEach(function(k){
+    if (k[0] === 'card' && baseStyle() !== 'card') { setVar(k, null); return; }
+    setVar(k, out[k[0]]);
+  });
+  ED.gen = {accent: acc, photo: photo || null};
+}
+
+function bindEditor(){
+  function $(id){ return document.getElementById(id); }
+  $('e-title').oninput = function(){ ED.title = this.value; changed(); };
+  $('e-name').oninput = function(){
+    ED.name = this.value.trim(); ED.nameSet = !!ED.name; changed(); };
+  $('e-base').onchange = function(){ ED.extends = this.value; drawEditor(); changed(); };
+  $('e-mode').onclick = function(ev){
+    var v = ev.target.getAttribute('data-v'); if (!v) return;
+    setMode(v);
+    // Собрано из акцента - пересобрать под новую светлоту, иначе светлые
+    // цвета оказались бы в тёмной теме.
+    if (ED.gen) generate(ED.gen.accent, ED.gen.photo);
+    drawEditor(); changed();
+  };
+  $('e-style').onclick = function(ev){
+    var v = ev.target.getAttribute('data-v'); if (!v) return;
+    ED.on_style = v;
+    if (v === 'card' && value(KEYS[7]) === null && ED.gen)
+      setVar(KEYS[7], fromAccent(ED.gen.accent, baseMode() === 'dark').card);
+    drawEditor(); changed();
+  };
+  $('e-gen').onclick = function(){ generate($('e-acc').value, null); drawEditor(); changed(); };
+  $('e-photo').onclick = function(){ $('e-file').click(); };
+  $('e-file').onchange = function(){
+    var f = this.files && this.files[0]; if (!f) return;
+    var url = URL.createObjectURL(f), img = new Image();
+    img.onload = function(){
+      var ph = photoColors(img);
+      // Маленькая копия для показа - сам файл не храним и никуда не шлём.
+      var cv = document.createElement('canvas'), k = 88 / Math.max(img.naturalWidth, img.naturalHeight);
+      cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      if (!ph) return;
+      ph.src = cv.toDataURL('image/jpeg', 0.8);
+      setMode(ph.dark ? 'dark' : 'light');
+      generate(ph.accent, ph);
+      drawEditor(); changed();
+    };
+    img.src = url;
+  };
+  $('e-sw').onclick = function(ev){
+    var c = ev.target.getAttribute && ev.target.getAttribute('data-c');
+    if (!c || !ED.gen || !ED.gen.photo) return;
+    ED.gen.photo.accent = c;
+    generate(c, ED.gen.photo); drawEditor(); changed();
+  };
+  var rows = document.querySelectorAll('#ed .row');
+  Array.prototype.forEach.call(rows, function(row){
+    var k = KEYS.filter(function(x){ return x[0] === row.getAttribute('data-k'); })[0];
+    var pick = row.querySelector('.pick'), text = row.querySelector('input[type=text]');
+    pick.oninput = function(){
+      setVar(k, this.value.toUpperCase()); text.value = this.value.toUpperCase();
+      row.querySelector('.st').innerHTML = 'своё · <a data-reset="1">сбросить</a>';
+      drawChecks(); changed();
+    };
+    text.onchange = function(){
+      var v = this.value.trim();
+      if (!v) setVar(k, null);
+      else if (hexRgb(v)) setVar(k, rgbHex(hexRgb(v)));
+      else setVar(k, v);                 // rgba(…), var(--…) - проверит сервер
+      drawEditor(); changed();
+    };
+    row.querySelector('.st').onclick = function(ev){
+      if (!ev.target.getAttribute('data-reset')) return;
+      setVar(k, null); drawEditor(); changed();
+    };
+  });
+  $('e-save').onclick = download;
+  $('e-show').onclick = function(){
+    var pre = $('e-yaml'); pre.hidden = !pre.hidden;
+    this.textContent = pre.hidden ? 'Показать файл' : 'Скрыть файл';
+    if (!pre.hidden) pre.textContent = lastResp ? lastResp.yaml : '';
+  };
+  $('e-new').onclick = function(){
+    if (!confirm('Начать заново? Несохранённые цвета пропадут.')) return;
+    startEditor(freshEditor(state.theme, false));
+  };
+}
+
+function payload(){
+  var t = {title: ED.title, name: ED.nameSet ? ED.name : '', extends: ED.extends, vars: ED.vars};
+  if (ED.mode) t.mode = ED.mode;
+  if (ED.on_style) t.on_style = ED.on_style;
+  for (var k in ED.keep) t[k] = ED.keep[k];
+  return {theme: t};
+}
+function changed(){
+  saveEditor();
+  clearTimeout(edTimer);
+  edTimer = setTimeout(function(){ edTimer = null; preview(false); }, 450);
+}
+/* Черновик на сервере: имя, сведения и файл. Витрина - сразу, пульты -
+   когда цвета перестали меняться: их семь страниц, и на каждый шаг
+   ползунка перерисовывать их незачем. */
+function preview(now){
+  var seq = ++edSeq;
+  document.getElementById('ed').classList.add('busy');
+  return fetch('api/theme/draft', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                   body: JSON.stringify(payload())})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (seq !== edSeq) return;
+      document.getElementById('ed').classList.remove('busy');
+      if (j.error) { lastResp = null; return; }
+      lastResp = j;
+      var again = ED.draft !== j.draft;
+      ED.draft = j.draft;
+      drawProblems(); drawChecks();
+      if (again || now) {
+        loadLive();
+        clearTimeout(padTimer);
+        padTimer = setTimeout(drawPads, now ? 0 : 1500);
+      }
+    })
+    .catch(function(){ document.getElementById('ed').classList.remove('busy'); });
+}
+function download(){
+  var go = function(){
+    if (!lastResp) return;
+    var blob = new Blob([lastResp.yaml], {type: 'text/yaml;charset=utf-8'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = fileName();
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  };
+  // Цвет только что поменяли - сперва свежий файл, потом скачивание.
+  if (edTimer) { clearTimeout(edTimer); edTimer = null; preview(false).then(go); }
+  else go();
+}
+
 document.getElementById('dir').textContent = DATA.dir_name + '/';
 drawStray();
 draw(true);

@@ -998,6 +998,17 @@ def chart_svg():
                     headers={"Cache-Control": "no-store"})
 
 
+def _page_themes():
+    """Темы для страницы панели. Черновик редактора в меню не попадает, но
+    если его показывают (?theme=draft-…), странице нужны его цвета полей
+    и пультов."""
+    out = palette.menu()
+    asked = request.args.get("theme") or ""
+    if palette.is_draft(asked):
+        out.append(palette.menu_entry(asked))
+    return out
+
+
 @app.route("/<name>.html")
 def panel_html(name):
     """
@@ -1023,7 +1034,7 @@ def panel_html(name):
             ("__APP_JS__", json.dumps(__version__)),
             # Список тем для меню и цвета полей страницы - из данных тем,
             # а не из копии в скрипте страницы (с 1.24).
-            ("__THEMES_JS__", json.dumps(palette.menu(), ensure_ascii=False))):
+            ("__THEMES_JS__", json.dumps(_page_themes(), ensure_ascii=False))):
         html_page = html_page.replace(mark, value)
 
     # страница не кэшируется: после обновления панели должны прийти
@@ -1061,6 +1072,28 @@ def themes_page():
     return Response(page.replace("__DATA__", blob),
                     mimetype="text/html; charset=utf-8",
                     headers={"Cache-Control": "no-cache, must-revalidate"})
+
+
+@app.route("/api/theme/draft", methods=["POST"])
+def api_theme_draft():
+    """
+    Редактор тем (с 1.29): тема со страницы -> черновик в памяти. Ответ -
+    имя черновика (его показывает витрина: ?theme=draft-…), сведения о
+    нём (цвета, контраст, ошибки) и готовый файл темы для скачивания.
+    На контроллер ничего не пишется: файл человек кладёт в themes/ сам.
+    """
+    if (request.content_length or 0) > 32 * 1024:
+        return _json({"error": "слишком большой запрос"}, 413)
+    try:
+        body = json.loads(request.get_data(as_text=True) or "{}")
+        palette.refresh()
+        name, data = palette.draft(body.get("theme"))
+    except (ValueError, TypeError, AttributeError) as exc:
+        return _json({"error": str(exc)}, 400)
+    info = dict(palette.menu_entry(name), **palette.describe(name))
+    return _json({"draft": name, "info": info, "name": data["name"],
+                  "filename": data["name"] + ".yaml",
+                  "yaml": palette.to_yaml(data, time.strftime("%Y-%m-%d"))})
 
 
 # какой тип плитки обычно подходит для типа канала Wiren Board

@@ -1079,8 +1079,10 @@ function padDisk(node){
   /* ---- колесо уставки ---- */
   function draw(){
     var rot = -(pos - D.base) * D.dpd;
-    G.querySelector('.acs-scale').setAttribute('transform',
-        'rotate(' + rot.toFixed(3) + ' ' + D.cx + ' ' + D.cy + ')');
+    // шкала и резкая тень зубцов под ней крутятся вместе
+    var sc = G.querySelectorAll('.acs-scale');
+    for(var si = 0; si < sc.length; si++)
+      sc[si].setAttribute('transform', 'rotate(' + rot.toFixed(3) + ' ' + D.cx + ' ' + D.cy + ')');
     var b = D.box, m = 5 * D.fs, i;
     var labs = G.querySelectorAll('.acs-lab');
     for(i = 0; i < labs.length; i++){

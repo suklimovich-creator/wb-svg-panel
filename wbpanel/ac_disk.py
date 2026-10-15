@@ -324,7 +324,7 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     }
 
 
-def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None):
+def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None, rim=False):
     """
     Обод с зубцами: прямые шапки на радиусе R + th, между ними круглые
     желоба до R. Желоба - между делениями шкалы (на t + 0.25), деления
@@ -362,6 +362,9 @@ def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None):
         t += 0.5
     if not pts:
         return None
+    if rim:
+        # только линия обода - для каймы и тени, без лучей к центру
+        return "M " + " L ".join("%.1f,%.1f" % p for p in pts)
     return "M %.1f,%.1f L " % (cx, cy) + " L ".join("%.1f,%.1f" % p for p in pts) + " Z"
 
 
@@ -528,6 +531,8 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
     lift = tooth_h
     teeth = slots_path(cx, cy, R, ang, lo - 3, hi + 3, per_deg, 7.0 * fs, tooth_h,
                        1 if dpd > 0 else -1)
+    teeth_rim = slots_path(cx, cy, R, ang, lo - 3, hi + 3, per_deg, 7.0 * fs, tooth_h,
+                           1 if dpd > 0 else -1, rim=True)
 
     num_size = wl["num"] * fs
     gap = wl["gap"] * fs
@@ -730,7 +735,8 @@ def build_screen(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
 
     return {
         "orient": orient, "kind": kind, "w": w, "h": h, "fs": _r(fs),
-        "cx": _r(cx), "cy": _r(cy), "r": _r(R), "rr": _r(rr), "teeth": teeth, "lift": _r(lift),
+        "cx": _r(cx), "cy": _r(cy), "r": _r(R), "rr": _r(rr), "teeth": teeth, "teeth_rim": teeth_rim,
+        "lift": _r(lift),
         "dpd": round(dpd, 5), "a_sp": round(a_sp, 4), "value": value, "lo": lo, "hi": hi, "cur": cur,
         "no_target": no_target,
         "ticks": ticks, "labels": labels, "lab_size": _r(lab_size), "lab_r": _r(lab_r),

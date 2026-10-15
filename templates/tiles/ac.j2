@@ -305,15 +305,24 @@
     решает раскладка в ac_disk.SCREEN; жесты разбирает пульт (padScreen)
     по data-z у элементов. Тени - как у плиток панели: у светлых тем две,
     у тёмных вместо тени светлая кромка. -#}
-{% macro shade(x, y, r, s) %}
+{#- Тень и кайма. path - контур колеса с желобами: тень и кайма идут по
+    нему, а не по кругу. Круг проходил поперёк желобов, и желоба выглядели
+    тёмными вставками, а не прорезями. -#}
+{% macro shade(x, y, r, s, path=None) %}
   {% set dark = theme in ('dark', 'graphite') %}
   {% if dark %}
-  <circle cx="{{ x }}" cy="{{ y }}" r="{{ r + 0.6 }}" class="acs-lit" stroke-width="1.2"/>
+  {% if path %}<path d="{{ path }}" class="acs-lit" stroke-width="1.2"/>
+  {% else %}<circle cx="{{ x }}" cy="{{ y }}" r="{{ r + 0.6 }}" class="acs-lit" stroke-width="1.2"/>{% endif %}
   {% else %}
   {% set amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.24}.get(theme, 0.13) %}
   {% set key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.14}.get(theme, 0.08) %}
+  {% if path %}
+  <path d="{{ path }}" transform="translate(0 {{ s.sh_dy }})" class="acs-shade" opacity="{{ amb }}" filter="url(#{{ uid }}acs-amb)"/>
+  <path d="{{ path }}" transform="translate(0 {{ s.sh_dy2 }})" class="acs-shade" opacity="{{ key }}" filter="url(#{{ uid }}acs-key)"/>
+  {% else %}
   <circle cx="{{ x }}" cy="{{ y + s.sh_dy }}" r="{{ r * 0.96 }}" class="acs-shade" opacity="{{ amb }}" filter="url(#{{ uid }}acs-amb)"/>
   <circle cx="{{ x }}" cy="{{ y + s.sh_dy2 }}" r="{{ r }}" class="acs-shade" opacity="{{ key }}" filter="url(#{{ uid }}acs-key)"/>
+  {% endif %}
   {% endif %}
 {% endmacro %}
 
@@ -338,10 +347,23 @@
     <rect width="{{ s.w }}" height="{{ s.h }}" class="acs-bg"/>
     {#- колесо уставки -#}
     <g data-z="wheel">
-      {{ shade(s.cx, s.cy, s.r, s) }}
+      {% set dark = theme in ('dark', 'graphite') %}
+      {#- Тень колеса: мягкая - кругом (она неподвижна, и размытие не
+          пересчитывается при повороте), резкая - копией зубцов со сдвигом
+          вниз, без размытия: крутится вместе со шкалой. -#}
+      {% if not dark %}
+      {% set amb = {'light': 0.13, 'autumn': 0.16, 'retro': 0.20, 'noir': 0.24}.get(theme, 0.13) %}
+      {% set key = {'light': 0.08, 'autumn': 0.09, 'retro': 0.12, 'noir': 0.14}.get(theme, 0.08) %}
+      <circle cx="{{ s.cx }}" cy="{{ s.cy + s.sh_dy }}" r="{{ s.r * 0.98 }}" class="acs-shade" opacity="{{ amb }}" filter="url(#{{ uid }}acs-amb)"/>
+      <g transform="translate(0 {{ s.sh_dy2 }})"><g class="acs-scale">
+        <circle cx="{{ s.cx }}" cy="{{ s.cy }}" r="{{ s.r }}" class="acs-shade" opacity="{{ key }}"/>
+        {% if s.teeth %}<path d="{{ s.teeth }}" class="acs-shade" opacity="{{ key }}"/>{% endif %}
+      </g></g>
+      {% endif %}
       <circle cx="{{ s.cx }}" cy="{{ s.cy }}" r="{{ s.r }}" class="acs-disk"/>
       <path d="{{ s.seg or 'M 0,0' }}" class="acs-seg{{ ' acs-hid' if not s.seg }}" stroke-width="{{ s.seg_w }}"/>
       <g class="acs-scale">
+        {% if dark and s.teeth_rim %}<path d="{{ s.teeth_rim }}" class="acs-lit" stroke-width="1.2"/>{% endif %}
         {% if s.teeth %}<path d="{{ s.teeth }}" class="acs-disk"/>{% endif %}
         {% for k in s.ticks %}
         <g class="acs-tk{{ ' acs-hid' if k.hide }}" data-t="{{ k.t }}">
@@ -414,9 +436,9 @@
        data-hub="{{ d.hub }}" data-angs="{{ d.angs|join(',') }}" data-values="{{ d.vals|join(',') }}"
        data-active="{{ d.active }}" data-p1="{{ d.p1 }}" data-p2="{{ d.p2 }}" data-aw="{{ d.aw }}" data-awon="{{ d.aw_on }}">
       <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.hit }}" fill="transparent"/>
-      {{ shade(d.x, d.y, d.r, s) }}
+      {{ shade(d.x, d.y, d.r, s, d.gear) }}
       <path d="{{ d.gear }}" class="acs-gear"/>
-      <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.r }}" fill="url(#{{ uid }}acs-gl)" pointer-events="none"/>
+      <path d="{{ d.gear }}" fill="url(#{{ uid }}acs-gl)" pointer-events="none"/>
       {% for a in d.arrows %}
       <path d="{{ a.d }}" data-i="{{ a.i }}" class="acs-arrow{{ ' on' if a.on }}"
             stroke-width="{{ d.aw_on if a.on and not d.auto else d.aw }}"/>

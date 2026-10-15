@@ -64,6 +64,9 @@ _TRANSLIT = dict(zip(
      "p", "r", "s", "t", "u", "f", "h", "ts", "ch", "sh", "sch", "", "y", "", "e",
      "yu", "ya"]))
 
+#: Короткие имена основных цветов для своих тем.
+ALIASES = {"bg": "bg-bottom", "accent": "active", "heat": "ac-seg-heat", "card": "inv-tile"}
+
 _THEMES = {}
 _PROBLEMS = []          # [(файл, текст)] - для /check
 _STATE = {"dir": None, "sig": None, "checked": 0.0, "version": 0}
@@ -95,7 +98,8 @@ def _theme(data, name, builtin, where):
         theme["props"]["inv_kinds"] = tuple(theme["props"]["inv_kinds"] or ())
     out = {}
     for key, value in (data.get("vars") or {}).items():
-        key = "--" + str(key).lstrip("-")
+        key = str(key).lstrip("-")
+        key = "--" + (ALIASES.get(key, key) if not builtin else key)
         value = str(value).strip()
         if not builtin and not _VALUE_RE.match(value):
             _PROBLEMS.append((where, "%s: значение %r не похоже на цвет или число - "
@@ -203,6 +207,8 @@ def load(directory=None):
     _THEMES.clear()
     _THEMES.update(builtin)
     _THEMES.update(user)
+    for name in _derive_order(user):
+        _derive(name)
     for name in user:
         _contrast(name)
     _STATE["sig"] = _signature(_STATE["dir"])
@@ -407,5 +413,134 @@ def _contrast(name):
                               "%s читается плохо: контраст %.1f, нужно от %.1f"
                               % (what, ratio, need)))
 
+
+
+# ------------------------------------------------- производные цвета (1.26)
+# Своя тема задаёт основные цвета - фон, плитку, текст, акцент, холод,
+# тепло, тень, тёмную карточку, - а всё, что от них зависит, считается
+# здесь: приглушённый текст, значки, кромка, чип, кнопки, колесо
+# кондиционера. Правило срабатывает, только если сама тема задала хоть
+# один из исходных цветов и не задала производный: иначе остаётся то,
+# что унаследовано, или то, что задано руками. Встроенные темы не
+# пересчитываются - у них всё задано.
+
+def _parse(value, vars_):
+    c = _rgba(value, vars_)
+    return c[:3] if c else None
+
+
+def _hex(c):
+    return "#%02X%02X%02X" % tuple(max(0, min(255, int(round(v)))) for v in c[:3])
+
+
+def _mix(a, b, f):
+    return tuple(a[i] + (b[i] - a[i]) * f for i in range(3))
+
+
+def _alpha(c, a):
+    return "rgba(%d,%d,%d,%s)" % (int(round(c[0])), int(round(c[1])), int(round(c[2])),
+                                  ("%.2f" % a).lstrip("0"))
+
+
+_WHITE, _BLACK = (255.0, 255.0, 255.0), (0.0, 0.0, 0.0)
+
+
+def _readable_on(bg, light=(244, 244, 246), dark=(26, 20, 8)):
+    """Светлый или тёмный текст - что контрастнее на этой подложке."""
+    bg4 = tuple(bg) + (1.0,)
+    return light if contrast(tuple(light) + (1.0,), bg4) >= contrast(tuple(dark) + (1.0,), bg4) else dark
+
+
+def _lift(color, bg, need=3.0):
+    """Подмешивать белое или чёрное, пока цвет не станет заметен на bg."""
+    target = _WHITE if _lum(tuple(bg) + (1.0,)) < 0.4 else _BLACK
+    for k in range(11):
+        c = _mix(color, target, k / 12.0)
+        if contrast(tuple(c) + (1.0,), tuple(bg) + (1.0,)) >= need:
+            return c
+    return _mix(color, target, 0.85)
+
+
+def _rules(dark, card):
+    """(производная, исходные, расчёт по словарю v разобранных цветов)."""
+    return [
+        ("--bg-top", ("--bg-bottom",),
+         lambda v: _hex(_mix(v["--bg-bottom"], _WHITE, 0.06 if dark else 0.3))),
+        ("--ink-dim", ("--ink", "--tile"), lambda v: _hex(_mix(v["--ink"], v["--tile"], 0.5))),
+        ("--ink-faint", ("--ink",), lambda v: _alpha(v["--ink"], 0.32)),
+        ("--stroke", ("--ink", "--tile"), lambda v: _hex(_mix(v["--ink"], v["--tile"], 0.22))),
+        ("--edge", ("--ink",), lambda v: _alpha(v["--ink"], 0.16 if dark else 0.14)),
+        ("--active-soft", ("--active", "--tile"),
+         lambda v: _hex(_mix(v["--active"], v["--tile"], 0.72))),
+        ("--active-soft-edge", ("--active",), lambda v: _alpha(v["--active"], 0.35)),
+        ("--active-ink", ("--active", "--ink"),
+         lambda v: _hex(v["--active"] if dark else _mix(v["--active"], v["--ink"], 0.35))),
+        ("--sheen-on", ("--active",), lambda v: _alpha(v["--active"], 0.30)),
+        ("--ac-seg-cool", ("--cool",), lambda v: _hex(v["--cool"])),
+        ("--ac-disk", ("--inv-tile",) if card else (("--active",) if dark else ("--ink",)),
+         lambda v: _hex(v["--inv-tile"] if card else
+                        (v["--active"] if dark else _mix(v["--ink"], _BLACK, 0.15)))),
+        ("--ac-ink", ("--ac-disk",), lambda v: _hex(_readable_on(v["--ac-disk"]))),
+        ("--ac-dim", ("--ac-ink",), lambda v: _alpha(v["--ac-ink"], 0.62)),
+        ("--ac-pill", ("--tile", "--ink"),
+         lambda v: _hex(_mix(v["--tile"], _WHITE, 0.08) if dark else _mix(v["--tile"], v["--ink"], 0.07))),
+        ("--ac-pill-on", ("--ac-disk",), lambda v: _hex(v["--ac-disk"])),
+        ("--ac-pill-ink", ("--ac-ink",), lambda v: _hex(v["--ac-ink"])),
+        ("--ac-off", ("--tile", "--ink"), lambda v: _hex(_mix(v["--tile"], v["--ink"], 0.08))),
+        ("--ac-off-ink", ("--ink",), lambda v: _hex(v["--ink"])),
+        ("--ac-off-dim", ("--stroke",), lambda v: _hex(v["--stroke"])),
+        ("--inv-ink", ("--inv-tile",),
+         lambda v: _hex(_mix(_WHITE, v["--inv-tile"], 0.06))
+         if _lum(tuple(v["--inv-tile"]) + (1.0,)) < 0.3 else _hex(v["--ink"])),
+        ("--inv-dim", ("--inv-ink",), lambda v: _alpha(v["--inv-ink"], 0.75)),
+        ("--inv-stroke", ("--inv-ink", "--active"),
+         lambda v: _hex(_mix(v["--inv-ink"], v["--active"], 0.25))),
+        ("--inv-accent", ("--active", "--inv-tile"),
+         lambda v: _hex(_lift(v["--active"], v["--inv-tile"]))),
+    ]
+
+
+def _derive_order(user):
+    """Свои темы так, чтобы родитель считался раньше потомка."""
+    out, seen = [], set()
+
+    def visit(name):
+        if name in seen or name not in user:
+            return
+        seen.add(name)
+        visit(user[name].get("extends"))
+        out.append(name)
+    for name in user:
+        visit(name)
+    return out
+
+
+def _derive(name):
+    theme = _THEMES[name]
+    own = set(theme["vars"])
+    changed = set(own)
+    merged = css_vars(name)
+    dark, card = is_dark(name), prop(name, "on_style") == "card"
+    derived = {}
+    for target, sources, fn in _rules(dark, card):
+        if target in own or not any(src in changed for src in sources):
+            continue
+        parsed = {}
+        for key in set(sources) | {"--ink", "--tile", "--active", "--inv-tile", "--ac-disk",
+                                   "--stroke", "--ac-ink", "--inv-ink", "--cool", "--bg-bottom"}:
+            col = _parse(merged.get(key), merged)
+            if col is not None:
+                parsed[key] = col
+        if any(src not in parsed for src in sources):
+            continue
+        try:
+            value = fn(parsed)
+        except Exception:                      # расчёт не должен ронять тему
+            continue
+        derived[target] = value
+        merged[target] = value
+        changed.add(target)
+    theme["vars"] = dict(theme["vars"], **derived)
+    theme["derived"] = sorted(k[2:] for k in derived)
 
 load()

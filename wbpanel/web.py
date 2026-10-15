@@ -62,12 +62,19 @@ def _template(name):
     return jinja.get_template(name)
 
 
+def themes_dir():
+    """Папка своих тем: themes_dir из конфига или themes/ рядом с ним."""
+    path = (config.get("themes_dir") if config else None) or "themes"
+    return os.path.join(os.path.dirname(os.path.abspath(CONFIG_PATH)), path)
+
+
 def panel_theme(panel_conf=None):
     """
     Тема для этого ответа: ?theme= из адреса (выбор на устройстве - у
     телефона и планшета на стене он свой), иначе тема панели, иначе общая.
     Неизвестное имя в адресе молча игнорируется.
     """
+    palette.refresh()
     asked = request.args.get("theme") if request else None
     if asked and palette.exists(asked):
         return asked
@@ -593,7 +600,8 @@ def cached_panel(name, cols):
     # В ключе - тема, которая получится на самом деле: у theme: auto она
     # меняется на закате, и кэш не должен отдать дневную картинку ночью.
     theme = panel_theme(config.panels.get(name) or {})
-    base = (name, cols, closed, opened, flat, theme, getattr(config, "_mtime", 0))
+    base = (name, cols, closed, opened, flat, theme, getattr(config, "_mtime", 0),
+            palette.version())
     bucket = int(time.time() // _refresh_every())
     with _RENDER_LOCK:
         now = time.time()
@@ -956,6 +964,7 @@ def panel_html(name):
                        config.get("interactive", False)))
 
     html_page = wrapper_html()
+    palette.refresh(0)
     for mark, value in (
             ("__NAME__", html.escape(name)),
             ("__NAME_JS__", json.dumps(name)),
@@ -1190,6 +1199,9 @@ def main():
         format="%(asctime)s %(levelname)-7s %(message)s")
 
     config = Config(CONFIG_PATH)
+    # Свои темы (с 1.25): папка themes/ рядом с config.yaml, или своя -
+    # themes_dir в конфиге. Перечитывается сама, когда файлы меняются.
+    palette.load(themes_dir())
     # Сборка плиток заглядывает в общие настройки панели, но получить их
     # параметром неоткуда: build_tile зовётся из десятка мест.
     assemble.config = config

@@ -13,6 +13,8 @@
 просто тихо теряет часть настройки.
 """
 
+import os
+
 from .const import log
 from .registry import (REGISTRY, channels_of, guess_type,
                        resolve_type, writable_of)
@@ -90,6 +92,10 @@ def _check_themes(config):
             out.append(dict(row, tile=where,
                             text="темы %r нет" % name,
                             hint="есть: auto, " + ", ".join(palette.names())))
+    # Свои темы (с 1.25): файл не читается, имя занято, слабый контраст.
+    for where, text in palette.problems():
+        out.append(dict(row, tile="themes/" + os.path.basename(str(where)), text=text,
+                        hint="тема из папки themes/"))
     uses_auto = any(name == "auto" for _w, name in places)
     if uses_auto or config.get("theme_auto"):
         for text in themes.problems(config):

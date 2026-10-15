@@ -80,6 +80,7 @@
   <a href="#icons">Значки</a>
   <a href="#look">Вид органов управления</a>
   <a href="#colors">Цвета</a>
+  <a class="lvl2" href="#own-themes">свои темы</a>
   <a href="#interactive">Нажатия на плитки</a>
   <a href="#urls">Адреса</a>
   <a href="#flat">Подстановка переменных</a>
@@ -1065,8 +1066,67 @@ theme_auto:
 адресом: <code>/main.html?theme=retro</code>, картинкой —
 <code>/main.svg?theme=retro</code>.</p>
 <p>Цифра на графике автоматически красится в цвет своей линии, затемнённый
-для читаемости. Общие цвета темы правятся в <code>panel.svg.j2</code>,
-в блоке <code>&lt;style&gt;</code> вверху файла.</p>
+для читаемости.</p>
+
+<h3 id="own-themes">Свои темы</h3>
+<p>С 1.25 тему можно сделать самому. Свои темы лежат в папке
+<code>themes/</code> рядом с <code>config.yaml</code>, по файлу на тему —
+ими удобно делиться. Панель видит все <code>*.yaml</code> в папке сама и
+перечитывает их на ходу, через пару секунд после сохранения: ничего
+прописывать и перезапускать не нужно. Своя тема появляется в меню темы
+на устройстве и годится везде, где имя темы: <code>theme:</code> у панели
+и в корне, <code>theme_auto</code>. Файлы, чьё имя начинается с
+«<code>_</code>», — заготовки, их панель не читает; пример —
+<code>themes/_example.yaml</code>.</p>
+<pre><code>name: forest          # латиницей: так тему зовут в config.yaml и в адресе
+title: "лес"          # так она называется в меню
+extends: autumn       # что не задано - как у осени
+# mode: light         # light | dark - от неё пульты и подписи графиков
+# on_style: card      # rim - рамка у включённой, card - тёмная карточка
+# inv_kinds: []       # типы плиток, у которых карточка тёмная всегда
+# sheen: false        # отсвет из угла плитки
+# shadow: {amb: 0.16, key: 0.09}   # тени плиток; null - без теней
+vars:
+  tile: "#FBFCF8"
+  active: "#4E8A5A"
+  inv-tile: "#2F4A36"</code></pre>
+<p>Тема наследует встроенную (<code>extends</code>; без него — светлую или,
+при <code>mode: dark</code>, тёмную) и задаёт только то, что меняет:
+и цвета, и свойства. Наследовать можно и от своей темы. Без
+<code>name</code> имя берётся из имени файла (кириллица переводится в
+латиницу). Значения — цвета (<code>#RRGGBB</code>, <code>rgba(…)</code>,
+<code>hsl(…)</code>), числа или ссылки <code>var(--tile)</code>; что-то
+другое панель пропустит. Что не так с файлом — не читается, имя занято,
+неизвестная переменная, текст плохо читается на плитке, — покажет
+<code>/check</code>.</p>
+<p>Своих тем в git нет: <code>themes/*.yaml</code> в
+<code>.gitignore</code>, как и конфиг. Хотите хранить их в репозитории —
+уберите эту строку.</p>
+<table>
+<tr><th>Переменная</th><th>Что красит</th></tr>
+<tr><td><code>bg-top / bg-bottom</code></td><td>фон страницы сверху и снизу; низ — ещё и поля вокруг панели</td></tr>
+<tr><td><code>tile</code></td><td>плитка</td></tr>
+<tr><td><code>tile-on</code></td><td>плитка включённого прибора (по умолчанию как tile)</td></tr>
+<tr><td><code>edge / edge-w</code></td><td>контур плитки и его толщина</td></tr>
+<tr><td><code>shadow</code></td><td>цвет теней плиток и органов управления</td></tr>
+<tr><td><code>ink / ink-dim / ink-faint</code></td><td>текст: основной, приглушённый, бледный</td></tr>
+<tr><td><code>stroke</code></td><td>линии значков</td></tr>
+<tr><td><code>active / active-w</code></td><td>акцент: рамка включённого, дуги, ручки; толщина рамки (0 — без рамки)</td></tr>
+<tr><td><code>active-soft / active-soft-edge / active-ink</code></td><td>чип строки состояния: подложка, контур, значок</td></tr>
+<tr><td><code>chip-on-ink</code></td><td>значок включённого чипа на тёмной подложке</td></tr>
+<tr><td><code>cool</code></td><td>холод: охлаждение, «не греет»</td></tr>
+<tr><td><code>inv-tile / inv-ink / inv-dim / inv-stroke / inv-accent</code></td><td>тёмная карточка (on_style: card): фон, текст, приглушённый текст, значки, акцент</td></tr>
+<tr><td><code>section / section-op</code></td><td>заголовок раздела и его плотность</td></tr>
+<tr><td><code>sheen / sheen-on</code></td><td>отсвет из угла плитки (sheen: true): обычной и включённой</td></tr>
+<tr><td><code>ac-disk / ac-ink / ac-dim</code></td><td>колесо кондиционера: заливка, цифры, деления</td></tr>
+<tr><td><code>ac-off / ac-off-ink / ac-off-dim</code></td><td>то же у выключенного</td></tr>
+<tr><td><code>ac-pill / ac-pill-on / ac-pill-ink</code></td><td>кнопки, клавиши и ручки; включённая кнопка и её надпись</td></tr>
+<tr><td><code>ac-seg-cool / ac-seg-heat</code></td><td>дорожка охлаждения и нагрева</td></tr>
+<tr><td><code>window / fabric</code></td><td>окно и ткань шторы прежнего вида (look: classic)</td></tr>
+<tr><td><code>drape / sash</code></td><td>ткань шторы и переплёт окна нового вида</td></tr>
+</table>
+<p>Встроенные темы — такие же файлы в <code>wbpanel/builtin_themes/</code>:
+по ним удобно смотреть, что как задано.</p>
 
 <h2 id="interactive">Нажатия на плитки</h2>
 <p>По умолчанию панель только показывает. Управление включается одной

@@ -53,6 +53,37 @@
   .dial-deg    { font-size: calc(18px * var(--fs)); font-weight: 500; fill: var(--ink); }
   .dial-sub    { font-size: calc(11.5px * var(--fs)); font-weight: 500; fill: var(--ink-dim); }
   .dial-mode   { font-size: calc(13px * var(--fs)); font-weight: 600; fill: var(--ink-dim); }
+  /* ручка термостата (1.17) */
+  .knob .kt     { stroke: var(--ink); opacity: .45; stroke-linecap: round; }
+  .knob .kt.mj  { opacity: .85; }
+  .knob.off .kt { opacity: .25; }
+  .knob.off .kt.mj { opacity: .45; }
+  .knob .kl     { fill: var(--ink-dim); font-weight: 600; }
+  .knob .ktrack { fill: none; stroke: var(--ink); opacity: .12; stroke-linecap: round; }
+  .knob .kfill  { fill: none; stroke-linecap: round; }
+  .knob.heat .kfill, .knob.heat .kptr { stroke: var(--ac-seg-heat); }
+  .knob.idle .kfill, .knob.idle .kptr { stroke: var(--cool); }
+  .knob.off .kfill, .knob.off .kptr   { stroke: var(--ink-dim); }
+  .knob .kcur-h { stroke: var(--tile); stroke-linecap: round; }
+  .knob .kcur   { stroke: var(--ink); stroke-linecap: round; }
+  .knob .ksh    { fill: var(--shadow); }
+  .knob .kgear  { fill: var(--ac-pill); stroke: var(--edge); stroke-width: 1; }
+  .knob .kptr   { stroke-linecap: round; }
+  .knob .kdot   { fill: var(--ink); stroke: var(--tile); }
+  .knob.off .kdot { fill: var(--ink-dim); }
+  .knob .knum   { fill: var(--ink); font-weight: 650; letter-spacing: -.5px; }
+  .knob.off .knum { fill: var(--ink-dim); }
+  .knob .kdeg   { font-weight: 500; }
+  .knob .ksub   { fill: var(--ink-dim); font-weight: 500; }
+  .knob-mode.heat { fill: var(--ac-seg-heat); }
+  .knob-mode.idle { fill: var(--cool); }
+  /* тёмная карточка (inv) в осенней, ретро и нуаре */
+  .inv .knob .kt, .inv .knob .ktrack, .inv .knob .kcur { stroke: var(--inv-ink); }
+  .inv .knob .kl   { fill: var(--inv-dim); }
+  .inv .knob .kcur-h, .inv .knob .kdot { stroke: var(--inv-tile); }
+  .inv .knob .kdot { fill: var(--inv-ink); }
+  .inv .knob.heat .kfill, .inv .knob.heat .kptr { stroke: var(--inv-accent); }
+  .inv .knob-mode.heat { fill: var(--inv-accent); }
 {% endmacro %}
 
 {#- ---- раздвижные шторы ----
@@ -241,6 +272,21 @@
     Одна величина, поэтому просто заливка снизу вверх на высоту яркости. -#}
 {% macro tile_dimmer(t) %}
   {{ base.plate(t) }}
+  {% if t.roll %}
+  {#- 1.17: колесо в прорези; плитку снизу подсвечивает свет -#}
+  {% if t.on %}
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})">
+    <rect x="0" y="{{ (t.h * (1 - t.level) * 0.6)|round(1) }}" width="{{ t.w }}" height="{{ t.h }}"
+          fill="url(#{{ uid }}dglow)" opacity="{{ (0.35 + 0.65 * t.level)|round(2) }}"/>
+  </g>
+  {% endif %}
+  {{ base.roller(t) }}
+  {% if t.compact and t.roll.kind == 'tall' and t.on and t.short %}
+  <text x="{{ t.w / 2 }}" y="{{ t.h - 31 }}" class="status" text-anchor="middle">{{ t.short }}</text>
+  {% endif %}
+  {% if not t.compact and t.roll.kind != 'wide' %}{{ base.value_tr(t) }}{% endif %}
+  {{ base.caption(t, t.status) }}
+  {% else %}
   <g clip-path="url(#{{ uid }}clip{{ t.i }})">
     <rect x="0" y="{{ '%.1f'|format(t.h * (1 - t.fill)) }}"
           width="{{ t.w }}" height="{{ '%.1f'|format(t.h * t.fill) }}"
@@ -258,6 +304,7 @@
         text-anchor="middle">{{ t.short }}</text>
   {% endif %}
   {{ base.caption(t, t.status) }}
+  {% endif %}
 {% endmacro %}
 
 {#- ---- термостат ----
@@ -265,13 +312,68 @@
     фактической температурой и уставкой - тот самый разрыв, который
     прибору предстоит закрыть. Две засечки отмечают обе границы,
     в разрыве дуги снизу стоит режим работы. -#}
+{#- ---- ручка термостата (с 1.17) ----
+    Прежняя дуга, в центре зубчатая ручка с уставкой, снаружи шкала.
+    Дорожка от начала шкалы до уставки: греет - оранжевая, включён и не
+    греет - синяя, выключен - серая. Текущая - риска поперёк. -#}
+{% macro knob(t) %}
+  {% set k = t.knob %}
+  <g class="knob {{ k.state }}">
+    {% for x in k.ticks %}
+    <line x1="{{ x.x1 }}" y1="{{ x.y1 }}" x2="{{ x.x2 }}" y2="{{ x.y2 }}"
+          class="kt{{ ' mj' if x.major }}" stroke-width="{{ k.tick_w2 if x.major else k.tick_w }}"/>
+    {% endfor %}
+    {% for l in k.labels %}
+    <text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ k.lab }}" text-anchor="middle" class="kl">{{ l.text }}</text>
+    {% endfor %}
+    <path d="{{ k.track }}" class="ktrack" stroke-width="{{ k.tw }}"/>
+    {% if k.fill %}<path d="{{ k.fill }}" class="kfill" stroke-width="{{ k.tw }}"/>{% endif %}
+    {% if k.cur %}
+    <line x1="{{ k.cur.x1 }}" y1="{{ k.cur.y1 }}" x2="{{ k.cur.x2 }}" y2="{{ k.cur.y2 }}"
+          class="kcur-h" stroke-width="{{ k.cur.halo }}"/>
+    <line x1="{{ k.cur.x1 }}" y1="{{ k.cur.y1 }}" x2="{{ k.cur.x2 }}" y2="{{ k.cur.y2 }}"
+          class="kcur" stroke-width="{{ k.cur.w }}"/>
+    {% endif %}
+    {#- ручка: тень двумя слоями без размытия, тело, блик -#}
+    <circle cx="{{ k.cx }}" cy="{{ k.cy + k.shadow_dy * 2 }}" r="{{ k.rk }}" class="ksh" opacity=".10"/>
+    <circle cx="{{ k.cx }}" cy="{{ k.cy + k.shadow_dy }}" r="{{ k.rk }}" class="ksh" opacity=".18"/>
+    <path d="{{ k.gear }}" class="kgear"/>
+    <path d="{{ k.gear }}" fill="url(#{{ uid }}gl)"/>
+    {% if k.ptr %}
+    <line x1="{{ k.ptr.x1 }}" y1="{{ k.ptr.y1 }}" x2="{{ k.ptr.x2 }}" y2="{{ k.ptr.y2 }}"
+          class="kptr" stroke-width="{{ k.ptr.w }}"/>
+    {% endif %}
+    {% if k.dot %}
+    <circle cx="{{ k.dot.x }}" cy="{{ k.dot.y }}" r="{{ k.dot.r }}" class="kdot" stroke-width="{{ k.dot.sw }}"/>
+    {% endif %}
+    {% if k.num %}
+    <text x="{{ k.cx }}" y="{{ k.cy + k.num_size * 0.3 }}" font-size="{{ k.num_size }}"
+          text-anchor="middle" class="knum">{{ k.num }}</text>
+    <text x="{{ k.cx + k.deg_dx }}" y="{{ k.cy - k.num_size * 0.36 }}" font-size="{{ k.deg_size }}"
+          class="knum kdeg">°</text>
+    {% else %}
+    <text x="{{ k.cx }}" y="{{ k.cy + k.num_size * 0.3 }}" font-size="{{ k.num_size }}"
+          text-anchor="middle" class="knum">--</text>
+    {% endif %}
+    {% if t.current %}
+    <text x="{{ k.cx }}" y="{{ k.cy + k.num_size * 0.3 + k.sub_size * 1.45 }}" font-size="{{ k.sub_size }}"
+          text-anchor="middle" class="ksub">сейчас {{ t.current }}</text>
+    {% endif %}
+  </g>
+  <text x="{{ t.w / 2 }}" y="20" class="tag" text-anchor="middle">{{ t.title|upper }}</text>
+  <text x="{{ t.w / 2 }}" y="{{ t.h - 16 }}" class="dial-mode knob-mode {{ k.state }}"
+        text-anchor="middle">{{ t.status }}</text>
+{% endmacro %}
+
 {% macro tile_thermostat(t) %}
   {#- Невидимые зоны плюс и минус по краям плитки. Рисовать кнопки не нужно:
       на плитке и так тесно, а место у краёв всё равно пустует. Долгое
       нажатие открывает пульт, короткое по центру - ничего не делает,
       чтобы случайное касание не меняло уставку. -#}
   {{ base.plate(t) }}
-  {% if t.dial and not t.compact %}
+  {% if t.knob and not t.compact %}
+    {{ knob(t) }}
+  {% elif t.dial and not t.compact %}
     <g class="dial {{ 'live' if t.on }} {{ 'cool' if t.cooling }} {{ 'muted' if not t.enabled }}">
       {% if t.dial.track %}<path d="{{ t.dial.track }}" class="track"/>{% endif %}
       {% if t.dial.fill %}<path d="{{ t.dial.fill }}" class="fill"/>{% endif %}

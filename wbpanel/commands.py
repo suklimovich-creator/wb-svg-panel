@@ -167,7 +167,7 @@ CMD_ATTRS = [
     ("ac_quiet_now", "data-ac-quiet-now"),
     ("ac_swing", "data-ac-swing"), ("ac_swing_h", "data-ac-swing-h"),
     ("ac_swing_now", "data-ac-swing-now"), ("ac_swing_h_now", "data-ac-swing-h-now"),
-    ("href", "data-href"),
+    ("href", "data-href"), ("look", "data-look"),
     ("cam", "data-cam"), ("cam_poll", "data-cam-poll"),
     ("cam_live", "data-cam-live"), ("cam_life", "data-cam-life"),
     # Телевизор. Топики кнопок пульт собирает сам из tv_base и имён

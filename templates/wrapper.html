@@ -137,6 +137,9 @@
  #lvl .fill{position:absolute;left:0;right:0;bottom:0;background:#E0A050;opacity:.75}
  #lvl .val{position:absolute;left:0;right:0;bottom:14px;text-align:center;
            color:#fff;font-size:26px;font-weight:600}
+ /* пульт диммера с 1.17: колесо в прорези, шкала рядом, число над ним */
+ #lvl.roll{background:transparent;border-radius:0;overflow:visible}
+ #lvl.roll svg{display:block;width:100%;height:100%}
  /* Шаг числом. Двумя процентами на ночь пальцем по полю не попасть: один
     процент это пара пикселей. Стрелки закрывают ровно этот случай, а
     крупное неяркое число отвечает на вопрос «сколько сейчас», не
@@ -179,8 +182,8 @@
  #ov .cbtn.stop{border-color:#C4553B;color:#FFD8CE}
  #ov .cbtn.on{border-color:#E09B2D;color:#FFD9A0}
  #tdial{margin:0 auto;touch-action:none;user-select:none}
- #tdial .tbig{fill:#fff;font-size:54px;font-weight:600;letter-spacing:-1px}
- #tdial .tsub{fill:rgba(255,255,255,.55);font-size:16px;font-weight:500}
+ #tdial .tbig{fill:#fff;font-size:44px;font-weight:650;letter-spacing:-1px}
+ #tdial .tsub{fill:rgba(255,255,255,.55);font-size:14px;font-weight:500}
  #tdial .tmode{fill:rgba(255,255,255,.65);font-size:17px;font-weight:600}
  /* пульт кондиционера */
  #wheel{margin:0 auto;user-select:none;touch-action:none}
@@ -1497,6 +1500,87 @@ function acControls(node, changed){
 
 /* ---------- пульт диммера: линейный ---------- */
 function padLevel(node){
+  if(node.getAttribute('data-look') === 'classic') return padLevelFlat(node);
+  /* С 1.17: колесо, как на плитке, только крупно. Ведёшь вверх - ярче.
+     Шаг относительный: колесо крутится за пальцем от того места, где
+     было, а не прыгает в точку касания, - промахом не выкрутить на сто. */
+  var W = Math.round(Math.min(window.innerWidth * 0.5, 200));
+  var H = Math.round(Math.min(window.innerHeight * 0.5, 380));
+  var box = el('div'); box.id = 'lvl'; box.className = 'roll';
+  box.style.width = W + 'px'; box.style.height = H + 'px';
+  var title = el('div','ttl', node.getAttribute('data-title') || 'Яркость');
+  var hint = el('div','hint','Крутите колесо вверх или вниз · стрелками по проценту');
+  var power = powerRow(node);
+  var lvl = parseFloat(node.getAttribute('data-level') || '0');
+  var NS = 'http://www.w3.org/2000/svg', KW = Math.round(W * 0.56), KH = H - 8;
+  var KX = Math.round((W - KW - 22) / 2), KY = 4;
+  var svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  function mk(tag, a, parent){
+    var e = document.createElementNS(NS, tag);
+    for(var k in a) e.setAttribute(k, a[k]);
+    (parent || svg).appendChild(e); return e;
+  }
+  mk('defs', {}).innerHTML = '<linearGradient id="lvcyl" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset=".5" stop-color="#fff" stop-opacity=".1"/>'
+    + '<stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>';
+  mk('rect', {x: KX - 5, y: KY - 4, width: KW + 10, height: KH + 8, rx: 7, fill: '#0E0F11',
+              stroke: 'rgba(255,255,255,.08)'});
+  mk('rect', {x: KX, y: KY, width: KW, height: KH, rx: 3, fill: '#3A3B40'});
+  var ribs = mk('g', {});
+  mk('rect', {x: KX, y: KY, width: KW, height: KH, rx: 3, fill: 'url(#lvcyl)'});
+  var BX = KX + KW + 18;
+  mk('rect', {x: BX, y: KY, width: 5, height: KH, rx: 2.5, fill: 'rgba(255,255,255,.12)'});
+  var bar = mk('rect', {x: BX, width: 5, rx: 2.5, fill: '#F2A23A'});
+  box.appendChild(svg);
+  var turn = lvl * 9;            // поворот колеса в шагах рёбер, копится за пальцем
+  function place(){
+    var step = 15 / KH, n = Math.ceil(1.6 / step) + 1, ph = turn % 1, out = '';
+    if(ph < 0) ph += 1;
+    for(var k = -n; k <= n; k++){
+      var th = (k + ph) * step;
+      if(Math.abs(th) > 1.52) continue;
+      var y = KY + (Math.sin(th) * .5 + .5) * KH, w = Math.cos(th);
+      out += '<line x1="' + (KX + 4) + '" x2="' + (KX + KW - 4) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1)
+           + '" stroke="#000" stroke-width="' + (.8 + 3.2 * w).toFixed(2) + '" opacity="' + (.25 + .5 * w).toFixed(2) + '"/>'
+           + '<line x1="' + (KX + 4) + '" x2="' + (KX + KW - 4) + '" y1="' + (y + 2 * w).toFixed(1) + '" y2="' + (y + 2 * w).toFixed(1)
+           + '" stroke="#fff" stroke-width="' + (.8 * w).toFixed(2) + '" opacity="' + (.1 * w).toFixed(2) + '"/>';
+    }
+    ribs.innerHTML = out;
+    bar.setAttribute('y', (KY + KH * (1 - lvl)).toFixed(1));
+    bar.setAttribute('height', (KH * lvl).toFixed(1));
+  }
+  place();
+
+  function send(){
+    var bmax = parseFloat(node.getAttribute('data-bright-max') || '100');
+    return power.ensureOn()
+      .then(function(){ return pub(node.getAttribute('data-bright'), Math.round(lvl * bmax)); })
+      .catch(function(e){ flash('Не удалось: ' + e.message); });
+  }
+  var step = stepRow('Яркость', {
+    unit: ' %',
+    read:  function(){ return Math.round(lvl * 100); },
+    write: function(v){ turn += (v / 100 - lvl) * KH / 15; lvl = v / 100; place(); },
+    send:  send
+  });
+  openOv([title, box, step, power.el, hint]);
+  var y0 = 0, l0 = 0, t0 = 0;
+  function begin(ev){ var p = evPoint(ev); y0 = p.clientY; l0 = lvl; t0 = turn; }
+  function at(ev){
+    var p = evPoint(ev);
+    if(p.clientY === undefined) return;
+    var dy = p.clientY - y0;
+    // полный ход - полторы высоты колеса: точнее, чем «от низа до верха»
+    lvl = Math.max(0, Math.min(1, l0 - dy / (KH * 1.5)));
+    turn = t0 - dy / 15 * (H / KH);
+    place(); step.repaint();
+  }
+  drag(box, at, send, begin);
+}
+
+/* Прежний пульт диммера (look: classic): полоса, заполнение снизу. */
+function padLevelFlat(node){
   var box = el('div'); box.id='lvl';
   box.style.width = Math.round(Math.min(window.innerWidth*0.5, 220)) + 'px';
   box.style.height = Math.round(Math.min(window.innerHeight*0.5, 380)) + 'px';
@@ -1972,30 +2056,15 @@ function padThermostat(node){
   var S = Math.min(window.innerWidth - 40, Math.round(window.innerHeight * 0.62), 460);
   var wrap = el('div'); wrap.id = 'tdial';
   wrap.style.width = S + 'px'; wrap.style.height = S + 'px';
-  wrap.innerHTML =
-      '<svg viewBox="0 0 ' + S + ' ' + S + '" width="' + S + '" height="' + S + '">'
-    + '<path class="tarc-bg" fill="none" stroke-linecap="round"/>'
-    + '<path class="tarc" fill="none" stroke-linecap="round"/>'
-    + '<line class="tcur" stroke-linecap="round"/>'
-    + '<circle class="tcurdot" r="3.4"/>'
-    + '<line class="ttgt" stroke-linecap="round"/>'
-    + '<circle class="tknob"/>'
-    + '<text class="tbig" text-anchor="middle"></text>'
-    + '<text class="tsub" text-anchor="middle"></text>'
-    + '<text class="tmode" text-anchor="middle"></text>'
-    + '</svg>';
-  var pBg = wrap.querySelector('.tarc-bg'), pArc = wrap.querySelector('.tarc');
-  var lCur = wrap.querySelector('.tcur'), dCur = wrap.querySelector('.tcurdot');
-  var lTgt = wrap.querySelector('.ttgt'), cKnob = wrap.querySelector('.tknob');
-  var tBig = wrap.querySelector('.tbig'), tSub = wrap.querySelector('.tsub');
-  var tMode = wrap.querySelector('.tmode');
 
   var START = parseFloat(node.getAttribute('data-dial-start') || '148');
   var SWEEP = parseFloat(node.getAttribute('data-dial-sweep') || '244');
-  // Те же пропорции, что в build_dial: центр опущен, радиус от меньшей стороны
-  var CX = S / 2, CY = S * 0.55, R = S * 0.36;
-  var W = Math.max(8, Math.round(S * 0.042));
-
+  /* С 1.17 пульт рисует ту же ручку, что плитка (wbpanel/skeuo.py): дорожка
+     от начала шкалы до уставки, шкала с делениями снаружи, зубчатая ручка
+     с цифрой в центре. Центр - там же, где его ждёт жест (55 % высоты). */
+  var CX = S / 2, CY = S * 0.55, RA = S * 0.33, RK = RA - S * 0.093;
+  var TW = Math.max(6, S * 0.025), LAB = Math.max(11, S * 0.034);
+  var NS = 'http://www.w3.org/2000/svg';
   function pt(deg, radius){
     var a = deg * Math.PI / 180;
     return [CX + radius * Math.cos(a), CY + radius * Math.sin(a)];
@@ -2004,58 +2073,100 @@ function padThermostat(node){
     if(Math.abs(toDeg - fromDeg) < 0.3) return '';
     var a = pt(fromDeg, radius), b = pt(toDeg, radius);
     var large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
-    var sweepFlag = toDeg > fromDeg ? 1 : 0;
-    return 'M' + a[0].toFixed(1) + ' ' + a[1].toFixed(1) +
-           'A' + radius + ' ' + radius + ' 0 ' + large + ' ' + sweepFlag + ' ' +
+    return 'M' + a[0].toFixed(1) + ' ' + a[1].toFixed(1) + 'A' + radius + ' ' + radius + ' 0 ' + large + ' 1 ' +
            b[0].toFixed(1) + ' ' + b[1].toFixed(1);
   }
   function degOf(v){
     var f = (v - lo) / (hi - lo);
     return START + Math.max(0, Math.min(1, f)) * SWEEP;
   }
-  function mark(line, dot, v, inner, outer){
-    var a = pt(degOf(v), R * inner), b = pt(degOf(v), R * outer);
-    line.setAttribute('x1', a[0].toFixed(1)); line.setAttribute('y1', a[1].toFixed(1));
-    line.setAttribute('x2', b[0].toFixed(1)); line.setAttribute('y2', b[1].toFixed(1));
-    if(dot){ dot.setAttribute('cx', b[0].toFixed(1)); dot.setAttribute('cy', b[1].toFixed(1)); }
+  function gear(r, fs){
+    var tw = 7 * fs, th = 6 * fs, n = Math.max(18, Math.round(2 * Math.PI * r / (16 * fs)));
+    var hw = tw / 2 / r, d = [];
+    function P(rr, a){ d.push((CX + rr * Math.cos(a)).toFixed(1) + ',' + (CY + rr * Math.sin(a)).toFixed(1)); }
+    for(var k = 0; k < n; k++){
+      var a0 = 2 * Math.PI * k / n;
+      P(r, a0 - hw);
+      for(var f = 0; f < 9; f++){
+        var ff = Math.PI * f / 8, x = -tw / 2 * Math.cos(ff), rr = (r - th + tw / 2) - (tw / 2) * Math.sin(ff);
+        P(rr, a0 + x / rr);
+      }
+      P(r, a0 + hw); P(r, a0 + Math.PI / n);
+    }
+    return 'M ' + d.join(' L ') + ' Z';
+  }
+  function mk(tag, attrs, parent){
+    var e = document.createElementNS(NS, tag);
+    for(var k in attrs) e.setAttribute(k, attrs[k]);
+    (parent || svgEl).appendChild(e); return e;
+  }
+  var svgEl = document.createElementNS(NS, 'svg');
+  svgEl.setAttribute('viewBox', '0 0 ' + S + ' ' + S);
+  svgEl.setAttribute('width', S); svgEl.setAttribute('height', S);
+  wrap.appendChild(svgEl);
+  mk('defs', {}).innerHTML = '<linearGradient id="tdgl" x1="0" y1="0" x2="1" y2="1">'
+    + '<stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/>'
+    + '<stop offset="1" stop-color="#000" stop-opacity=".16"/></linearGradient>';
+  // шкала: деления через градус, подписи через четыре
+  var t0 = Math.ceil(lo), every = (Math.floor(hi) - t0) <= 40 ? 4 : 8;
+  for(var v = t0; v <= Math.floor(hi); v++){
+    var major = (v - t0) % every === 0, a = degOf(v);
+    var p1 = pt(a, RA + S * 0.025), p2 = pt(a, RA + S * (major ? 0.057 : 0.043));
+    mk('line', {x1: p1[0].toFixed(1), y1: p1[1].toFixed(1), x2: p2[0].toFixed(1), y2: p2[1].toFixed(1),
+                stroke: '#fff', 'stroke-opacity': major ? .8 : .4, 'stroke-width': major ? 2 : 1.2, 'stroke-linecap': 'round'});
+    if(major){
+      var lp = pt(a, RA + S * 0.096 + LAB * 0.2);
+      var tl = mk('text', {x: lp[0].toFixed(1), y: (lp[1] + LAB * 0.36).toFixed(1), 'text-anchor': 'middle',
+                           fill: 'rgba(255,255,255,.55)', 'font-size': LAB, 'font-weight': 600});
+      tl.textContent = v;
+    }
+  }
+  var pBg = mk('path', {fill: 'none', stroke: 'rgba(255,255,255,.14)', 'stroke-width': TW, 'stroke-linecap': 'round',
+                        d: arc(START, START + SWEEP, RA)});
+  var pArc = mk('path', {fill: 'none', 'stroke-width': TW, 'stroke-linecap': 'round'});
+  var lCurH = mk('line', {stroke: '#1C1D20', 'stroke-width': Math.max(6, S * 0.025), 'stroke-linecap': 'round'});
+  var lCur = mk('line', {stroke: '#fff', 'stroke-width': Math.max(3, S * 0.0114), 'stroke-linecap': 'round'});
+  mk('circle', {cx: CX, cy: CY + S * 0.028, r: RK, fill: '#000', opacity: .22});
+  var gd = gear(RK, Math.max(0.8, 0.8 * S / 280));
+  mk('path', {d: gd, fill: '#2E2F34', stroke: 'rgba(255,255,255,.08)'});
+  mk('path', {d: gd, fill: 'url(#tdgl)'});
+  var lPtr = mk('line', {'stroke-width': Math.max(3, S * 0.013), 'stroke-linecap': 'round'});
+  var cKnob = mk('circle', {r: Math.max(6, S * 0.023), stroke: '#1C1D20', 'stroke-width': Math.max(2, S * 0.007)});
+  var tBig = mk('text', {'text-anchor': 'middle', 'class': 'tbig'});
+  var tSub = mk('text', {'text-anchor': 'middle', 'class': 'tsub'});
+  var tMode = mk('text', {'text-anchor': 'middle', 'class': 'tmode'});
+
+  function line(e, v, inner, outer){
+    var a = pt(degOf(v), inner), b = pt(degOf(v), outer);
+    e.setAttribute('x1', a[0].toFixed(1)); e.setAttribute('y1', a[1].toFixed(1));
+    e.setAttribute('x2', b[0].toFixed(1)); e.setAttribute('y2', b[1].toFixed(1));
   }
   function paint(){
-    var cool = !isNaN(current) && value < current;
-    var color = cool ? '#3B8FD4' : '#FFAE28';
-
-    pBg.setAttribute('d', arc(START, START + SWEEP, R));
-    pBg.setAttribute('stroke', 'rgba(255,255,255,.14)');
-    pBg.setAttribute('stroke-width', W);
-
-    // от текущей до уставки, а не от начала шкалы
-    var from = isNaN(current) ? START : degOf(current);
+    // греет - оранжевая, включён и не греет - синяя, выключен - серая
+    var enabled = node.getAttribute('data-enabled') !== '0';
+    var color = !enabled ? 'rgba(255,255,255,.42)' : (live ? '#FF8A3D' : '#3B8FD4');
     var to = degOf(value);
-    pArc.setAttribute('d', arc(Math.min(from, to), Math.max(from, to), R));
+    pArc.setAttribute('d', arc(START, to, RA));
     pArc.setAttribute('stroke', color);
-    pArc.setAttribute('stroke-width', W);
-    pArc.setAttribute('opacity', live ? '.95' : '.55');
-
     if(!isNaN(current)){
-      mark(lCur, dCur, current, 0.86, 1.20);
-      lCur.setAttribute('stroke', 'rgba(255,255,255,.70)');
-      lCur.setAttribute('stroke-width', Math.max(2, W * 0.34));
-      dCur.setAttribute('fill', 'rgba(255,255,255,.70)');
-    }
-    mark(lTgt, null, value, 0.80, 1.20);
-    lTgt.setAttribute('stroke', color);
-    lTgt.setAttribute('stroke-width', Math.max(3, W * 0.46));
-    var k = pt(degOf(value), R * 1.20);
-    cKnob.setAttribute('cx', k[0].toFixed(1));
-    cKnob.setAttribute('cy', k[1].toFixed(1));
-    cKnob.setAttribute('r', Math.max(7, W * 0.62));
-    cKnob.setAttribute('fill', color);
+      line(lCurH, current, RA - S * 0.025, RA + S * 0.061);
+      line(lCur, current, RA - S * 0.025, RA + S * 0.061);
+      lCur.style.display = lCurH.style.display = '';
+    } else lCur.style.display = lCurH.style.display = 'none';
+    line(lPtr, value, RK - S * 0.043, RK - S * 0.011);
+    lPtr.setAttribute('stroke', color);
+    var k = pt(to, RA);
+    cKnob.setAttribute('cx', k[0].toFixed(1)); cKnob.setAttribute('cy', k[1].toFixed(1));
+    cKnob.setAttribute('fill', enabled ? '#F2F2F4' : '#8A8C92');
 
     tBig.setAttribute('x', CX); tBig.setAttribute('y', CY + S * 0.035);
     tBig.textContent = value.toFixed(digits) + '°';
-    tSub.setAttribute('x', CX); tSub.setAttribute('y', CY + S * 0.105);
+    tBig.setAttribute('opacity', enabled ? 1 : .55);
+    tSub.setAttribute('x', CX); tSub.setAttribute('y', CY + S * 0.095);
     tSub.textContent = isNaN(current) ? '' : ('сейчас ' + current.toFixed(1) + '°');
     tMode.setAttribute('x', CX); tMode.setAttribute('y', S - S * 0.03);
     tMode.textContent = node.getAttribute('data-status') || '';
+    tMode.style.fill = enabled ? color : 'rgba(255,255,255,.55)';
   }
   /* Отправляем последнее значение, а не каждое движение пальца: головка
      иначе выстроит десяток команд в очередь. */

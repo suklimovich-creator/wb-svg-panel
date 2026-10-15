@@ -284,6 +284,23 @@
   .inv .wnotch      { stroke: var(--inv-dim); }
   .inv .ag-now      { fill: var(--inv-accent); }
   .shadows   { pointer-events: none; }
+  /* ---- органы управления (1.17): клавиша, диод, колесо ---- */
+  .led-frame  { fill: #000000; opacity: .55; }
+  .led-off    { fill: var(--ink); opacity: .16; }
+  .led-gloss  { fill: #FFFFFF; opacity: .45; }
+  .key        { fill: var(--ac-pill); stroke: var(--edge); stroke-width: 1; }
+  .key-sh     { fill: var(--shadow); }
+  .key-split  { stroke: #000000; stroke-width: 1.2; opacity: .45; }
+  .slot       { fill: var(--shadow); opacity: .85; }
+  .drum       { fill: var(--ac-pill); }
+  .roller.on .drum { fill: var(--ac-pill); }
+  .rib        { stroke: #000000; }
+  .rib-hi     { stroke: #FFFFFF; }
+  .lvl-track  { fill: var(--ink); opacity: .12; }
+  .lvl        { fill: var(--ink-dim); }
+  .roller.on .lvl { fill: var(--active); }
+  .inv .lvl-track { fill: var(--inv-ink); }
+  .inv .roller.on .lvl { fill: var(--inv-accent); }
   /* Сетка графика на угольном фоне читается вдвое ярче, чем на сером. */
   .graphite .tick, .graphite .hline { opacity: .07; }
   .graphite .tick.major { opacity: .12; }
@@ -443,6 +460,64 @@
     Выпускается всегда целиком: имя значка приходит из конфига,
     и заранее неизвестно, какие понадобятся. -#}
 {% macro defs() %}
+  {#- Органы управления (с 1.17): блик на ручке и клавише, цилиндр колеса
+      диммера, светящийся диод. Один раз на документ. -#}
+  <linearGradient id="{{ uid }}gl" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".22"/>
+    <stop offset=".55" stop-color="#FFFFFF" stop-opacity="0"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".16"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}cyl" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#000000" stop-opacity=".55"/>
+    <stop offset=".5" stop-color="#FFFFFF" stop-opacity=".10"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".55"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}cylh" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity=".55"/>
+    <stop offset=".5" stop-color="#FFFFFF" stop-opacity=".10"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".55"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}led" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFE2A8"/>
+    <stop offset="1" stop-color="var(--active)"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}ledh" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#FFE2A8"/>
+    <stop offset="1" stop-color="var(--active)"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}dglow" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="var(--active)" stop-opacity=".45"/>
+    <stop offset="1" stop-color="var(--active)" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="{{ uid }}halo" cx=".5" cy=".5" r=".5">
+    <stop offset="0" stop-color="var(--active)" stop-opacity=".55"/>
+    <stop offset="1" stop-color="var(--active)" stop-opacity="0"/>
+  </radialGradient>
+  {#- клавиша: верх светлее, низ темнее и наоборот - какая половина нажата -#}
+  <linearGradient id="{{ uid }}key-on" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#000000" stop-opacity=".22"/>
+    <stop offset=".5" stop-color="#000000" stop-opacity=".12"/>
+    <stop offset=".5" stop-color="#FFFFFF" stop-opacity=".10"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".02"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}key-off" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".10"/>
+    <stop offset=".5" stop-color="#000000" stop-opacity=".02"/>
+    <stop offset=".5" stop-color="#000000" stop-opacity=".12"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".22"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}keyh-on" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".10"/>
+    <stop offset=".5" stop-color="#000000" stop-opacity=".02"/>
+    <stop offset=".5" stop-color="#000000" stop-opacity=".12"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".22"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}keyh-off" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity=".22"/>
+    <stop offset=".5" stop-color="#000000" stop-opacity=".12"/>
+    <stop offset=".5" stop-color="#FFFFFF" stop-opacity=".10"/>
+    <stop offset="1" stop-color="#000000" stop-opacity=".02"/>
+  </linearGradient>
   {% if theme in ('dark', 'graphite') %}
   {#- Отсвет плиток тёмных тем: радиальный из левого верхнего угла. Цвет -
       переменной, чтобы плоская подстановка для старых браузеров его
@@ -776,6 +851,76 @@
 {% endmacro %}
 
 {#- ==================== макросы ==================== -#}
+
+{#- ---- органы управления (с 1.17) ----
+    Диод-ночник: окошко-полоска; светится, когда прибор выключен, - чтобы
+    найти выключатель в темноте. Включённый гасит диод, светится плитка. -#}
+{% macro diode(d, lit, horiz=False) %}
+  <rect x="{{ d.x - 2 }}" y="{{ d.y - 2 }}" width="{{ d.w + 4 }}" height="{{ d.h + 4 }}" rx="3.6" class="led-frame"/>
+  {% if lit %}
+  <ellipse cx="{{ d.x + d.w / 2 }}" cy="{{ d.y + d.h / 2 }}" rx="{{ d.w / 2 + 9 }}" ry="{{ d.h / 2 + 9 }}"
+           fill="url(#{{ uid }}halo)"/>
+  <rect x="{{ d.x }}" y="{{ d.y }}" width="{{ d.w }}" height="{{ d.h }}" rx="3"
+        fill="url(#{{ uid }}{{ 'ledh' if horiz else 'led' }})"/>
+  {% else %}
+  <rect x="{{ d.x }}" y="{{ d.y }}" width="{{ d.w }}" height="{{ d.h }}" rx="3" class="led-off"/>
+  {% endif %}
+  {% if horiz %}
+  <rect x="{{ d.x + 1.2 }}" y="{{ d.y + 3 }}" width="1.6" height="{{ d.h - 8 if d.h > 10 else 2 }}" rx=".8" class="led-gloss"/>
+  {% else %}
+  <rect x="{{ d.x + 3 }}" y="{{ d.y + 1.2 }}" width="{{ d.w - 8 if d.w > 10 else 2 }}" height="1.6" rx=".8" class="led-gloss"/>
+  {% endif %}
+{% endmacro %}
+
+{#- Клавиша-качалка: нажатая половина утоплена (градиент), разделитель
+    посередине, диод у дальнего края. -#}
+{% macro rocker(t) %}
+  {% set k = t.key %}
+  {% set r = 16 if k.kw > 50 else 11 %}
+  <g class="rocker {{ 'on' if t.on }}">
+    <rect x="{{ k.kx }}" y="{{ k.ky + 4 }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" class="key-sh" opacity=".22"/>
+    <rect x="{{ k.kx }}" y="{{ k.ky + 2 }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" class="key-sh" opacity=".18"/>
+    <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}" class="key"/>
+    <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="{{ r }}"
+          fill="url(#{{ uid }}{{ 'keyh' if k.horiz else 'key' }}-{{ 'on' if t.on else 'off' }})"/>
+    {% if k.horiz %}
+    <line x1="{{ k.kx + k.kw / 2 }}" y1="{{ k.ky + 8 }}" x2="{{ k.kx + k.kw / 2 }}" y2="{{ k.ky + k.kh - 8 }}" class="key-split"/>
+    {% else %}
+    <line x1="{{ k.kx + 8 }}" y1="{{ k.ky + k.kh / 2 }}" x2="{{ k.kx + k.kw - 8 }}" y2="{{ k.ky + k.kh / 2 }}" class="key-split"/>
+    {% endif %}
+    {{ diode(k.led, not t.on, k.horiz) }}
+  </g>
+{% endmacro %}
+
+{#- Колесо диммера в прорези: цилиндр, рёбра сгущаются к краям. -#}
+{% macro roller(t) %}
+  {% set k = t.roll %}
+  {% set horiz = k.kind == 'wide' %}
+  <g class="roller {{ 'on' if t.on }}">
+    <rect x="{{ k.kx - 4 }}" y="{{ k.ky - 4 }}" width="{{ k.kw + 8 }}" height="{{ k.kh + 8 }}" rx="5" class="slot"/>
+    <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="2" class="drum"/>
+    {% for r in k.ribs %}
+    <line x1="{{ r.x1 }}" y1="{{ r.y1 }}" x2="{{ r.x2 }}" y2="{{ r.y2 }}" class="rib" stroke-width="{{ r.w }}" opacity="{{ r.op }}"/>
+    {% if horiz %}
+    <line x1="{{ r.hx }}" y1="{{ r.y1 }}" x2="{{ r.hx }}" y2="{{ r.y2 }}" class="rib-hi" stroke-width="{{ r.hw }}" opacity="{{ r.hop }}"/>
+    {% else %}
+    <line x1="{{ r.x1 }}" y1="{{ r.hy }}" x2="{{ r.x2 }}" y2="{{ r.hy }}" class="rib-hi" stroke-width="{{ r.hw }}" opacity="{{ r.hop }}"/>
+    {% endif %}
+    {% endfor %}
+    <rect x="{{ k.kx }}" y="{{ k.ky }}" width="{{ k.kw }}" height="{{ k.kh }}" rx="2" fill="url(#{{ uid }}{{ 'cylh' if horiz else 'cyl' }})"/>
+    {% set b = k.bar %}
+    {% if b.horiz %}
+    <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="4" rx="2" class="lvl-track"/>
+    <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ (b.w * t.level)|round(1) }}" height="4" rx="2" class="lvl"/>
+    {% else %}
+    <rect x="{{ b.x }}" y="{{ b.y }}" width="4" height="{{ b.h }}" rx="2" class="lvl-track"/>
+    <rect x="{{ b.x }}" y="{{ (b.y + b.h * (1 - t.level))|round(1) }}" width="4" height="{{ (b.h * t.level)|round(1) }}" rx="2" class="lvl"/>
+    {% endif %}
+    {% if k.led %}
+    {{ diode({'x': k.led.x - 13, 'y': k.led.y - 3.25, 'w': 26, 'h': 6.5}, not t.on) }}
+    {% endif %}
+  </g>
+{% endmacro %}
 
 {% macro plate(t) %}
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"

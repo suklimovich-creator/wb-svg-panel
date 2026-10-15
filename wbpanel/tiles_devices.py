@@ -15,6 +15,7 @@ from .geometry import _fmt, field_color, text_width
 from .registry import Tile, Zone, tile
 from .tiles import DIAL_START, DIAL_SWEEP, HEAT_MODE, HEAT_NOW, build_dial
 from .state import to_float
+from .skeuo import dimmer_layout, knob_dial
 
 
 def _percent(ctx, role, default_max=100.0):
@@ -144,8 +145,19 @@ class Dimmer(Tile):
         if ctx.has("switch"):
             on = ctx.flag("switch")
 
+        # С 1.17 диммер - колесо в прорези со шкалой (look: classic -
+        # прежняя заливка). Уровень помним и у выключенного: серая шкала
+        # показывает, с какой яркостью он включится.
+        level = (brightness or 0.0) / 100.0
+        roll = None
+        if ctx.opt("look", "roller") != "classic":
+            roll = dimmer_layout(float(ctx.opt("inner_w") or 170), float(ctx.opt("chart_h") or 170),
+                                 level)
         return {
             "on": on,
+            "roll": roll,
+            "level": round(level, 3),
+            "low_x": roll["text_x"] if roll and roll["kind"] == "wide" else None,
             "fill": 0.0 if (not on or brightness is None) else brightness / 100.0,
             "color": ctx.opt("color", "#E0A050"),
             "short": ("%d %%" % round(brightness)) if brightness is not None else "",
@@ -162,8 +174,11 @@ class Dimmer(Tile):
                 Zone("bright", "pad", "bright")]
 
     def pad(self, ctx, data):
-        return {"bright_max": str(to_float(ctx.meta("bright", "max"), 100.0) or 100.0),
-                "level": "%.3f" % (data.get("fill") or 0.0)}
+        out = {"bright_max": str(to_float(ctx.meta("bright", "max"), 100.0) or 100.0),
+               "level": "%.3f" % (data.get("fill") or 0.0)}
+        if ctx.opt("look") == "classic":
+            out["look"] = "classic"
+        return out
 
 
 @tile("curtain")
@@ -368,8 +383,19 @@ class Thermostat(Tile):
         big = 30.0 * float(ctx.opt("fs", 1.0))
         deg_dx = text_width(target_num, big) / 2.0 + 1.0 * float(ctx.opt("fs", 1.0))
 
+        # С 1.17 по умолчанию ручка со шкалой (look: classic - прежняя дуга).
+        # Состояние красит дорожку: греет - оранжевая, включён и не греет -
+        # синяя, выключен - серая.
+        knob = None
+        if dial is not None and ctx.opt("look", "knob") != "classic":
+            state = "off" if mode == 0 else ("heat" if working == 1 else "idle")
+            knob = knob_dial(ctx.opt("inner_w") or 170, ctx.opt("chart_h") or 170,
+                             ctx.opt("scale_min", 14), ctx.opt("scale_max", 30),
+                             current, target, state, int(digits))
+
         return {
             "dial": dial,
+            "knob": knob,
             "target_num": target_num,
             # Число без округления: по нему считается шаг уставки.
             "target_value": target,

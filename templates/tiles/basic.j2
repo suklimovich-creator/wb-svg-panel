@@ -12,12 +12,14 @@
 {#- ---- выключатель ---- -#}
 {% macro tile_switch(t) %}
   {{ base.plate(t) }}
-  {% if t.icon == 'toggle' and not t.compact %}
+  {% if t.key %}
+    {{ base.rocker(t) }}
+  {% elif t.icon == 'toggle' and not t.compact %}
     {{ base.toggle(t) }}
   {% else %}
     {{ base.icon_c(t, t.icon if t.icon != 'toggle' else 'power', 24) }}
   {% endif %}
-  {{ base.value_tr(t) }}
+  {% if not t.key %}{{ base.value_tr(t) }}{% endif %}
   {{ base.caption(t, t.status) }}
 {% endmacro %}
 

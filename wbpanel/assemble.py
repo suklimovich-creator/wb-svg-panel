@@ -86,7 +86,9 @@ def _fit_low(tile, pw, fs):
     """
     toggle = tile["kind"] == "switch" and tile.get("icon") == "toggle"
     # Тумблер шире значка: 34 против 27, и текст от него отступает дальше.
-    x = 64 if toggle else 56
+    # Клавиша выключателя и колесо диммера (1.17) шире значка - их
+    # плитка сама говорит, откуда начинать текст.
+    x = tile.get("low_x") or (64 if toggle else 56)
     tile["low_x"] = x
     size = 15.0 * float(fs or 1.0)
     title = " ".join(tile.get("title_lines") or [tile.get("title") or ""]).strip()
@@ -177,6 +179,12 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # Крупная плитка рисуется теми же макросами, но с увеличенным кеглем.
     # Сборщикам это нужно, чтобы считать ширину текста в тех же единицах.
     conf["fs"] = font_scale(ph)
+    # Вид органов управления (с 1.17): новый по умолчанию, look: classic -
+    # прежний. Задаётся у плитки, у панели или для всего config.yaml.
+    look = conf.get("look") or (panel_conf or {}).get("look") or (
+        config.get("look") if config else None)
+    if look:
+        conf["look"] = look
     # Тема нужна графику: подписи значений красятся под цвет подложки, а
     # она разная. CSS-переменная тут не подходит - цвет у каждой серии свой.
     conf["theme"] = (panel_conf or {}).get("theme") or (

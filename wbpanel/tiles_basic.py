@@ -16,6 +16,7 @@ from urllib.parse import quote
 from .geometry import _fmt
 from .registry import Tile, Zone, tile
 from .state import is_on
+from .skeuo import diode_box, switch_layout
 from .state import to_float
 
 
@@ -34,11 +35,19 @@ class Switch(Tile):
         if ctx.opt("invert") and raw != "":
             on = not on
 
+        # С 1.17 выключатель - клавиша с диодом-ночником (look: classic -
+        # прежний значок или тумблер).
+        key = None
+        if ctx.opt("look", "key") != "classic":
+            key = switch_layout(float(ctx.opt("inner_w") or 170), float(ctx.opt("chart_h") or 170))
+            key["led"] = diode_box(key["kx"], key["ky"], key["kw"], key["kh"], key["horiz"])
         return {
             "on": on,
             "status": ctx.opt("on_text", "Вкл") if on else ctx.opt("off_text", "Выкл"),
             "icon": ctx.opt("icon", "toggle"),
             "short": ctx.opt("badge", ""),
+            "key": key,
+            "low_x": key["text_x"] if key and key["kind"] == "wide" else None,
         }
 
     def zones(self, ctx, data):

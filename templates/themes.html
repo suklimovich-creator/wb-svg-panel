@@ -232,6 +232,7 @@ function drawInfo(){
   if (t.extends) meta.push('наследует <b>' + esc((BY[t.extends] || {}).title || t.extends) + '</b>');
   meta.push(t.mode === 'dark' ? 'тёмная' : 'светлая');
   meta.push(t.on_style === 'card' ? 'включённая — тёмная карточка' : 'включённая — рамка');
+  meta.push(DEPTH_RU[t.depth] || DEPTH_RU.soft);
   var sw = t.swatches.map(function(s){
     return '<div><i style="background:' + s.color + '"></i><div>' + esc(s.title) +
            '<span>' + s.color + '</span></div></div>';
@@ -407,6 +408,7 @@ var KEYS = [['bg', 'bg-bottom', 'Фон', 'страница и поля вокр
             ['cool', 'cool', 'Холод', 'охлаждение, «не греет»'],
             ['shadow', 'shadow', 'Тень', 'цвет теней плиток'],
             ['card', 'inv-tile', 'Карточка', 'включённая плитка при «тёмной карточке»']];
+var DEPTH_RU = {soft: 'мягкая тень', flat: 'плоско', neumo: 'неоморфизм'};
 var ED = null, edTimer = null, padTimer = null, edSeq = 0, lastResp = null;
 var DRAFT_KEY = 'wb-panel-theme-editor';
 
@@ -558,6 +560,7 @@ function freshEditor(name, editOwn){
     var p = t.src.props || {};
     return {editing: t.name, title: t.title, name: t.name, nameSet: true,
             extends: t.src.extends || 'light', mode: p.mode || '', on_style: p.on_style || '',
+            depth: p.depth || '',
             vars: JSON.parse(JSON.stringify(t.src.vars || {})),
             keep: JSON.parse(JSON.stringify((function(){
               var o = {}; ['sheen', 'inv_kinds', 'shadow', 'chart'].forEach(function(k){
@@ -565,7 +568,7 @@ function freshEditor(name, editOwn){
             gen: null};
   }
   return {editing: '', title: 'Моя тема', name: '', nameSet: false, extends: t.name,
-          mode: '', on_style: '', vars: {}, keep: {}, gen: null};
+          mode: '', on_style: '', depth: '', vars: {}, keep: {}, gen: null};
 }
 function saveEditor(){
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(ED)); } catch(e) {}
@@ -584,6 +587,7 @@ function startEditor(e){
 function base(){ return BY[ED.extends] || THEMES[0]; }
 function baseMode(){ return ED.mode || base().mode; }
 function baseStyle(){ return ED.on_style || base().on_style; }
+function baseDepth(){ return ED.depth || base().depth || 'soft'; }
 function value(k){
   var v = ED.vars[k[1]] !== undefined ? ED.vars[k[1]] : ED.vars[k[0]];
   return v !== undefined ? v : null;
@@ -626,6 +630,10 @@ function drawEditor(){
     '<div class="two"><div class="seg" id="e-mode"><b data-v="light">Светлая</b><b data-v="dark">Тёмная</b></div>' +
     '<div class="seg" id="e-style"><b data-v="rim">Рамка</b><b data-v="card">Тёмная карточка</b></div></div>' +
     '<div class="note">Включённая плитка: рамкой акцента или тёмной карточкой.</div>' +
+    '<div class="two"><div class="seg" id="e-depth"><b data-v="soft">Мягкая тень</b>' +
+    '<b data-v="flat">Плоско</b><b data-v="neumo">Неоморфизм</b></div></div>' +
+    '<div class="note">Форма. Неоморфизм: плитка того же цвета, что и фон, её отделяют ' +
+    'светлая тень сверху-слева и тёмная снизу-справа, включённая — утоплена.</div>' +
 
     '<h3>Собрать за раз</h3>' +
     '<div class="gen"><input type="color" class="pick" id="e-acc" value="' + shownColor(KEYS[3]) + '">' +
@@ -649,7 +657,7 @@ function drawEditor(){
     '<button class="btn" id="e-new">Начать заново</button></div>' +
     '<div class="note" id="e-where"></div>' +
     '<pre id="e-yaml" hidden></pre>';
-  drawSeg('e-mode', baseMode()); drawSeg('e-style', baseStyle());
+  drawSeg('e-mode', baseMode()); drawSeg('e-style', baseStyle()); drawSeg('e-depth', baseDepth());
   if (ED.gen && ED.gen.photo) drawPhoto(ED.gen.photo);
   bindEditor();
   drawChecks();
@@ -723,6 +731,17 @@ function generate(acc, photo){
     setVar(k, out[k[0]]);
   });
   ED.gen = {accent: acc, photo: photo || null};
+  if (baseDepth() === 'neumo') neuMaterial();
+}
+/* Неоморфизм: плитка - цвет фона, без контура; тень - не серая, а
+   глубокий тон самого фона. */
+function neuMaterial(){
+  var bg = shownColor(KEYS[0]), c = rgbHsl(hexRgb(bg)), dark = baseMode() === 'dark';
+  // На почти чёрном фоне выпуклости не видно: тёмный неоморфизм - графит.
+  if (dark && c[2] < 0.15) { bg = hsl(c[0], Math.min(c[1], 0.12), 0.17); setVar(KEYS[0], bg); }
+  setVar(KEYS[1], rgbHex(hexRgb(bg)));
+  setVar(KEYS[6], dark ? '#000000' : hsl(c[0], Math.min(0.3, c[1] + 0.12), Math.max(0.2, c[2] - 0.22)));
+  ED.vars['edge-w'] = '0';
 }
 
 function bindEditor(){
@@ -744,6 +763,13 @@ function bindEditor(){
     ED.on_style = v;
     if (v === 'card' && value(KEYS[7]) === null && ED.gen)
       setVar(KEYS[7], fromAccent(ED.gen.accent, baseMode() === 'dark').card);
+    drawEditor(); changed();
+  };
+  $('e-depth').onclick = function(ev){
+    var v = ev.target.getAttribute('data-v'); if (!v) return;
+    ED.depth = v === (base().depth || 'soft') ? '' : v;
+    // Неоморфизм держится на том, что плитка - из материала фона.
+    if (v === 'neumo') neuMaterial(); else delete ED.vars['edge-w'];
     drawEditor(); changed();
   };
   $('e-gen').onclick = function(){ generate($('e-acc').value, null); drawEditor(); changed(); };
@@ -809,6 +835,7 @@ function payload(){
   var t = {title: ED.title, name: ED.nameSet ? ED.name : '', extends: ED.extends, vars: ED.vars};
   if (ED.mode) t.mode = ED.mode;
   if (ED.on_style) t.on_style = ED.on_style;
+  if (ED.depth) t.depth = ED.depth;
   for (var k in ED.keep) t[k] = ED.keep[k];
   return {theme: t};
 }

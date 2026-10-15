@@ -7,7 +7,7 @@
 #
 # Конфиг перечитывается сам, как только меняется файл: правите — жмёте F5.
 
-theme: light           # light | autumn | retro | noir | dark | graphite | auto
+theme: light           # light | autumn | retro | noir | neumo | dark | graphite | auto
 # Свои темы (с 1.25) - файлы в папке themes/ рядом с этим файлом, см.
 # themes/_example.yaml. Другая папка: themes_dir: my-themes
 # theme: auto - днём одна тема, ночью другая:

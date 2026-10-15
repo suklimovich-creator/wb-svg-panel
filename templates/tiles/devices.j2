@@ -484,8 +484,12 @@
     {% endif %}
     {#- ручка: тень двумя слоями без размытия, тело, блик -#}
     {{ base.soft_round(k.cx, k.cy, k.rk, k.shadow_dy) }}
-    <path d="{{ k.gear }}" class="kgear"/>
-    <path d="{{ k.gear }}" fill="url(#{{ uid }}gl)"/>
+    {#- Зубчатый край - один путь, два слоя через use (с 1.31): тело и
+        блик. Раньше путь в пять килобайт шёл дважды. -#}
+    {% set gid = uid ~ 'kg' ~ t.i %}
+    <defs><path id="{{ gid }}" d="{{ k.gear }}"/></defs>
+    <use href="#{{ gid }}" xlink:href="#{{ gid }}" class="kgear"/>
+    <use href="#{{ gid }}" xlink:href="#{{ gid }}" fill="url(#{{ uid }}gl)"/>
     {% if k.ptr %}
     <line x1="{{ k.ptr.x1 }}" y1="{{ k.ptr.y1 }}" x2="{{ k.ptr.x2 }}" y2="{{ k.ptr.y2 }}"
           class="kptr" stroke-width="{{ k.ptr.w }}"/>

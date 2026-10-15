@@ -47,12 +47,27 @@
     фильтров старый планшет тянет плохо, два - терпимо. shadows: false в
     конфиге выключает. -#}
 {% set th_shadow = PAL.info(theme).shadow %}
-{% set use_shadows = shadows and th_shadow %}
+{% set depth = PAL.info(theme).depth %}
+{#- Неоморфизм без теней не бывает: и у основы без них (тёмные) тени есть. -#}
+{% set use_shadows = shadows and depth != 'flat' and (th_shadow or depth == 'neumo') %}
 {#- Сила теней: у светлой - чуть-чуть, у неё есть контур; у остальных
     контура почти нет, тень и отделяет плитку от фона. -#}
 {% set sh_amb = th_shadow.amb if th_shadow else 0 %}
 {% set sh_key = th_shadow.key if th_shadow else 0 %}
-{% if use_shadows %}
+{#- В неоморфизме amb - тёмная тень, key - светлая. Тема, унаследовавшая
+    слабые тени обычной формы, получает свои. -#}
+{% if depth == 'neumo' %}
+{% set sh_amb = sh_amb if sh_amb >= 0.3 else 0.7 %}
+{% set sh_key = sh_key if sh_key >= 0.3 else 1.0 %}
+{% endif %}
+{% if use_shadows and depth == 'neumo' %}
+  {#- неоморфизм: одно размытие на обе тени, область шире панели - светлая
+      тень уходит вверх-влево за край первой плитки -#}
+  <filter id="{{ uid }}sh-neu" filterUnits="userSpaceOnUse" x="-30" y="-30"
+          width="{{ width + 60 }}" height="{{ height + 70 }}">
+    <feGaussianBlur stdDeviation="7"/>
+  </filter>
+{% elif use_shadows %}
   <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="0" y="0"
           width="{{ width }}" height="{{ height + 40 }}">
     <feGaussianBlur stdDeviation="1.4"/>
@@ -136,7 +151,23 @@
 
 {#- Слой теней - под всеми плитками разом. Ширина размытой тени чуть
     меньше плитки: тень выглядывает снизу, а не обводит со всех сторон. -#}
-{% if use_shadows %}
+{% if use_shadows and depth == 'neumo' %}
+{#- Неоморфизм (1.32): тёмная тень снизу-справа, светлая сверху-слева.
+    Включённая плитка утоплена - внешних теней у неё нет. -#}
+{% set raised = tiles | rejectattr('kind', 'equalto', 'header') | rejectattr('on') | list %}
+<g class="shadows">
+  <g filter="url(#{{ uid }}sh-neu)" opacity="{{ sh_amb }}" style="fill:var(--shadow)">
+  {% for t in raised %}
+    <rect x="{{ t.x + 7 }}" y="{{ t.y + 8 }}" width="{{ t.w - 4 }}" height="{{ t.h - 4 }}" rx="{{ rx }}"/>
+  {% endfor %}
+  </g>
+  <g filter="url(#{{ uid }}sh-neu)" opacity="{{ sh_key }}" style="fill:var(--neu-light)">
+  {% for t in raised %}
+    <rect x="{{ t.x - 5 }}" y="{{ t.y - 5 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
+  {% endfor %}
+  </g>
+</g>
+{% elif use_shadows %}
 {% set plated = tiles | rejectattr('kind', 'equalto', 'header') | list %}
 <g class="shadows" style="fill:var(--shadow)">
   <g filter="url(#{{ uid }}sh-amb)" opacity="{{ sh_amb }}">

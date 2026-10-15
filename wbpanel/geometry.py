@@ -136,6 +136,48 @@ def grid_bounds(values, step=None, unit="", divisions=None, target=4):
     return (lo, hi, step, n)
 
 
+# ------------------------------------------------- короткие пути (1.31)
+# Пути - больше половины веса панели: зубцы колёс, кривые графиков, соты
+# шара. Раньше каждая точка шла абсолютной парой с повтором команды
+# («L 123.4,56.7»), теперь - сдвигом от предыдущей («1.2,-.3»): короче на
+# треть, а вид тот же. Сдвиги считаются от уже округлённых точек, поэтому
+# ошибка округления не копится вдоль пути.
+
+def _tenths(v):
+    return int(round(v * 10))
+
+
+_NUMS = {}
+
+
+def _num(t):
+    """Десятые доли -> кратчайшая запись: 12, 1.5, .5, -.5. Запоминаем:
+    сдвиги между соседними точками повторяются, а зовут это тысячи раз."""
+    s = _NUMS.get(t)
+    if s is None:
+        a = abs(t)
+        i, f = divmod(a, 10)
+        s = str(i) if not f else ("%d.%d" % (i, f) if i else ".%d" % f)
+        if t < 0:
+            s = "-" + s
+        if len(_NUMS) < 50000:
+            _NUMS[t] = s
+    return s
+
+
+def poly(points, close=False, start=None):
+    """Ломаная одним путём: «M x,y l dx,dy dx,dy …» (+ «z»)."""
+    seq = ([start] if start is not None else []) + list(points)
+    if not seq:
+        return ""
+    q = [(_tenths(x), _tenths(y)) for x, y in seq]
+    out = "M%s,%s" % (_num(q[0][0]), _num(q[0][1]))
+    if len(q) > 1:
+        out += "l" + " ".join("%s,%s" % (_num(b[0] - a[0]), _num(b[1] - a[1]))
+                              for a, b in zip(q, q[1:]))
+    return out + ("z" if close else "")
+
+
 def smooth_path(points, width, height, band=BAND, pad_x=3.0,
                 lo=None, hi=None):
     """
@@ -170,13 +212,20 @@ def smooth_path(points, width, height, band=BAND, pad_x=3.0,
     # Время ложится в pad_x от краёв (там же часовые деления), а сама линия
     # и заливка доводятся горизонтально до краёв плитки: иначе между
     # заливкой и рамкой оставался светлый просвет в три точки.
-    d = "M 0,%.1f L %.1f,%.1f" % (xy[0][1], xy[0][0], xy[0][1])
-    for i in range(1, len(xy)):
-        x0, y0 = xy[i - 1]
-        x1, y1 = xy[i]
-        mx = (x0 + x1) / 2.0
-        d += " C %.1f,%.1f %.1f,%.1f %.1f,%.1f" % (mx, y0, mx, y1, x1, y1)
-    d += " L %.1f,%.1f" % (width, xy[-1][1])
+    # Кривая - относительными «c» от округлённых точек (с 1.31, см. poly):
+    # на графике сотня отрезков, и абсолютные тройки пар были самым
+    # тяжёлым, что есть на панели.
+    q = [(_tenths(x), _tenths(y)) for x, y in xy]
+    d = "M0,%s L%s,%s c" % (_num(q[0][1]), _num(q[0][0]), _num(q[0][1]))
+    segs = []
+    for i in range(1, len(q)):
+        x0, y0 = q[i - 1]
+        x1, y1 = q[i]
+        dx, dy = x1 - x0, y1 - y0
+        half = int(round(dx / 2.0))
+        segs.append("%s,0 %s,%s %s,%s" % (_num(half), _num(half), _num(dy), _num(dx), _num(dy)))
+    d += " ".join(segs) if segs else "0,0 0,0 0,0"
+    d += " L%s,%s" % (_num(_tenths(width)), _num(q[-1][1]))
     # заливка замыкается по нижней кромке плитки, а не по низу графика
     area = d + " L %.1f,%.1f L 0,%.1f Z" % (width, height, height)
     return {"line": d, "area": area, "lo": lo, "hi": hi,

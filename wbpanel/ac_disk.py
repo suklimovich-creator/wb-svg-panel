@@ -17,9 +17,10 @@
 читается плохо, а пульт тем же данным крутит шкалу при перетаскивании.
 """
 
+import functools
 import math
 
-from .geometry import text_width
+from .geometry import poly, text_width
 
 # Три точки обода (доли ширины и высоты), куда смотрит риска уставки и где
 # центр блока «сейчас». Подобраны на макетах; пульт выше плитки, поэтому
@@ -307,6 +308,15 @@ def build_disk(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
         if swing is not None:
             icons.append(louver_icon(w - (55 if swing_h is not None else 26) * fs, iy, "v", swing, fs))
 
+    # Плитка шкалу не крутит - это делает только пульт (build_screen).
+    # Поэтому спрятанное и ушедшее за край здесь не нужно вовсе: из трёх
+    # десятков делений на плитке видно меньше половины (с 1.31).
+    def _seen(*xy):
+        return any(-6 < x < w + 6 and -6 < y < h + 6 for x, y in zip(xy[::2], xy[1::2]))
+    ticks = [k for k in ticks if not k["hide"] and _seen(k["ox1"], k["oy1"], k["ox2"], k["oy2"],
+                                                         k["ix1"], k["iy1"], k["ix2"], k["iy2"])]
+    labels = [lb for lb in labels if not lb["hide"]]
+
     return {
         "kind": kind, "teeth": teeth,
         "cx": _r(cx), "cy": _r(cy), "r": _r(R), "rr": _r(rr),
@@ -364,10 +374,11 @@ def slots_path(cx, cy, R, ang, t0, t1, per_deg, gw, th, sgn, bounds=None, rim=Fa
         return None
     if rim:
         # только линия обода - для каймы и тени, без лучей к центру
-        return "M " + " L ".join("%.1f,%.1f" % p for p in pts)
-    return "M %.1f,%.1f L " % (cx, cy) + " L ".join("%.1f,%.1f" % p for p in pts) + " Z"
+        return poly(pts)
+    return poly(pts, close=True, start=(cx, cy))
 
 
+@functools.lru_cache(maxsize=256)
 def gear_path(cx, cy, r, fs):
     """Малое колесо жалюзи: тот же обод с желобами, по кругу."""
     tw, tth = 7.0 * fs, 6.0 * fs
@@ -386,7 +397,7 @@ def gear_path(cx, cy, r, fs):
         pts.append((cx + r * math.cos(a0 + hw), cy + r * math.sin(a0 + hw)))
         am = a0 + math.pi / n
         pts.append((cx + r * math.cos(am), cy + r * math.sin(am)))
-    return "M " + " L ".join("%.1f,%.1f" % p for p in pts) + " Z"
+    return poly(pts, close=True)
 
 
 # ---------------------------------------------------------------- пульт на весь экран

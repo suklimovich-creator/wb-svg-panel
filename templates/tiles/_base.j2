@@ -52,6 +52,7 @@
   .led-gloss  { fill: #FFFFFF; opacity: .45; }
   .key        { fill: var(--ac-pill); stroke: var(--edge); stroke-width: 1; }
   .key-sh     { fill: var(--shadow); }
+  .key-hl     { fill: var(--neu-light); }
   .key-split  { stroke: #000000; stroke-width: 1.2; opacity: .45; }
   .slot       { fill: var(--shadow); opacity: .85; }
   .drum       { fill: var(--ac-pill); }
@@ -290,9 +291,23 @@
   </radialGradient>
   <!-- мягкая тень под шаром ленты: без размытия, градиентом -->
   <radialGradient id="{{ uid }}sphsh" cx=".5" cy=".5" r=".5">
-    <stop offset=".7" stop-color="var(--shadow)" stop-opacity=".32"/>
+    <stop offset=".7" stop-color="var(--shadow)" stop-opacity="{{ '.6' if NEU else '.32' }}"/>
     <stop offset="1" stop-color="var(--shadow)" stop-opacity="0"/>
   </radialGradient>
+  {% if NEU %}
+  <!-- неоморфизм (1.32): светлая тень ручек и колёс - сверху-слева -->
+  <radialGradient id="{{ uid }}sphhl" cx=".5" cy=".5" r=".5">
+    <stop offset=".7" stop-color="var(--neu-light)" stop-opacity=".95"/>
+    <stop offset="1" stop-color="var(--neu-light)" stop-opacity="0"/>
+  </radialGradient>
+  <!-- утопленная плитка: тень у верхнего-левого края внутри, свет у нижнего-правого -->
+  <linearGradient id="{{ uid }}neu-in" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="var(--shadow)" stop-opacity=".8"/>
+    <stop offset=".22" stop-color="var(--shadow)" stop-opacity="0"/>
+    <stop offset=".78" stop-color="var(--neu-light)" stop-opacity="0"/>
+    <stop offset="1" stop-color="var(--neu-light)" stop-opacity=".85"/>
+  </linearGradient>
+  {% endif %}
   <radialGradient id="{{ uid }}halo" cx=".5" cy=".5" r=".5">
     <stop offset="0" stop-color="var(--active)" stop-opacity=".55"/>
     <stop offset="1" stop-color="var(--active)" stop-opacity="0"/>
@@ -715,14 +730,32 @@
     радиальный градиент, прямоугольному - три рамки с нарастающим краем.
     Прежняя тень - тот же контур, сдвинутый вниз, - выглядывала из-под
     детали резким серпом. -#}
+{#- Тени органов управления. Форма темы (depth, с 1.32): flat - без
+    теней; neumo - две тени, светлая сверху-слева и тёмная снизу-справа. -#}
 {% macro soft_round(cx, cy, r, dy) %}
+  {% if DEPTH == 'neumo' %}
+  {% set o = (dy * 1.3 + 1.5)|round(1) %}
+  <circle cx="{{ (cx - o)|round(1) }}" cy="{{ (cy - o)|round(1) }}" r="{{ (r * 1.14)|round(1) }}" fill="url(#{{ uid }}sphhl)"/>
+  <circle cx="{{ (cx + o)|round(1) }}" cy="{{ (cy + o)|round(1) }}" r="{{ (r * 1.14)|round(1) }}" fill="url(#{{ uid }}sphsh)"/>
+  {% elif DEPTH != 'flat' %}
   <circle cx="{{ cx }}" cy="{{ (cy + dy)|round(1) }}" r="{{ (r * 1.16)|round(1) }}" fill="url(#{{ uid }}sphsh)"/>
+  {% endif %}
 {% endmacro %}
 {% macro soft_rect(x, y, w, h, r, dy) %}
+  {% if DEPTH == 'neumo' %}
+  {% set o = (dy * 0.9 + 1)|round(1) %}
+  {% for g in (3.0, 1.8, 0.6) %}
+  <rect x="{{ (x - g - o)|round(1) }}" y="{{ (y - g - o)|round(1) }}" width="{{ (w + 2 * g)|round(1) }}"
+        height="{{ (h + 2 * g)|round(1) }}" rx="{{ (r + g)|round(1) }}" class="key-hl" opacity=".3"/>
+  <rect x="{{ (x - g + o)|round(1) }}" y="{{ (y - g + o)|round(1) }}" width="{{ (w + 2 * g)|round(1) }}"
+        height="{{ (h + 2 * g)|round(1) }}" rx="{{ (r + g)|round(1) }}" class="key-sh" opacity=".16"/>
+  {% endfor %}
+  {% elif DEPTH != 'flat' %}
   {% for g in (3.0, 1.8, 0.6) %}
   <rect x="{{ (x - g)|round(1) }}" y="{{ (y + dy - g * 0.5)|round(1) }}" width="{{ (w + 2 * g)|round(1) }}"
         height="{{ (h + 2 * g)|round(1) }}" rx="{{ (r + g)|round(1) }}" class="key-sh" opacity=".07"/>
   {% endfor %}
+  {% endif %}
 {% endmacro %}
 
 {#- Клавиша-качалка: нажатая половина утоплена (градиент), разделитель
@@ -816,6 +849,12 @@
 {% macro plate(t) %}
   <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
         class="plate {{ 'on' if t.on }}"/>
+  {#- Неоморфизм: включённая плитка утоплена - тень у верхнего края внутри,
+      свет у нижнего. Внешних теней у неё нет (panel.svg.j2). -#}
+  {% if NEU and t.on %}
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+        fill="url(#{{ uid }}neu-in)" class="neu-in"/>
+  {% endif %}
   {{ sheen(t, t.on) }}
 {% endmacro %}
 
@@ -900,6 +939,9 @@
     стоит на h-40, то есть ровно на значке: текст ложился поверх него.
     Значок уезжает влево и центрируется, текст - вправо от значка. -#}
 {% set LOW = 117 %}
+{#- Форма темы (с 1.32): глубина плиток и органов управления. -#}
+{% set DEPTH = PAL.info(theme).depth %}
+{% set NEU = DEPTH == 'neumo' %}
 {% macro icon_c(t, name, size=24) %}
   {% if t.compact %}
   <use href="#{{ uid }}ic-{{ name }}" xlink:href="#{{ uid }}ic-{{ name }}"

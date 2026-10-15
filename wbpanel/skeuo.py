@@ -13,7 +13,7 @@
 import math
 
 from .ac_disk import gear_path
-from .geometry import _fmt, text_width
+from .geometry import _fmt, poly, text_width
 
 #: Дуга термостата: та же, что была (tiles.DIAL_START / DIAL_SWEEP).
 START = 148.0
@@ -316,8 +316,7 @@ def sphere_seams(cx, cy, r, yaw, pitch, freq):
     for vi, ring in cells:
         if P(verts[vi])[2] < 0.03 or any(pc[k][2] < 0 for k in ring):
             continue
-        out.append("M " + " L ".join("%.1f,%.1f" % (cx + pc[k][0] * r, cy - pc[k][1] * r)
-                                     for k in ring) + " Z")
+        out.append(poly([(cx + pc[k][0] * r, cy - pc[k][1] * r) for k in ring], close=True))
     return " ".join(out)
 
 

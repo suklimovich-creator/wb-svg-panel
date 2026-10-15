@@ -41,12 +41,17 @@ log = logging.getLogger("wb-svg-panel")
 BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_themes")
 
 #: Порядок в меню выбора темы: сначала светлые, потом тёмные, потом свои.
-ORDER = ("light", "autumn", "retro", "noir", "dark", "graphite")
+ORDER = ("light", "autumn", "retro", "noir", "neumo", "dark", "graphite")
 
 #: Свойства темы, кроме цветов. Своя тема наследует незаданные.
-PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart")
+PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart", "depth")
 _PROP_DEFAULTS = {"mode": "light", "on_style": "rim", "inv_kinds": (), "sheen": False,
-                  "shadow": None, "chart": None}
+                  "shadow": None, "chart": None, "depth": "soft"}
+#: Форма - вторая ось темы (с 1.32): глубина плиток и органов управления.
+#: soft - мягкая тень снизу, как было; flat - без теней; neumo -
+#: неоморфизм: плитка из того же материала, что и фон, светлая тень
+#: сверху-слева и тёмная снизу-справа, включённая - утоплена.
+DEPTHS = ("soft", "flat", "neumo")
 
 #: Значение переменной: цвет, число или ссылка на другую переменную. Всё
 #: прочее не пропускаем - значения уходят прямо в <style> и в атрибуты, и
@@ -133,6 +138,9 @@ def _load_builtin():
             continue
         if name == "light":
             theme["extends"] = None
+        # Встроенная тема, у которой задано мало, может попросить
+        # рассчитать остальное, как у своих (derive: true).
+        theme["derive"] = bool(data.get("derive"))
         found[name] = theme
     return found
 
@@ -184,6 +192,10 @@ def _load_user(directory, builtin):
             _PROBLEMS.append((base, "on_style: %r - бывает rim или card"
                                     % theme["props"]["on_style"]))
             theme["props"].pop("on_style")
+        if theme["props"].get("depth") not in (None,) + DEPTHS:
+            _PROBLEMS.append((base, "depth: %r - бывает %s"
+                                    % (theme["props"]["depth"], ", ".join(DEPTHS))))
+            theme["props"].pop("depth")
         if not theme["extends"]:
             theme["extends"] = "dark" if theme["props"].get("mode") == "dark" else "light"
         found[name] = theme
@@ -221,6 +233,8 @@ def load(directory=None):
     _THEMES.clear()
     _THEMES.update(builtin)
     _THEMES.update(user)
+    for name in [n for n in ORDER if n in builtin and builtin[n].get("derive")]:
+        _derive(name)
     for name in _derive_order(user):
         _derive(name)
     for name in user:
@@ -332,6 +346,7 @@ def info(name):
         "sheen": bool(prop(name, "sheen")),
         "shadow": dict(shadow) if isinstance(shadow, dict) else None,
         "page_bg": css_vars(name).get("--bg-bottom", "#E6E6E9"),
+        "depth": prop(name, "depth") if prop(name, "depth") in DEPTHS else "soft",
     }
 
 
@@ -424,6 +439,7 @@ def describe(name):
             "file": os.path.basename(theme["file"]) if theme["file"] else "",
             "extends": theme.get("extends") or "",
             "mode": i["mode"], "on_style": "card" if i["card"] else "rim",
+            "depth": i["depth"],
             "swatches": swatches,
             "contrast": round(contrast(tuple(ink) + (1.0,), tuple(tile) + (1.0,)), 1) if ink else None,
             "problems": own,
@@ -435,7 +451,8 @@ def describe(name):
             "src": None if theme["builtin"] else {
                 "extends": theme.get("extends") or "",
                 "props": dict((k, v) for k, v in theme["props"].items()
-                              if k in ("mode", "on_style", "sheen", "inv_kinds", "shadow", "chart")),
+                              if k in ("mode", "on_style", "sheen", "inv_kinds", "shadow", "chart",
+                                       "depth")),
                 "vars": dict((k[2:], v) for k, v in theme.get("raw", {}).items())}}
 
 
@@ -697,6 +714,9 @@ def _rules(dark, card):
         ("--inv-dim", ("--inv-ink",), lambda v: _alpha(v["--inv-ink"], 0.75)),
         ("--inv-stroke", ("--inv-ink", "--active"),
          lambda v: _hex(_mix(v["--inv-ink"], v["--active"], 0.25))),
+        # Светлая тень неоморфизма (depth: neumo) - фон, разбавленный белым.
+        ("--neu-light", ("--bg-bottom",),
+         lambda v: _hex(_mix(v["--bg-bottom"], _WHITE, 0.09 if dark else 0.72))),
         ("--inv-accent", ("--active", "--inv-tile"),
          lambda v: _hex(_lift(v["--active"], v["--inv-tile"]))),
     ]
@@ -769,7 +789,7 @@ def _clean_draft(data):
     out["name"] = raw_name if _NAME_RE.match(raw_name) else (slug(raw_name or title) or "my-theme")
     parent = str(data.get("extends") or "")
     out["extends"] = parent if parent in _THEMES else None
-    for key in ("mode", "on_style"):
+    for key in ("mode", "on_style", "depth"):
         if data.get(key) is not None:
             out[key] = str(data[key])
     for key in ("sheen", "inv_kinds", "shadow", "chart"):
@@ -811,6 +831,8 @@ def draft(data):
         theme["props"].pop("mode")
     if theme["props"].get("on_style") not in (None, "rim", "card"):
         theme["props"].pop("on_style")
+    if theme["props"].get("depth") not in (None,) + DEPTHS:
+        theme["props"].pop("depth")
     if theme["props"].get("chart") is not None:
         theme["props"]["chart"] = _clean_chart(theme["props"]["chart"], where)
     if not theme["extends"]:
@@ -855,6 +877,9 @@ def to_yaml(data, stamp=""):
     if data.get("on_style") in ("rim", "card"):
         lines.append("on_style: %s        # rim - рамка у включённой, card - тёмная карточка"
                      % data["on_style"].ljust(4))
+    if data.get("depth") in DEPTHS:
+        lines.append("depth: %s           # soft - мягкая тень, flat - плоско, neumo - неоморфизм"
+                     % data["depth"].ljust(5))
     for key in ("sheen", "inv_kinds", "shadow"):
         if key in data:
             lines.append("%s: %s" % (key, json.dumps(data[key], ensure_ascii=False)))

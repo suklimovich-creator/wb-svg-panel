@@ -26,19 +26,27 @@ function remember(q, svg){
 }
 
 /* ---------- точечная замена ----------
-   Новая картинка разбирается целиком, но в документ попадают только те
-   плитки, что изменились. Остальные узлы остаются прежними - с их
-   обработчиками, нажатием, которое сейчас идёт, и ссылками, которые
-   держат пульты. Раньше innerHTML менял всю панель: полторы сотни
-   килобайт разметки и обработчики заново на каждую плитку раз в десять
-   секунд.
+   В документ попадают только те плитки, что изменились. Остальные узлы
+   остаются прежними - с их обработчиками, нажатием, которое сейчас идёт,
+   и ссылками, которые держат пульты. Раньше innerHTML менял всю панель:
+   полторы сотни килобайт разметки и обработчики заново на каждую плитку
+   раз в десять секунд.
 
    Сравниваются дети главной группы: заголовки разделов, чипы, плитки,
-   часы в шапке - каждый своей строкой. Стили, defs и размеры - отдельно:
-   если поменялись они, раскладка другая, и панель заменяется целиком. */
+   часы в шапке - каждый своей строкой. Голова (стили, заготовки, ширина) -
+   отдельно: поменялась она - панель заменяется целиком.
+
+   С 1.48 строки частей режутся прямо из текста ответа, без разбора всей
+   картинки: на старом планшете разбор 380 КБ разметки и сборка строк
+   обратно стоили полсекунды на каждом обновлении. Разбираются только
+   изменившиеся части - одним маленьким документом. */
 var XP = window.DOMParser ? new DOMParser() : null;
 var XS = window.XMLSerializer ? new XMLSerializer() : null;
 var shownHead = null, shownParts = null, shownSvg = null, patchWhy = '', perfMerged = 0;
+/* Части - куски текста ответа (TEXT_PARTS) или, если резка однажды не
+   сошлась с разбором браузера, сериализованные узлы, как до 1.48. */
+var TEXT_PARTS = true;
+var PART_OPEN = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">';
 /* Плитки с мгновенным откликом: индекс -> до какого времени не трогать.
    Пока прибор не ответил, сервер присылает плитку в прежнем виде, и без
    этого рамка мигнула бы обратно на первом же ответе. */
@@ -49,6 +57,10 @@ function kids(node){
   for (var c = node.firstChild; c; c = c.nextSibling)
     if (c.nodeType === 1) out.push(c);
   return out;
+}
+function nextEl(n){
+  for (n = n.nextSibling; n && n.nodeType !== 1; n = n.nextSibling) {}
+  return n;
 }
 function mainOf(svgEl){
   var k = kids(svgEl);
@@ -69,17 +81,62 @@ function headKey(raw){
     return tag.replace(/ height="[^"]*"/, '').replace(/ viewBox="[^"]*"/, '');
   });
 }
-function sizeFrom(root, cur){
-  var a = ['height', 'viewBox'];
-  for (var i = 0; i < a.length; i++) {
-    var v = root.getAttribute(a[i]);
-    if (v !== null && cur.getAttribute(a[i]) !== v) cur.setAttribute(a[i], v);
-  }
+/* Высота и viewBox новой картинки - на показанную. */
+function sizeTo(cur, h, vb){
+  if (h !== null && cur.getAttribute('height') !== h) cur.setAttribute('height', h);
+  if (vb !== null && cur.getAttribute('viewBox') !== vb) cur.setAttribute('viewBox', vb);
+}
+function sizeOfHead(headRaw){
+  var tag = (headRaw.match(/<svg\b[^>]*>/) || [''])[0];
+  var h = tag.match(/ height="([^"]*)"/), vb = tag.match(/ viewBox="([^"]*)"/);
+  return {h: h ? h[1] : null, vb: vb ? vb[1] : null};
 }
 function partsOf(g){
   var k = kids(g), out = [];
   for (var i = 0; i < k.length; i++) out.push(XS.serializeToString(k[i]));
   return out;
+}
+/* Дети главной группы - кусками текста. Разметку пишет наш шаблон:
+   угловые скобки в значениях атрибутов экранированы, поэтому хватает
+   поиска «<» и «>». null - что-то непонятное, тогда разбираем целиком. */
+function splitMain(t, at){
+  var i = t.indexOf('>', at) + 1, depth = 0, start = 0, out = [];
+  if (i <= 0) return null;
+  for (;;) {
+    var lt = t.indexOf('<', i);
+    if (lt < 0) return null;
+    var c = t.charAt(lt + 1);
+    if (c === '!') {
+      var close = t.substr(lt, 4) === '<!--' ? '-->' : t.substr(lt, 9) === '<![CDATA[' ? ']]>' : null;
+      if (!close) return null;
+      var ce = t.indexOf(close, lt);
+      if (ce < 0) return null;
+      i = ce + close.length;
+      continue;
+    }
+    var gt = t.indexOf('>', lt);
+    if (gt < 0) return null;
+    if (c === '/') {
+      if (depth === 0) return out;            // </g> главной группы
+      if (--depth === 0) out.push(t.slice(start, gt + 1));
+    } else if (c === '?') {
+      return null;
+    } else if (t.charAt(gt - 1) === '/') {
+      if (depth === 0) out.push(t.slice(lt, gt + 1));
+    } else {
+      if (depth === 0) start = lt;
+      depth++;
+    }
+    i = gt + 1;
+  }
+}
+/* Несколько частей - одним маленьким документом. */
+function parseParts(list){
+  if (!list.length) return [];
+  var doc = XP.parseFromString(PART_OPEN + list.join('') + '</svg>', 'image/svg+xml');
+  if (!doc || !doc.documentElement || doc.getElementsByTagName('parsererror').length) return null;
+  var k = kids(doc.documentElement);
+  return k.length === list.length ? k : null;
 }
 function parseSvg(svg){
   if (!XP || !XS) return null;
@@ -98,10 +155,78 @@ function hold(node){
   }
 }
 
-/* Заменить только изменившееся. false - не вышло, нужна полная замена. */
+/* Свести новые части (strs) с показанными. Одинаковые узлы остаются на
+   месте, новые вставляются, пропавшие удаляются. Число частей то же -
+   сравниваем по местам; другое (раздел свернули, чип появился, 1.47) -
+   ищем совпадение недалеко вперёд: порядок почти всегда тот же.
+   Плитку с мгновенным откликом, которую прибор так и не подтвердил,
+   возвращаем к тому, что знает сервер. nodesFor(индексы) - узлы для
+   новых частей; null - не вышло, нужна полная замена. */
+var MERGE_LOOK = 12;
+function sync(strs, nodesFor, cg){
+  var ck = kids(cg), now = Date.now(), plan = [], need = [], j = 0;
+  var same = strs.length === ck.length;
+  for (var i = 0; i < strs.length; i++) {
+    var at = -1;
+    if (same) {
+      if (strs[i] === shownParts[i] && !(holds[i] && holds[i] <= now)) at = i;
+    } else {
+      for (var m = j; m < Math.min(ck.length, j + MERGE_LOOK); m++)
+        if (shownParts[m] === strs[i] && !(holds[m] && holds[m] <= now)) { at = m; break; }
+      if (at >= 0) j = at + 1;
+    }
+    plan.push(at);
+    if (at < 0) need.push(i);
+  }
+  if (!need.length && same) { shownParts = strs; return true; }
+  var fresh = nodesFor(need);
+  if (!fresh) return false;
+  var kept = {}, newHolds = {}, f = 0, added = [];
+  for (var p = 0; p < plan.length; p++) if (plan[p] >= 0) kept[plan[p]] = true;
+  for (var r = 0; r < ck.length; r++) if (!kept[r]) cg.removeChild(ck[r]);
+  var cursor = kids(cg)[0] || null;
+  for (var q = 0; q < plan.length; q++) {
+    if (plan[q] >= 0) {
+      if (holds[plan[q]]) newHolds[q] = holds[plan[q]];
+      cursor = nextEl(ck[plan[q]]);
+    } else {
+      var node = document.importNode(fresh[f++], true);
+      cg.insertBefore(node, cursor);
+      added.push(node);
+    }
+  }
+  shownParts = strs;
+  holds = newHolds;
+  if (!same) perfMerged++;
+  for (var b = 0; b < added.length; b++) bind(added[b]);
+  return true;
+}
+
+/* Без разбора всей картинки - по тексту (1.48). false - не вышло. */
+function patchText(svg, at, headRaw){
+  var cur = host.querySelector('svg');
+  patchWhy = !cur || !shownParts ? 'первая' : '';
+  if (patchWhy) return false;
+  if (headKey(headRaw) !== shownHead) { patchWhy = 'голова'; return false; }
+  var cg = mainOf(cur);
+  if (!cg) { patchWhy = 'нет группы'; return false; }
+  if (kids(cg).length !== shownParts.length) { patchWhy = 'раскладка'; return false; }
+  var strs = splitMain(svg, at);
+  if (!strs) { patchWhy = 'не разрезать'; return false; }
+  var ok = sync(strs, function(need){
+    var list = [];
+    for (var i = 0; i < need.length; i++) list.push(strs[need[i]]);
+    return parseParts(list);
+  }, cg);
+  if (!ok) { patchWhy = 'не разобрать часть'; return false; }
+  var sz = sizeOfHead(headRaw);
+  sizeTo(cur, sz.h, sz.vb);
+  return true;
+}
+
+/* По разобранной картинке - когда резка текста не годится. */
 function patch(root, headRaw){
   var cur = host.querySelector('svg');
-  // Почему пришлось менять целиком - для замера ?perf=1 (1.47).
   patchWhy = !cur ? 'первая' : !root ? 'не разобрать' : !shownParts ? 'первая' : '';
   if (patchWhy) return false;
   // Голову сравниваем исходным текстом, а не разобранной и собранной
@@ -110,62 +235,27 @@ function patch(root, headRaw){
   if (head !== shownHead) { patchWhy = 'голова'; return false; }
   var ng = mainOf(root), cg = mainOf(cur);
   if (!ng || !cg) { patchWhy = 'нет группы'; return false; }
-  var nk = kids(ng), ck = kids(cg);
-  if (ck.length !== shownParts.length) { patchWhy = 'раскладка'; return false; }
-  sizeFrom(root, cur);
-  // Число частей поменялось (чип появился или пропал, раздел свернули) -
-  // сводим по совпадающим строкам, а не меняем панель целиком (1.47).
-  if (nk.length !== ck.length) return merge(nk, ck, cg);
-  var now = Date.now();
-  for (var i = 0; i < nk.length; i++) {
-    var str = XS.serializeToString(nk[i]);
-    // Не изменилась - не трогаем. Исключение - плитка с мгновенным
-    // откликом, которую прибор так и не подтвердил: её возвращаем к
-    // тому, что знает сервер.
-    var expired = holds[i] && holds[i] <= now;
-    if (str === shownParts[i] && !expired) continue;
-    var fresh = document.importNode(nk[i], true);
-    cg.replaceChild(fresh, ck[i]);
-    shownParts[i] = str;
-    delete holds[i];
-    bind(fresh);
-  }
+  if (kids(cg).length !== shownParts.length) { patchWhy = 'раскладка'; return false; }
+  var nk = kids(ng), strs = [];
+  for (var i = 0; i < nk.length; i++) strs.push(XS.serializeToString(nk[i]));
+  sync(strs, function(need){
+    var out = [];
+    for (var n = 0; n < need.length; n++) out.push(nk[need[n]]);
+    return out;
+  }, cg);
+  sizeTo(cur, root.getAttribute('height'), root.getAttribute('viewBox'));
   return true;
 }
 
-/* Свести новые части главной группы с показанными: одинаковые остаются
-   на месте (с обработчиками и мгновенным откликом), новые вставляются,
-   пропавшие удаляются. Совпадение ищем недалеко вперёд: порядок частей
-   почти всегда тот же, меняется немногое. */
-var MERGE_LOOK = 12;
-function merge(nk, ck, cg){
-  var parts = [], newHolds = {}, j = 0, now = Date.now();
-  for (var i = 0; i < nk.length; i++) {
-    var str = XS.serializeToString(nk[i]), at = -1;
-    for (var m = j; m < Math.min(ck.length, j + MERGE_LOOK); m++)
-      if (shownParts[m] === str && !(holds[m] && holds[m] <= now)) { at = m; break; }
-    if (at >= 0) {
-      for (var d = j; d < at; d++) cg.removeChild(ck[d]);
-      if (holds[at]) newHolds[parts.length] = holds[at];
-      j = at + 1;
-    } else {
-      var fresh = document.importNode(nk[i], true);
-      if (j < ck.length) cg.insertBefore(fresh, ck[j]); else cg.appendChild(fresh);
-      bind(fresh);
-    }
-    parts.push(str);
-  }
-  for (var r = j; r < ck.length; r++) cg.removeChild(ck[r]);
-  shownParts = parts;
-  holds = newHolds;
-  perfMerged++;
-  return true;
-}
-
-function full(svg, root, headRaw){
+function full(svg, root, headRaw, at){
   if (root) {
     shownHead = headKey(headRaw || headOf(root));
-    shownParts = partsOf(mainOf(root));
+    var g = mainOf(root), strs = TEXT_PARTS && at > 0 ? splitMain(svg, at) : null;
+    // Резка текста должна давать те же части, что и разбор браузера;
+    // не сошлось хоть раз - дальше по-старому, через разбор.
+    if (strs && strs.length !== kids(g).length) strs = null;
+    if (!strs) TEXT_PARTS = false;
+    shownParts = strs || partsOf(g);
     holds = {};
     var node = document.importNode(root, true);
     while (host.firstChild) host.removeChild(host.firstChild);
@@ -179,10 +269,16 @@ function full(svg, root, headRaw){
   bind();
 }
 
+/* Пока панель листают, обновление ждёт (1.48): на старом планшете
+   вставка посреди прокрутки - лишний рывок. */
+var SCROLL_QUIET = 400;
+function scrolling(){ return Date.now() - lastScroll < SCROLL_QUIET; }
+
 function applySvg(svg, seq){
   if (seq < shownSeq) return;
-  if (fingerHeld()) {
+  if (fingerHeld() || scrolling()) {
     if (!pendingSvg || seq > pendingSvg.seq) pendingSvg = {svg: svg, seq: seq};
+    if (!fingerHeld()) setTimeout(flushPending, SCROLL_QUIET + 50);
     return;
   }
   shownSeq = seq; pendingSvg = null;
@@ -196,9 +292,17 @@ function applySvg(svg, seq){
   }
   var t0 = PERF ? perfNow() : 0;
   var at = svg.indexOf(MAIN_MARK), headRaw = at > 0 ? svg.slice(0, at) : null;
-  var root = parseSvg(svg);
-  var patched = patch(root, headRaw);
-  if (!patched) full(svg, root, headRaw);
+  var root = null, patched = false;
+  if (TEXT_PARTS && headRaw && XP) patched = patchText(svg, at, headRaw);
+  if (!patched) {
+    root = parseSvg(svg);
+    // Текст не разрезался или часть не разобралась - дальше через разбор
+    // всей картинки. Другая голова или раскладка - сразу целиком.
+    var cut = patchWhy === 'не разрезать' || patchWhy === 'не разобрать часть';
+    if (cut) TEXT_PARTS = false;
+    if (cut || !TEXT_PARTS || !headRaw) patched = patch(root, headRaw);
+    if (!patched) full(svg, root, headRaw, at);
+  }
   shownSvg = svg;
   // Облегчённо: вращение вентиляторов и круги на воде стоят на месте.
   var shown = host.querySelector('svg');
@@ -220,6 +324,7 @@ function applySvg(svg, seq){
 }
 function flushPending(){
   if (!pendingSvg || fingerHeld()) return;
+  if (scrolling()) { setTimeout(flushPending, SCROLL_QUIET + 50); return; }
   var p = pendingSvg; pendingSvg = null;
   applySvg(p.svg, p.seq);
 }

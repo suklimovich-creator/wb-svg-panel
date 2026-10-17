@@ -202,9 +202,25 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
         ({lean: r.headers.get('X-Panel-Lean'), h: r.headers.get('X-Panel-Height'),
           shown: document.querySelector('#host svg').getAttribute('height')})));
       st.lean = lean.lean === '1' && lean.h === lean.shown;
-      ok('свёртка раздела без полной замены', st.merged > before.merged && st.same && st.lean && st.n !== before.n,
+      st.text = await p.evaluate(() => TEXT_PARTS);
+      ok('свёртка раздела без полной замены', st.merged > before.merged && st.same && st.lean && st.text && st.n !== before.n,
          JSON.stringify([before, st]));
       await p.evaluate(() => { MODE = ''; FOLDED = []; saveFold(); });
+      await p.context().close();
+    }
+
+    // 10. пока листают, обновление ждёт и догоняет после (1.48)
+    {
+      const p = await page('gal.html');
+      const st = await p.evaluate(() => new Promise(done => {
+        const svg = shownSvg.replace(/(class="clock"[^>]*>)[^<]*/, '$1 99:99');
+        lastScroll = Date.now();
+        applySvg(svg, ++reqSeq);
+        const during = shownSvg === svg;
+        setTimeout(() => done({during, after: shownSvg === svg,
+          clock: (document.querySelector('#host .clock') || {}).textContent}), 900);
+      }));
+      ok('обновление после прокрутки', !st.during && st.after && /99:99/.test(st.clock), JSON.stringify(st));
       await p.context().close();
     }
 

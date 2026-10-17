@@ -10,6 +10,7 @@ web.history, а не копируются сюда при импорте.
 """
 
 import hashlib
+import re
 import threading
 import time
 from collections import OrderedDict
@@ -274,7 +275,8 @@ def panel_svg(name):
     # бы версии, до которой счётчик дойдёт нескоро.
     base_headers = {"Access-Control-Allow-Origin": "*",
                     "Access-Control-Expose-Headers":
-                        "X-Panel-Version, X-Panel-App, X-Panel-Head, X-Panel-Lean",
+                        "X-Panel-Version, X-Panel-App, X-Panel-Head, X-Panel-Lean, "
+                        "X-Panel-Height",
                     # версия демона: страница со старыми скриптами
                     # перезагрузится сама (см. APP в wrapper.html)
                     "X-Panel-App": __version__}
@@ -338,17 +340,31 @@ def lean_head(svg, have, headers):
     присылает отпечаток головы, которая у неё есть (have=); совпал -
     отдаём только главную группу, страница приставит голову сама
     (с 1.45). X-Panel-Head - отпечаток головы этой картинки.
+
+    Высота корня в отпечаток не входит (1.47): свернули раздел - панель
+    стала ниже, а стили и заготовки те же. Высоту страница берёт из
+    X-Panel-Height и ставит в свою голову.
     """
     idx = svg.find(MAIN_MARK)
     if idx <= 0:
         return svg
     head = svg[:idx]
-    mark = hashlib.sha1(head.encode("utf-8")).hexdigest()[:12]
+    found = ROOT_SIZE.search(head)
+    key = head
+    if found:
+        key = head[:found.start()] + found.group(1) + found.group(3) + head[found.end():]
+    mark = hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
     headers["X-Panel-Head"] = mark
     if have and have == mark:
         headers["X-Panel-Lean"] = "1"
+        if found:
+            headers["X-Panel-Height"] = found.group(2)
         return svg[idx:]
     return svg
+
+
+#: Высота корня: height="H" и viewBox="0 0 W H" подряд (panel.svg.j2).
+ROOT_SIZE = re.compile(r'( width="[^"]*") height="([^"]*)" viewBox="[^"]*"([^>]*>)')
 
 
 def demo_svg(cols):

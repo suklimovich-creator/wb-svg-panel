@@ -62,23 +62,6 @@
 {% set sh_amb = sh_amb if sh_amb >= 0.3 else 0.7 %}
 {% set sh_key = sh_key if sh_key >= 0.3 else 1.0 %}
 {% endif %}
-{% if use_shadows and depth == 'neumo' %}
-  {#- неоморфизм: одно размытие на обе тени, область шире панели - светлая
-      тень уходит вверх-влево за край первой плитки -#}
-  <filter id="{{ uid }}sh-neu" filterUnits="userSpaceOnUse" x="-30" y="-30"
-          width="{{ width + 60 }}" height="{{ height + 70 }}">
-    <feGaussianBlur stdDeviation="7"/>
-  </filter>
-{% elif use_shadows %}
-  <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="0" y="0"
-          width="{{ width }}" height="{{ height + 40 }}">
-    <feGaussianBlur stdDeviation="1.4"/>
-  </filter>
-  <filter id="{{ uid }}sh-amb" filterUnits="userSpaceOnUse" x="0" y="0"
-          width="{{ width }}" height="{{ height + 40 }}">
-    <feGaussianBlur stdDeviation="10"/>
-  </filter>
-{% endif %}
 {% if depth == 'glass' %}
   {#- Отсвет стекла (1.40): свет сверху экрана. В координатах панели, а не
       плитки: страница сдвигает его на величину прокрутки (data-glare), и
@@ -97,12 +80,6 @@
       стекла. Размер и место группы на странице - окно браузера в
       координатах картинки: их ставит glassScroll(), и пятна под плиткой
       совпадают с неподвижным фоном страницы. Без страницы - экран высоты. -#}
-  {% set wall_h = [height, width * 2.2]|min %}
-  <g id="{{ uid }}wallg" data-wall="1">
-    {% for i in range(1, 5) %}
-    <rect width="{{ width }}" height="{{ wall_h|round(1) }}" fill="url(#{{ uid }}wall{{ i }})"/>
-    {% endfor %}
-  </g>
   {#- верхний блик «жидкого» стекла: светлая полоса у верхнего края -#}
   <linearGradient id="{{ uid }}glass-top" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#FFFFFF" stop-opacity=".22"/>
@@ -117,14 +94,6 @@
     <stop offset="1" stop-color="#FFFFFF" stop-opacity=".28"/>
   </linearGradient>
 {% endif %}
-{% for t in tiles %}
-  {#- Обрезка - ровно по средней линии рамки, и рамка рисуется поверх:
-      заливка уходит под неё без зазора. Раньше обрезали на точку внутрь,
-      и между заливкой и рамкой светилась полоска подложки. -#}
-  <clipPath id="{{ uid }}clip{{ t.i }}">
-    <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
-  </clipPath>
-{% endfor %}
 </defs>
 
 
@@ -139,6 +108,44 @@
 {#- data-main: всё до этой группы - «голова» (стили, заготовки), она
     меняется редко, и страница её повторно не просит (1.45). -#}
 <g data-main="1">
+{#- Заготовки, зависящие от раскладки (1.47): тени на высоту панели, обои,
+    обрезка плиток. Они в главной группе, а не в голове: свернули раздел -
+    поменялась высота, и голова осталась прежней, панель меняется точечно. -#}
+<defs>
+{% if use_shadows and depth == 'neumo' %}
+  {#- неоморфизм: одно размытие на обе тени, область шире панели - светлая
+      тень уходит вверх-влево за край первой плитки -#}
+  <filter id="{{ uid }}sh-neu" filterUnits="userSpaceOnUse" x="-30" y="-30"
+          width="{{ width + 60 }}" height="{{ height + 70 }}">
+    <feGaussianBlur stdDeviation="7"/>
+  </filter>
+{% elif use_shadows %}
+  <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="0" y="0"
+          width="{{ width }}" height="{{ height + 40 }}">
+    <feGaussianBlur stdDeviation="1.4"/>
+  </filter>
+  <filter id="{{ uid }}sh-amb" filterUnits="userSpaceOnUse" x="0" y="0"
+          width="{{ width }}" height="{{ height + 40 }}">
+    <feGaussianBlur stdDeviation="10"/>
+  </filter>
+{% endif %}
+{% if depth == 'glass' %}
+  {% set wall_h = [height, width * 2.2]|min %}
+  <g id="{{ uid }}wallg" data-wall="1">
+    {% for i in range(1, 5) %}
+    <rect width="{{ width }}" height="{{ wall_h|round(1) }}" fill="url(#{{ uid }}wall{{ i }})"/>
+    {% endfor %}
+  </g>
+{% endif %}
+{% for t in tiles %}
+  {#- Обрезка - ровно по средней линии рамки, и рамка рисуется поверх:
+      заливка уходит под неё без зазора. Раньше обрезали на точку внутрь,
+      и между заливкой и рамкой светилась полоска подложки. -#}
+  <clipPath id="{{ uid }}clip{{ t.i }}">
+    <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
+  </clipPath>
+{% endfor %}
+</defs>
 {#- bare - плитка для пульта: фон страницы под ней не нужен, она лежит на оверлее. -#}
 {% if not bare %}
 <rect width="{{ width }}" height="{{ height }}" fill="url(#{{ uid }}bg)"{% if depth == 'glass' %} class="wall"{% endif %}/>

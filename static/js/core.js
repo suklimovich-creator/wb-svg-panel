@@ -376,12 +376,30 @@ var menuOpen = false;
    картинке; поменялось - перезапросим. */
 /* «Облегчённо» (1.45): выбор этого устройства - без теней, линзы и отсвета
    стекла, анимации на паузе. Для слабых планшетов. */
-var LITE = (function(){ try { return localStorage.getItem('wb-panel-lite') === '1'; } catch(e) { return false; } })();
-function saveLite(v){
-  LITE = !!v;
-  try { v ? localStorage.setItem('wb-panel-lite', '1') : localStorage.removeItem('wb-panel-lite'); } catch(e) {}
+/* С 1.47 по умолчанию «авто»: слабое устройство - сразу облегчённо. На
+   планшете с Android 5.1 и Firefox 68 тени панели на 4 колонки (два
+   размытия на всю её высоту) давали 10 кадров в секунду при прокрутке и
+   замирания на десятки секунд. Признаки слабого: нет PointerEvent (старый
+   движок), Android до 8, памяти до 2 ГБ, ядер до 2. */
+function weakDevice(){
+  var ua = navigator.userAgent || '';
+  if (!window.PointerEvent) return true;
+  if (/Android [1-7][.;)]/.test(ua)) return true;
+  if (navigator.deviceMemory && navigator.deviceMemory <= 2) return true;
+  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) return true;
+  return false;
+}
+var LITE_MODE = (function(){   // 'auto' | '0' | '1' - выбор этого устройства
+  try { return localStorage.getItem('wb-panel-lite') || 'auto'; } catch(e) { return 'auto'; }
+})();
+var LITE = LITE_MODE === '1' || (LITE_MODE === 'auto' && weakDevice());
+function saveLite(mode){
+  LITE_MODE = mode;
+  LITE = mode === '1' || (mode === 'auto' && weakDevice());
+  try { mode === 'auto' ? localStorage.removeItem('wb-panel-lite') : localStorage.setItem('wb-panel-lite', mode); } catch(e) {}
 }
 var NAV_S = (function(){ try { return localStorage.getItem('wb-panel-navs') || '1.0'; } catch(e) { return '1.0'; } })();
+var navScaleAt = 0;
 function navScale(){
   var svg = host.querySelector('svg');
   if (!svg || !svg.getAttribute('viewBox')) return;
@@ -390,6 +408,10 @@ function navScale(){
   var k = Math.min(1.6, Math.max(1, W / shown));
   var want = (Math.round(k * 5) / 5).toFixed(1);
   if (want === NAV_S) return;
+  // Не чаще раза в 10 с: на границе округления (полоса прокрутки, поворот)
+  // масштаб мог бы прыгать туда-обратно, и каждая смена - новая картинка.
+  if (Date.now() - navScaleAt < 10000 && Math.abs(want - NAV_S) < 0.3) return;
+  navScaleAt = Date.now();
   NAV_S = want;
   try { localStorage.setItem('wb-panel-navs', want); } catch(e) {}
   refresh(true);
@@ -436,7 +458,8 @@ function drawMenu(){
            + '<div class="mh">Тема</div>' + row('', THEMES, THEME, 'data-t');
   if (HAS_SECTIONS) html += '<div class="mh">Разделы</div>' + row('', MODES, MODE, 'data-m');
   html += '<div class="mh">Это устройство</div>'
-        + row('', [['0', 'как есть'], ['1', 'облегчённо']], LITE ? '1' : '0', 'data-lite');
+        + row('', [['auto', 'авто' + (weakDevice() ? ' (облегчённо)' : '')],
+                   ['0', 'как есть'], ['1', 'облегчённо']], LITE_MODE, 'data-lite');
   html += '<a class="mlink" data-go="themes">все темы на витрине…</a>';
   m.innerHTML = html;
   var btns = m.querySelectorAll('[data-v],[data-t],[data-m],[data-go],[data-lite]');
@@ -445,7 +468,7 @@ function drawMenu(){
     if (this.hasAttribute('data-go')) { location.href = 'themes' + (THEME ? '?theme=' + THEME : ''); return; }
     if (this.hasAttribute('data-t')) saveTheme(this.getAttribute('data-t'));
     else if (this.hasAttribute('data-m')) { MODE = this.getAttribute('data-m'); saveFold(); }
-    else if (this.hasAttribute('data-lite')) saveLite(this.getAttribute('data-lite') === '1');
+    else if (this.hasAttribute('data-lite')) saveLite(this.getAttribute('data-lite'));
     else saveCols(this.getAttribute('data-v'));
     drawCols();
     drawMenu();
@@ -453,8 +476,9 @@ function drawMenu(){
     restartPoll();
   };
 }
-// Нажатие мимо меню закрывает его (и не доходит до плитки под ним).
-document.addEventListener('pointerdown', function(e){
+// Нажатие мимо меню закрывает его (и не доходит до плитки под ним). Без
+// PointerEvent (Firefox 68 на Android) - касанием и мышью.
+function menuOutside(e){
   if (!menuOpen) return;
   var m = document.getElementById('navmenu');
   for (var n = e.target; n; n = n.parentNode) {
@@ -463,19 +487,28 @@ document.addEventListener('pointerdown', function(e){
   closeMenu();
   e.preventDefault(); e.stopPropagation();
   shieldUntil = Date.now() + 350;
-}, true);
+}
+(window.PointerEvent ? ['pointerdown'] : ['touchstart', 'mousedown']).forEach(function(n){
+  document.addEventListener(n, menuOutside, true);
+});
 
 /* ---------- замер (?perf=1, 1.45) ----------
    Для старого планшета: что браузер умеет, сколько весит обновление,
    сколько миллисекунд уходит на его разбор и вставку и как идёт прокрутка.
    Снимок экрана с этой плашкой - всё, что нужно для разбора. */
 var PERF = /[?&]perf=1/.test(location.search);
-var perfS = {apply: [], patched: 0, full: 0, bytes: 0, lean: 0, frames: []};
+var perfS = {apply: [], patched: 0, full: 0, bytes: 0, lean: 0, frames: [], why: {}};
 function perfNow(){ return window.performance && performance.now ? performance.now() : Date.now(); }
 function perfApply(ms, patched, len){
   perfS.apply.push(ms); if (perfS.apply.length > 30) perfS.apply.shift();
-  if (patched) perfS.patched++; else perfS.full++;
+  if (patched) perfS.patched++;
+  else { perfS.full++; perfS.why[patchWhy || '?'] = (perfS.why[patchWhy || '?'] || 0) + 1; }
   perfDraw();
+}
+function perfWhyText(){
+  var out = [];
+  for (var k in perfS.why) if (perfS.why.hasOwnProperty(k)) out.push(k + ' ' + perfS.why[k]);
+  return out.length ? ' (' + out.join(', ') + ')' : '';
 }
 function perfNet(len, lean){ perfS.bytes = len; if (lean) perfS.lean++; }
 function perfStat(a){
@@ -511,9 +544,11 @@ function perfDraw(){
   }
   var ua = navigator.userAgent.replace(/^Mozilla\/5\.0 /, '');
   perfBox.textContent = ua + '\n' + perfFeat
-    + '\nверсия панели ' + APP + (LITE ? ' · облегчённо' : '') + ' · тема ' + (rootTheme() || '?')
+    + '\nверсия панели ' + APP + (LITE ? ' · облегчённо' + (LITE_MODE === 'auto' ? ' (авто)' : '') : '')
+    + ' · тема ' + (rootTheme() || '?')
     + '\nобновление: разбор+вставка ' + perfStat(perfS.apply) + ' (медиана / худшее)'
-    + '\n  точечно ' + perfS.patched + ', целиком ' + perfS.full + ', без головы ' + perfS.lean
+    + '\n  точечно ' + perfS.patched + ' (со сдвигом ' + perfMerged + '), целиком ' + perfS.full + perfWhyText()
+    + ', без головы ' + perfS.lean
     + ', последнее ' + Math.round(perfS.bytes / 1024) + ' КБ'
     + '\nпрокрутка: кадр ' + perfStat(perfS.frames) + (perfS.frames.length ? '' : ' — полистайте панель');
 }

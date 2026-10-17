@@ -5,10 +5,11 @@
 не нужен: команды складываются в журнал /_log, а ответ «прибор
 переключился» сервер изображает сам.
 
-    python3 tools/visual/serve.py [порт] [конфиг]
+    python3 tools/visual/serve.py [порт] [конфиг] [--history]
 
 По умолчанию порт 8846 и tests/fixtures/showcase.yaml. Время не заморожено:
-часы и календарь живые.
+часы и календарь живые. --history - графики с выдуманными кривыми (для
+замеров скорости: пустые графики легче настоящих).
 """
 
 import json
@@ -21,9 +22,10 @@ sys.path.insert(0, os.path.join(ROOT, "tests", "fixtures"))
 
 import env  # noqa: E402  (tests/fixtures/env.py)
 
-port = int(sys.argv[1]) if len(sys.argv) > 1 else 8846
-web, palette, cfg, sent = env.setup(sys.argv[2] if len(sys.argv) > 2 else None,
-                                    freeze_time=False)
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+port = int(args[0]) if args else 8846
+web, palette, cfg, sent = env.setup(args[1] if len(args) > 1 else None,
+                                    freeze_time=False, history="--history" in sys.argv)
 
 
 @web.app.route("/_log")

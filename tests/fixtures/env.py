@@ -51,8 +51,31 @@ def freeze():
     _dt.datetime = FrozenDatetime
 
 
-def setup(config=None, freeze_time=True):
-    """Поднять панель на конфиге (по умолчанию fixtures/showcase.yaml)."""
+class FakeHistory(object):
+    """История понарошку: у каждого канала своя плавная кривая на сутки -
+    графики на тестовом сервере нагружают страницу, как настоящие."""
+    mode = "sqlite"
+
+    def get(self, channel, span, points):
+        import math
+        now = _time.time()
+        k = (sum(map(ord, channel)) % 17) / 17.0
+        base = 400 + 400 * k if "co2" in channel.lower() else 20 + 5 * k
+        amp = base * 0.08
+        return [(now - span + i * span / float(points),
+                 base + amp * math.sin(i / 9.0 + k * 6) + amp * 0.4 * math.sin(i / 2.3))
+                for i in range(points)]
+
+    def refresh(self, *a, **k):
+        return []
+
+    def channels_with_history(self):
+        return {}
+
+
+def setup(config=None, freeze_time=True, history=False):
+    """Поднять панель на конфиге (по умолчанию fixtures/showcase.yaml).
+    history=True - графики с кривыми (FakeHistory), иначе пустые."""
     if freeze_time:
         freeze()
     if ROOT not in sys.path:
@@ -94,7 +117,7 @@ def setup(config=None, freeze_time=True):
         def channels_with_history(self):
             return {}
 
-    web.history = NoHistory()
+    web.history = FakeHistory() if history else NoHistory()
     lists.configure(cfg, state)
     water.configure(cfg)
     calendars.configure(cfg, state)

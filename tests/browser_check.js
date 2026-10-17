@@ -179,6 +179,35 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       await p.context().close();
     }
 
+    // 9. раздел свернули - части главной группы сводятся без полной замены,
+    //    и на экране ровно то, что прислал сервер
+    {
+      const p = await page('acc.html');
+      await p.evaluate(() => { MODE = 'list'; saveFold(); refresh(true); });
+      await p.waitForTimeout(1500);
+      const before = await p.evaluate(() => ({merged: perfMerged, n: document.querySelectorAll('#host [data-main] > *').length}));
+      await p.evaluate(() => toggleSection(document.querySelector('[data-section]')));
+      await p.waitForTimeout(1800);
+      const st = await p.evaluate(() => fetch(svgUrl(Q()).replace(/have=[^&]*&/, ''), {cache: 'no-store'})
+        .then(r => r.text()).then(t => {
+          const fresh = partsOf(mainOf(parseSvg(t)));
+          const root = parseSvg(t), cur = document.querySelector('#host svg');
+          const shown = partsOf(mainOf(cur));
+          return {merged: perfMerged, n: shown.length, same: fresh.join('') === shown.join('')
+            && root.getAttribute('viewBox') === cur.getAttribute('viewBox')
+            && root.getAttribute('height') === cur.getAttribute('height')};
+        }));
+      // голова не поменялась: следующий ответ - без неё, с новой высотой
+      const lean = await p.evaluate(() => fetch(svgUrl(Q()), {cache: 'no-store'}).then(r =>
+        ({lean: r.headers.get('X-Panel-Lean'), h: r.headers.get('X-Panel-Height'),
+          shown: document.querySelector('#host svg').getAttribute('height')})));
+      st.lean = lean.lean === '1' && lean.h === lean.shown;
+      ok('свёртка раздела без полной замены', st.merged > before.merged && st.same && st.lean && st.n !== before.n,
+         JSON.stringify([before, st]));
+      await p.evaluate(() => { MODE = ''; FOLDED = []; saveFold(); });
+      await p.context().close();
+    }
+
     // 8. замер ?perf=1
     {
       const p = await page('gal.html?perf=1');

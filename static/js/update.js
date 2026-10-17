@@ -38,7 +38,7 @@ function remember(q, svg){
    если поменялись они, раскладка другая, и панель заменяется целиком. */
 var XP = window.DOMParser ? new DOMParser() : null;
 var XS = window.XMLSerializer ? new XMLSerializer() : null;
-var shownHead = null, shownParts = null, shownSvg = null;
+var shownHead = null, shownParts = null, shownSvg = null, patchWhy = '', perfMerged = 0;
 /* Плитки с мгновенным откликом: индекс -> до какого времени не трогать.
    Пока прибор не ответил, сервер присылает плитку в прежнем виде, и без
    этого рамка мигнула бы обратно на первом же ответе. */
@@ -57,9 +57,24 @@ function mainOf(svgEl){
 function headOf(svgEl){
   var k = kids(svgEl), s = '';
   for (var i = 0; i < k.length - 1; i++) s += XS.serializeToString(k[i]);
-  var a = ['width', 'height', 'viewBox', 'class', 'style'];
+  var a = ['width', 'class', 'style'];
   for (var j = 0; j < a.length; j++) s += '|' + (svgEl.getAttribute(a[j]) || '');
   return s;
+}
+/* Голова без высоты корня (1.47): свернули раздел - панель стала ниже, но
+   стили и заготовки те же, и менять её целиком незачем. Высоту новой
+   картинки patch() переносит на показанную. */
+function headKey(raw){
+  return raw.replace(/<svg\b[^>]*>/, function(tag){
+    return tag.replace(/ height="[^"]*"/, '').replace(/ viewBox="[^"]*"/, '');
+  });
+}
+function sizeFrom(root, cur){
+  var a = ['height', 'viewBox'];
+  for (var i = 0; i < a.length; i++) {
+    var v = root.getAttribute(a[i]);
+    if (v !== null && cur.getAttribute(a[i]) !== v) cur.setAttribute(a[i], v);
+  }
 }
 function partsOf(g){
   var k = kids(g), out = [];
@@ -86,15 +101,21 @@ function hold(node){
 /* Заменить только изменившееся. false - не вышло, нужна полная замена. */
 function patch(root, headRaw){
   var cur = host.querySelector('svg');
-  if (!cur || !shownParts || !root) return false;
+  // Почему пришлось менять целиком - для замера ?perf=1 (1.47).
+  patchWhy = !cur ? 'первая' : !root ? 'не разобрать' : !shownParts ? 'первая' : '';
+  if (patchWhy) return false;
   // Голову сравниваем исходным текстом, а не разобранной и собранной
   // заново: 60 КБ стилей сериализовались на каждом обновлении (1.45).
-  var head = headRaw || headOf(root);
-  if (head !== shownHead) return false;
+  var head = headKey(headRaw || headOf(root));
+  if (head !== shownHead) { patchWhy = 'голова'; return false; }
   var ng = mainOf(root), cg = mainOf(cur);
-  if (!ng || !cg) return false;
+  if (!ng || !cg) { patchWhy = 'нет группы'; return false; }
   var nk = kids(ng), ck = kids(cg);
-  if (nk.length !== ck.length || nk.length !== shownParts.length) return false;
+  if (ck.length !== shownParts.length) { patchWhy = 'раскладка'; return false; }
+  sizeFrom(root, cur);
+  // Число частей поменялось (чип появился или пропал, раздел свернули) -
+  // сводим по совпадающим строкам, а не меняем панель целиком (1.47).
+  if (nk.length !== ck.length) return merge(nk, ck, cg);
   var now = Date.now();
   for (var i = 0; i < nk.length; i++) {
     var str = XS.serializeToString(nk[i]);
@@ -112,9 +133,38 @@ function patch(root, headRaw){
   return true;
 }
 
+/* Свести новые части главной группы с показанными: одинаковые остаются
+   на месте (с обработчиками и мгновенным откликом), новые вставляются,
+   пропавшие удаляются. Совпадение ищем недалеко вперёд: порядок частей
+   почти всегда тот же, меняется немногое. */
+var MERGE_LOOK = 12;
+function merge(nk, ck, cg){
+  var parts = [], newHolds = {}, j = 0, now = Date.now();
+  for (var i = 0; i < nk.length; i++) {
+    var str = XS.serializeToString(nk[i]), at = -1;
+    for (var m = j; m < Math.min(ck.length, j + MERGE_LOOK); m++)
+      if (shownParts[m] === str && !(holds[m] && holds[m] <= now)) { at = m; break; }
+    if (at >= 0) {
+      for (var d = j; d < at; d++) cg.removeChild(ck[d]);
+      if (holds[at]) newHolds[parts.length] = holds[at];
+      j = at + 1;
+    } else {
+      var fresh = document.importNode(nk[i], true);
+      if (j < ck.length) cg.insertBefore(fresh, ck[j]); else cg.appendChild(fresh);
+      bind(fresh);
+    }
+    parts.push(str);
+  }
+  for (var r = j; r < ck.length; r++) cg.removeChild(ck[r]);
+  shownParts = parts;
+  holds = newHolds;
+  perfMerged++;
+  return true;
+}
+
 function full(svg, root, headRaw){
   if (root) {
-    shownHead = headRaw || headOf(root);
+    shownHead = headKey(headRaw || headOf(root));
     shownParts = partsOf(mainOf(root));
     holds = {};
     var node = document.importNode(root, true);
@@ -198,12 +248,23 @@ function svgUrl(q, extra){
    трети картинки, а меняется она только с темой, колонками и раскладкой.
    Помним последнюю; сервер, увидев её отпечаток, шлёт ответ без неё. */
 var HEAD = null, MAIN_MARK = '<g data-main="1"';
+/* Отпечаток головы - без высоты (1.47): та же голова у панели другой
+   высоты. Высоту сервер присылает отдельно, она ставится в корень. */
+function withHeight(text, h){
+  return text.replace(/<svg\b[^>]*>/, function(tag){
+    return tag.replace(/ height="[^"]*"/, ' height="' + h + '"')
+              .replace(/ viewBox="(\S+ \S+ \S+) [^"]*"/, ' viewBox="$1 ' + h + '"');
+  });
+}
 function takeSvg(r){
   return r.text().then(function(t){
     if (PERF) perfNet(t.length, r.headers && r.headers.get && r.headers.get('X-Panel-Lean') === '1');
     var mark = r.headers && r.headers.get ? r.headers.get('X-Panel-Head') : null;
     if (r.headers && r.headers.get && r.headers.get('X-Panel-Lean') === '1') {
-      if (HEAD && HEAD.mark === mark) return HEAD.text + t;
+      if (HEAD && HEAD.mark === mark) {
+        var h = r.headers.get('X-Panel-Height');
+        return (h ? withHeight(HEAD.text, h) : HEAD.text) + t;
+      }
       HEAD = null;
       throw new Error('нет головы панели');
     }

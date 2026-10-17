@@ -7,7 +7,7 @@
 #
 # Конфиг перечитывается сам, как только меняется файл: правите — жмёте F5.
 
-theme: light           # light | autumn | retro | noir | neumo | glass-day | dark | graphite | glass | auto
+theme: light           # light | autumn | retro | noir | neumo | glass-day | dark | graphite | noir-dark | glass | auto
 # Свои темы (с 1.25) - файлы в папке themes/ рядом с этим файлом, см.
 # themes/_example.yaml. Другая папка: themes_dir: my-themes
 # theme: auto - днём одна тема, ночью другая:
@@ -272,6 +272,8 @@ panels:
         icon: cart
         w: 2
         h: 2
+        # color: sand   # свой цвет карточки (с 1.43): sage | mustard |
+        #               # terracotta | sky | lilac | sand | dark
 
       # --- вода: датчики протечки и краны -----------------------------------
       # Описаны в разделе water: выше; здесь - только ссылки по имени.
@@ -281,6 +283,8 @@ panels:
       # Расписание на сегодня (раздел calendars: выше). Нажатие - окно на
       # сегодня и завтра.
       # - {type: agenda, calendars: [family, work], w: 2, h: 2}
+      # «Сегодня» (с 1.43): дела списка и события календаря одной плиткой.
+      # - {type: today, list: shopping, calendars: [family], w: 2, h: 3}
       - {type: valve, valve: cold}
       - {type: valve, valve: hot}
 

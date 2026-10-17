@@ -108,13 +108,23 @@ def render_panel(name, cols=None):
     # Вид разделов на этом устройстве (с 1.36): list, accordion или tabs.
     # Нет - как в конфиге панели.
     mode = request.args.get("mode") or None
+    # Кнопки страницы в шапке (1.44): просит только страница-обёртка.
+    # Картинка сама по себе (киоск, img, дисплей) рисуется без них.
+    # Значение - во сколько раз крупнее рисовать кнопки: панель на 4
+    # колонки на телефоне ужата вдвое, и кружок в 36 точек становился
+    # мишенью в полтора десятка пикселей. Страница считает это сама.
+    try:
+        nav = min(1.6, max(1.0, float(request.args.get("nav") or 0))) \
+            if request.args.get("nav") else 0
+    except ValueError:
+        nav = 1.0
 
     theme = panel_theme(panel_conf)
     # Тема нужна и сборке: подписи графиков красятся под цвет подложки.
     panel_conf = dict(panel_conf, theme=theme)
     tiles, width, height, headers, top_chips, sect = prepare(
         panel_conf, st, hist, cols=cols, all_panels=all_panels,
-        name=name, closed=closed, opened=opened, mode=mode)
+        name=name, closed=closed, opened=opened, mode=mode, nav=nav)
     template = _template(panel_conf.get("template", "panel.svg.j2"))
     return template.render(
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
@@ -131,6 +141,8 @@ def render_panel(name, cols=None):
         tab_dock=sect["dock"],
         head_icon=sect["head_icon"],
         head_dy=sect["head_dy"],
+        nav_w=sect["nav_w"],
+        nav_r=sect["nav_r"],
         plate_sections=bool(panel_conf.get("section_plate",
                                            config.get("section_plate", True))),
         width=width,
@@ -699,9 +711,9 @@ def panel_watch(name):
             keys.update(channels_of(tile, state))
             if tile.get("service"):
                 prefixes.add(str(tile["service"]).rstrip("/") + "/")
-            if tile.get("type") == "list" and tile.get("list"):
+            if tile.get("type") in ("list", "today") and tile.get("list"):
                 keys.add("list:%s" % tile["list"])
-            if tile.get("type") == "agenda":
+            if tile.get("type") in ("agenda", "today"):
                 # Новая загрузка календаря будит панель, как пункт списка.
                 for cal in calendars.pick(tile.get("calendars")):
                     keys.add("calendar:%s" % cal)

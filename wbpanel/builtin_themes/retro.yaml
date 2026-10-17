@@ -21,6 +21,13 @@ chart:
   power: "#E8607A"
   palette: ["#EE9A55", "#6FB3C4", "#B8AE98", "#8CBF78", "#C29AD0", "#E8607A"]
 vars:
+  # карточки color: - шалфей, горчица, терракота (1.43)
+  card-sage: "#D8E0C6"
+  card-mustard: "#F0D99C"
+  card-terracotta: "#F1CCB4"
+  card-sky: "#CFDDE3"
+  card-lilac: "#E0D3E0"
+  card-sand: "#EFE3CC"
   bg-top: "#EFE6D6"
   bg-bottom: "#E7DBC6"
   tile: "#FBF6EC"

@@ -21,6 +21,13 @@ chart:
   power: "#F06A4E"
   palette: ["#FF9A3D", "#4FA8E0", "#9EA3AD", "#5FBF84", "#A98BE6", "#F06A4E"]
 vars:
+  # Цвета карточек для color: у плитки (с 1.43) - приглушённые
+  card-sage: "#27322A"
+  card-mustard: "#363021"
+  card-terracotta: "#3A2924"
+  card-sky: "#212D39"
+  card-lilac: "#2E2939"
+  card-sand: "#312D27"
   bg-top: "#1B1B1F"
   bg-bottom: "#101012"
   tile: "#2C2C31"

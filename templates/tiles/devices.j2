@@ -47,6 +47,26 @@
   .fcp-klab.in      { opacity: .6; }
   .fcp-word         { fill: currentColor; }
   .fcp-col use, .fcp-dimc use { color: currentColor; }
+  /* пульт фанкойла на весь экран (1.42) */
+  .fcp-bg           { fill: var(--tile); }
+  .depth-glass .fcp-bg, .depth-glass .acs-bg { fill: transparent; }
+  /* в стекле детали из цвета плитки тоже полупрозрачные: иначе на
+     светлом стекле они смотрятся серыми заплатками (1.43) */
+  .depth-glass .fcp-slat, .depth-glass .fcp-hub { fill: var(--glass-tint); }
+  .depth-glass .knob .kgear { fill: var(--glass-tint); stroke: var(--glass-hi); }
+  .depth-glass .knob .kcur-h, .depth-glass .knob .kdot { stroke: var(--glass-hi); }
+  .fcp-btn          { fill: var(--ac-pill); }
+  .fcp-btn-ink      { fill: none; stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .fcp-pw           { fill: var(--ac-pill); }
+  .fcp-pw.on        { fill: var(--ac-pill-on); }
+  .fcp-pw-ink       { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; }
+  .fcp-pw.on + .fcp-pw-ink { stroke: var(--ac-pill-ink); }
+  .fcp-pill         { fill: var(--well); }
+  .fcp-pill.on      { fill: currentColor; }
+  .fcp-pill-t       { fill: var(--ink-dim); }
+  .fcp-pill-t.on    { fill: #FFFFFF; }
+  .fcp-pill-ic      { color: var(--ink-dim); }
+  .fcp-pill-ic.on   { color: #FFFFFF; }
   /* карманы под рейки и нижняя рейка рулонной шторы. Цвет literal, а не
      var(--ink): это тень на ткани, и в тёмной теме она тоже тень, а не
      светлая линия, какой стала бы, взявшись от цвета текста. */
@@ -621,6 +641,7 @@
   {#- Работающий климат плитку не красит (с 1.37): ни заливки, ни рамки, ни
       отсвета. О работе говорят цвет дуги и слово «Греет» - этого хватает,
       а залитая плитка перетягивала взгляд с действительно включённого. -#}
+  {% if t.pad %}{{ fcpad(t) }}{% else %}
   {{ base.plate(dict(t, on=False)) }}
   {% if t.panel and not t.compact %}
     {% if t.panel.square %}{{ fcsquare(t) }}{% else %}{{ fcpanel(t) }}{% endif %}
@@ -696,6 +717,7 @@
     {% endif %}
     {{ base.caption(t, t.status) }}
   {% endif %}
+  {% endif %}
 {% endmacro %}
 
 
@@ -761,6 +783,80 @@
     </g>
 {% endmacro %}
 
+{#- Клавиша скорости: колодец, торец, лицо (нажатая утоплена), диод. -#}
+{% macro fc_key(k, ky, kh, id, fsz=14) %}
+    {% set dz = 4 if k.down else 0 %}{% set top = ky + dz %}{% set fh = kh - dz - (2 if k.down else 5) %}
+    <rect x="{{ k.x - 2.5 }}" y="{{ ky - 2.5 }}" width="{{ k.w + 5 }}" height="{{ kh + 5 }}" rx="8.5" class="fcp-well"/>
+    {% if not k.down %}<rect x="{{ k.x + 1 }}" y="{{ ky + 5 }}" width="{{ k.w - 2 }}" height="{{ kh - 2 }}" rx="6" class="fcp-shadow" filter="url(#{{ id }}sh)"/>{% endif %}
+    <rect x="{{ k.x }}" y="{{ top }}" width="{{ k.w }}" height="{{ kh - dz }}" rx="6" class="fcp-side"/>
+    <rect x="{{ k.x }}" y="{{ top }}" width="{{ k.w }}" height="{{ fh }}" rx="6"
+          fill="url(#{{ id }}{{ 'in' if k.down else 'cap' }})" class="fcp-edge"/>
+    <line x1="{{ k.x + 5 }}" y1="{{ top + 1.2 }}" x2="{{ k.x + k.w - 5 }}" y2="{{ top + 1.2 }}" class="fcp-hl"/>
+    {% if k.label != '0' %}
+    <g class="{{ 'fcp-col' if k.led }}">
+      <rect x="{{ k.cx - 7 }}" y="{{ top + 6 }}" width="14" height="3.2" rx="1.6" class="fcp-led{{ ' on' if k.led }}"/>
+      {% if k.led %}<rect x="{{ k.cx - 9 }}" y="{{ top + 4 }}" width="18" height="7" rx="3.5" class="fcp-ledglow" filter="url(#{{ id }}sh)"/>{% endif %}
+    </g>
+    {% endif %}
+    <text x="{{ k.cx }}" y="{{ top + fh / 2 + fsz * 0.55 }}" font-size="{{ fsz }}" text-anchor="middle"
+          class="fcp-klab{{ ' in' if k.down }}">{{ k.label }}</text>
+{% endmacro %}
+
+{#- Пульт фанкойла на весь экран (с 1.42): тот же прибор крупно, в рамке
+    390×700. Пульт (padFancoil в wrapper.html) двигает колпачок и сам
+    рисует цифры табло, пока ползунок тянут; остальное - нажатия по data-z. -#}
+{% macro fcpad(t) %}
+  {% set p = t.pad %}{% set id = uid ~ 'fcpad' %}
+  {{ fc_defs(id) }}
+  <rect width="{{ p.w }}" height="{{ p.h }}" class="fcp-bg"/>
+  <g transform="translate({{ p.dx }} {{ p.dy }}) scale({{ p.k }})" class="fcp fcpad {{ p.tone }}{{ ' off' if not t.enabled }}"
+     data-fcpad="1" data-top="{{ p.top }}" data-bot="{{ p.bot }}" data-smin="{{ p.smin }}" data-smax="{{ p.smax }}"
+     data-lo="{{ p.lo }}" data-hi="{{ p.hi }}" data-step="{{ p.step }}" data-sx="{{ p.sx }}"
+     data-cur="{{ p.cur_y if p.cur_y is not none else '' }}" data-cap="{{ p.cap_y }}"
+     data-target="{{ p.target if p.target is not none else '' }}" data-seg="{{ p.lcd.seg|join(',') }}"
+     data-on="{{ '1' if t.enabled else '0' }}">
+    {#- шапка -#}
+    <g data-z="back">
+      <circle cx="30" cy="34" r="20" class="fcp-btn"/>
+      <path d="M33.6,25 L24,34 L33.6,43" class="fcp-btn-ink"/>
+    </g>
+    <text x="195" y="40" font-size="17" font-weight="600" text-anchor="middle" class="fcp-ink">{{ p.title }}</text>
+    <g data-z="power">
+      <circle cx="360" cy="34" r="20" class="fcp-pw{{ ' on' if t.enabled }}"/>
+      <path d="M354.6,28.6 A7.6,7.6 0 1 0 365.4,28.6 M360,23.6 L360,32.4" class="fcp-pw-ink"/>
+    </g>
+    {#- режимы -#}
+    {% for m in p.modes %}
+    <g data-z="mode" data-v="{{ m.value }}" class="{{ 'fcp-col' if m.on }}">
+      <rect x="{{ m.x }}" y="{{ p.my }}" width="{{ m.w }}" height="{{ p.mh }}" rx="{{ p.mh / 2 }}" class="fcp-pill{{ ' on' if m.on }}"/>
+      <use href="#{{ uid }}ic-{{ m.icon }}" xlink:href="#{{ uid }}ic-{{ m.icon }}" x="{{ m.ix }}" y="{{ p.my + 13 }}" width="18" height="18" class="fcp-pill-ic{{ ' on' if m.on }}"/>
+      <text x="{{ m.tx }}" y="{{ p.my + 27 }}" font-size="14" font-weight="600" class="fcp-pill-t{{ ' on' if m.on }}">{{ m.word }}</text>
+    </g>
+    {% endfor %}
+    {#- ползунок -#}
+    <g data-z="slider">
+      <rect x="16" y="{{ p.top - 30 }}" width="118" height="{{ p.bot - p.top + 60 }}" fill="transparent"/>
+      {{ fc_slider(p, id) }}
+      <g class="fcp-capg">{{ fc_cap(p, id) }}</g>
+    </g>
+    {{ fc_grille(p.grille) }}
+    <g class="fcp-lcdbox">{{ fc_lcd(p.lcd) }}</g>
+    {#- сейчас и клапан -#}
+    <text x="{{ p.now_x }}" y="{{ p.now_y - 26 }}" font-size="13" class="fcp-dim">сейчас</text>
+    <text x="{{ p.now_x }}" y="{{ p.now_y + 4 }}" font-size="30" class="fcp-num">{{ p.current }}{% if p.current != '--' %}<tspan font-size="15" dy="-12">°</tspan>{% endif %}</text>
+    {% if p.valve is not none %}
+    <g class="{{ 'fcp-col' if p.valve and t.enabled else 'fcp-dimc' }}">
+      <use href="#{{ uid }}ic-drop" xlink:href="#{{ uid }}ic-drop" x="{{ p.now_x + 128 }}" y="{{ p.now_y - 34 }}" width="16" height="16"/>
+      <text x="{{ p.now_x + 214 }}" y="{{ p.now_y - 21 }}" font-size="13" font-weight="600" text-anchor="end" class="fcp-word">{{ 'клапан' if p.valve else 'закрыт' }}</text>
+    </g>
+    {% endif %}
+    {#- клавиши скорости -#}
+    {% for k in p['keys'] %}
+    <g data-z="key" data-v="{{ k.value }}">{{ fc_key(k, p.ky, p.kh, id, 20) }}</g>
+    {% endfor %}
+  </g>
+{% endmacro %}
+
 {% macro fcpanel(t) %}
   {% set p = t.panel %}{% set id = uid ~ 'fc' ~ t.i %}
   {{ fc_defs(id) }}
@@ -773,23 +869,7 @@
     <text x="340" y="26" text-anchor="end" font-size="11" class="tag">{{ p.title }}</text>
     <text x="{{ p.right }}" y="26" font-size="11" class="fcp-dim">сейчас</text>
     <text x="{{ p.right }}" y="52" font-size="24" class="fcp-num">{{ p.current }}<tspan font-size="13" dy="-10">°</tspan></text>
-    {% for k in p['keys'] %}
-    {% set dz = 4 if k.down else 0 %}{% set top = p.ky + dz %}{% set fh = p.kh - dz - (2 if k.down else 5) %}
-    <rect x="{{ k.x - 2.5 }}" y="{{ p.ky - 2.5 }}" width="{{ k.w + 5 }}" height="{{ p.kh + 5 }}" rx="8.5" class="fcp-well"/>
-    {% if not k.down %}<rect x="{{ k.x + 1 }}" y="{{ p.ky + 5 }}" width="{{ k.w - 2 }}" height="{{ p.kh - 2 }}" rx="6" class="fcp-shadow" filter="url(#{{ id }}sh)"/>{% endif %}
-    <rect x="{{ k.x }}" y="{{ top }}" width="{{ k.w }}" height="{{ p.kh - dz }}" rx="6" class="fcp-side"/>
-    <rect x="{{ k.x }}" y="{{ top }}" width="{{ k.w }}" height="{{ fh }}" rx="6"
-          fill="url(#{{ id }}{{ 'in' if k.down else 'cap' }})" class="fcp-edge"/>
-    <line x1="{{ k.x + 5 }}" y1="{{ top + 1.2 }}" x2="{{ k.x + k.w - 5 }}" y2="{{ top + 1.2 }}" class="fcp-hl"/>
-    {% if k.label != '0' %}
-    <g class="{{ 'fcp-col' if k.led }}">
-      <rect x="{{ k.cx - 7 }}" y="{{ top + 6 }}" width="14" height="3.2" rx="1.6" class="fcp-led{{ ' on' if k.led }}"/>
-      {% if k.led %}<rect x="{{ k.cx - 9 }}" y="{{ top + 4 }}" width="18" height="7" rx="3.5" class="fcp-ledglow" filter="url(#{{ id }}sh)"/>{% endif %}
-    </g>
-    {% endif %}
-    <text x="{{ k.cx }}" y="{{ top + fh / 2 + 8 }}" font-size="14" text-anchor="middle"
-          class="fcp-klab{{ ' in' if k.down }}">{{ k.label }}</text>
-    {% endfor %}
+    {% for k in p['keys'] %}{{ fc_key(k, p.ky, p.kh, id) }}{% endfor %}
     {#- режим и клапан: значки 16 и подписи на одной средней линии -#}
     <g class="fcp-col">
       <use href="#{{ uid }}ic-{{ p.mode.icon }}" xlink:href="#{{ uid }}ic-{{ p.mode.icon }}" x="{{ p.right }}" y="{{ p.ml - 8 }}" width="16" height="16"/>

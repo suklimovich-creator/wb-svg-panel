@@ -15,6 +15,7 @@ depth: soft   # форма: soft - мягкая тень, flat - плоско, n
 edge: teeth   # край ручек и колёс: teeth - зубцы, smooth - гладкий, knurl - насечка
 bevel: round   # фаска ручек и клавиш: round - мягкая, none - плоская, sharp - острая
 radius: 24   # скругление углов плитки, px: 0-40
+page: null   # поле страницы: light | dark, null - как у плиток (mode)
 # Цвета графиков: у величины свой цвет, остальные линии - по порядку из
 # palette. Цвет, заданный у серии в config.yaml, сильнее темы.
 chart:
@@ -26,6 +27,18 @@ chart:
   power: "#C4553B"
   palette: ["#E08A2D", "#3B93C4", "#8E8E93", "#4E9A6B", "#8E6BC4", "#C4553B"]
 vars:
+  # Подписи на поле страницы (с 1.43): заголовок, часы, разделы. Обычно
+  # как на плитках; у тёмного нуара поле тёмное, а плитки светлые.
+  page-ink: "var(--ink)"
+  page-dim: "var(--ink-dim)"
+  page-faint: "var(--ink-faint)"
+  # Цвета карточек для color: у плитки (с 1.43)
+  card-sage: "#DCE6D2"
+  card-mustard: "#F2E3B6"
+  card-terracotta: "#F3D5C5"
+  card-sky: "#D6E5F2"
+  card-lilac: "#E4DBEF"
+  card-sand: "#EDE4D3"
   bg-top: "#F1F1F3"
   bg-bottom: "#E6E6E9"
   tile: "#D9D9DC"   # сама плитка

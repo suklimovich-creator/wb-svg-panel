@@ -148,6 +148,12 @@ class Light(Tile):
         return out
 
 
+def _light_color(value):
+    """Цвет света лампы: только #rrggbb; имя цвета карточки - не он."""
+    value = str(value or "")
+    return value if value.startswith("#") else "#E0A050"
+
+
 @tile("dimmer")
 class Dimmer(Tile):
     """
@@ -183,7 +189,8 @@ class Dimmer(Tile):
             "level": round(level, 3),
             "low_x": roll["text_x"] if roll and roll["kind"] == "wide" else None,
             "fill": 0.0 if (not on or brightness is None) else brightness / 100.0,
-            "color": ctx.opt("color", "#E0A050"),
+            # color: sage и т. п. - цвет карточки (1.43), а не света
+            "color": _light_color(ctx.opt("color")),
             "short": ("%d %%" % round(brightness)) if brightness is not None else "",
             "status": ("Включено" if on else "Выключено") if brightness is not None
                       else "Нет данных",

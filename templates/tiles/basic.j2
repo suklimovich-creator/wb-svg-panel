@@ -272,6 +272,58 @@
   {% endif %}
 {% endmacro %}
 
+{#- ---- «Сегодня» (с 1.43) ----
+    Дела и события одной плиткой: шапка с листком календаря, дела
+    квадратиками на линейках, под чертой события как у расписания. -#}
+{% macro tile_today(t) %}
+  {{ base.plate(t) }}
+  {% if t.compact_today %}
+  {% if t.compact %}{{ calpage(((t.w - 28) / 2)|round(1), 13, 28, t.day, t.wd) }}
+  {% elif t.h < base.LOW %}{{ calpage(16, ((t.h - 30) / 2)|round(1), 28, t.day, t.wd) }}
+  {% else %}{{ calpage(18, 16, 32, t.day, t.wd) }}{% endif %}
+  {{ base.caption(t, t.status) }}
+  {% else %}
+  {{ calpage(16, 14, 28, t.day, t.wd) }}
+  <text x="{{ 16 + 34 * fs }}" y="{{ 35 * fs }}" class="name">{{ t.title }}</text>
+  {% if t.date %}
+  <text x="{{ t.w - 20 }}" y="{{ 35 * fs }}" class="ag-date" font-size="13.5" text-anchor="end">{{ t.date }}</text>
+  {% endif %}
+  {% for y in t.rules %}
+  <line x1="14" y1="{{ y }}" x2="{{ t.w - 14 }}" y2="{{ y }}" class="li-rule"/>
+  {% endfor %}
+  {% for r in t.tasks %}
+  <rect x="16" y="{{ r.y - t.size * 0.35 - t.box / 2 }}" width="{{ t.box }}" height="{{ t.box }}" rx="2.5" class="li-box"/>
+  <text x="34" y="{{ r.y }}" font-size="{{ t.size }}" class="li">{{ r.text }}</text>
+  {% endfor %}
+  {% if t.tasks_empty %}
+  <text x="34" y="{{ t.tasks_empty.y }}" font-size="{{ t.size }}" class="li-empty">{{ t.tasks_empty.text }}</text>
+  {% endif %}
+  {% if t.more_t %}
+  <text x="34" y="{{ t.more_t_y }}" font-size="{{ t.size * 0.9 }}" class="li-more">ещё {{ t.more_t }}…</text>
+  {% endif %}
+  {% if t.div_y %}
+  <line x1="14" y1="{{ t.div_y }}" x2="{{ t.w - 14 }}" y2="{{ t.div_y }}" class="td-div"/>
+  {% endif %}
+  {% for r in t.events %}
+  {% if r.kind == 'ev' %}
+  <g class="{{ 'ag-past' if r.state == 'past' }}">
+    <circle cx="21" cy="{{ r.dot_y }}" r="4" fill="{{ r.color }}"/>
+    <text x="30" y="{{ r.y }}" font-size="{{ 12 if r.small else t.size }}"
+          class="ag-time {{ 'small' if r.small }} {{ 'ag-now' if r.state == 'now' }}">{{ r.time }}</text>
+    <text x="{{ t.text_x }}" y="{{ r.y }}" font-size="{{ t.size }}" class="ag-txt">{{ r.text }}</text>
+  </g>
+  {% elif r.kind == 'sep' %}
+  <text x="16" y="{{ r.y }}" font-size="12.5" class="ag-sep">{{ r.text|upper }}</text>
+  {% else %}
+  <text x="30" y="{{ r.y }}" font-size="{{ t.size }}" class="ag-empty">{{ r.text }}</text>
+  {% endif %}
+  {% endfor %}
+  {% if t.more_e %}
+  <text x="30" y="{{ t.more_e_y }}" font-size="{{ t.size * 0.9 }}" class="li-more">ещё {{ t.more_e }}…</text>
+  {% endif %}
+  {% endif %}
+{% endmacro %}
+
 {#- Датчик протечки (с 1.41): плоская шайба на полу, диод посередине.
     Мокрый - диод красный и мигает. -#}
 {% macro puck(cx, cy, r, wet) %}

@@ -174,6 +174,16 @@ def _check_tile(tile, panel_title, panel_name, config, state,
                             "известные: " + ", ".join(sorted(REGISTRY))))
         return out
 
+    # --- цвет карточки (1.43) ---------------------------------------------
+    # color: sage и т. п. Шестнадцатеричный - цвет света у лампы, не ошибка.
+    color = tile.get("color")
+    if isinstance(color, str) and not color.startswith("#"):
+        from .palette import TINT_NAMES
+        if color.strip().lower() not in TINT_NAMES:
+            out.append(_problem(WARNING, panel_title, tile,
+                                "color: %s - такого цвета карточки нет" % color,
+                                "бывают: " + ", ".join(TINT_NAMES)))
+
     # --- обязательные роли -------------------------------------------------
     tile = cls.expand(tile)
     obj = cls()

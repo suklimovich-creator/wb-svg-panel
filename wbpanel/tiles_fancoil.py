@@ -323,6 +323,9 @@ def lcd_block(x, y, w, h, target, dh_max, level=None, auto=False, deg=True):
     y0 = y + (h - dh) / 2.0
     polys, dots = seven_seg(lcd_text(target), x0, y0, dw, dh, max(2.2, dh * 0.11), gap)
     out = {"x": x, "y": y, "w": w, "h": h, "polys": polys, "dots": dots,
+           # для пульта: он рисует цифры сам, пока тянут ползунок
+           "seg": [round(x0, 1), round(y0, 1), round(dw, 2), round(dh, 2),
+                   round(max(2.2, dh * 0.11), 2), round(gap, 2)],
            "cx": round(x0 + tw + 2, 1), "cy": round(y0 + 8, 1), "deg": deg, "bars": []}
     if level is not None:
         bx = x + w - 8 - bars + 2
@@ -432,6 +435,55 @@ def build_square(lo, hi, current, target, power, tone, level, auto, mode, spinni
     return out
 
 
+#: Пульт фанкойла на весь экран (с 1.42) - столбик в рамке 390×700:
+#: шапка, режимы, ползунок уставки слева, решётка и табло справа, клавиши.
+PAD_W, PAD_H = 390.0, 700.0
+
+
+def build_pad(w, h, lo, hi, smin, smax, current, target, power, tone, level, keys,
+              modes, mode_key, valve, spinning, spin):
+    """Всё для пульта w×h; рамка 390×700 вписывается и центруется."""
+    k = min(w / PAD_W, h / PAD_H)
+    dx, dy = (w - PAD_W * k) / 2.0, (h - PAD_H * k) / 2.0
+    top, bot = 150.0, 540.0
+    out = slider_block(78.0, top, bot, smin, smax, current, target, power)
+    gx, gw = 150.0, 214.0
+    out.update({
+        "k": round(k, 4), "dx": round(dx, 1), "dy": round(dy, 1), "tone": tone,
+        "w": w, "h": h, "top": top, "bot": bot,
+        "lo": float(lo), "hi": float(hi), "smin": float(smin), "smax": float(smax),
+        "grille": grille_block(gx, 142.0, gw, level, bool(spin and power and spinning)),
+        "lcd": lcd_block(gx, 368.0, gw, 84.0, target, 52.0, level if power else 0,
+                         False, True),
+        "lcd_box": [gx, 368.0, gw, 84.0],
+        "now_y": 500.0, "now_x": gx,
+    })
+    # клавиши скорости во всю ширину
+    n = len(keys)
+    kgap, kx0 = 10.0, 24.0
+    kw = (PAD_W - 2 * kx0 - kgap * (n - 1)) / float(n)
+    out["keys"] = [dict(kk, x=round(kx0 + i * (kw + kgap), 1), w=round(kw, 1),
+                        cx=round(kx0 + i * (kw + kgap) + kw / 2, 1)) for i, kk in enumerate(keys)]
+    out["ky"], out["kh"] = 576.0, 64.0
+    # режимы - ряд пилюль под шапкой
+    m = len(modes)
+    mgap = 8.0
+    mw = (PAD_W - 2 * 24 - mgap * (m - 1)) / float(max(m, 1))
+    out["modes"] = []
+    for i, (row, body) in enumerate(modes):
+        word = (body.get("short") or body.get("title") or str(row)).lower()
+        x = 24 + i * (mw + mgap)
+        span = 18 + 6 + text_width(word, 14, 0.6)
+        ix = x + (mw - span) / 2.0
+        out["modes"].append({"x": round(x, 1), "w": round(mw, 1), "ix": round(ix, 1),
+                             "tx": round(ix + 24, 1), "value": str(row),
+                             "icon": body.get("icon", "fan"), "word": word,
+                             "on": power and row == mode_key})
+    out["my"], out["mh"] = 78.0, 44.0
+    out["valve"] = valve
+    return out
+
+
 @tile("fancoil")
 class Fancoil(Tile):
     """Фанкойл: циферблат термостата плюс колонка режима, скорости и клапана."""
@@ -498,7 +550,22 @@ class Fancoil(Tile):
 
         # Широкая плитка - пультом (с 1.37); look: classic - прежний циферблат.
         panel = None
-        if side and ctx.opt("look") != "classic":
+        pad = None
+        if ctx.opt("view") == "pad" and ctx.opt("look") != "classic":
+            # Пульт на весь экран (с 1.42) - тот же прибор, крупно.
+            tone = "cool" if mode.get("cool") else ("fan" if not uses_valve else "heat")
+            pad = build_pad(width, height, ctx.opt("temp_min", 16), ctx.opt("temp_max", 30),
+                            ctx.opt("scale_min", 14), ctx.opt("scale_max", 30),
+                            current, target, power, tone,
+                            self.level_of(fan, fact) if power else 0,
+                            self.keys(fans, fan_key, power), modes, mode_key,
+                            (bool(valve) if valve is not None and uses_valve else None),
+                            active, ctx.opt("spin", True))
+            pad["title"] = str(ctx.opt("title") or "Фанкойл")
+            pad["current"] = _fmt(current, 1) if current is not None else "--"
+            pad["step"] = float(ctx.step("target", 0.5) or 0.5)
+            pad["target"] = target
+        elif side and ctx.opt("look") != "classic":
             if mode.get("cool"):
                 tone = "cool"
             elif not uses_valve:
@@ -543,6 +610,7 @@ class Fancoil(Tile):
             panel["square"] = True
 
         return {
+            "pad": pad,
             "panel": panel,
             "dial": gauge,
             "side": self.side_box(width, height) if side and gauge else None,
@@ -588,13 +656,13 @@ class Fancoil(Tile):
         steps = sorted(((body.get("level"), row) for row, body in fans if body.get("level")),
                        key=lambda pair: pair[0])
         auto = [row for row, body in fans if body.get("auto")]
-        out = [{"label": "0", "down": not power, "led": False}]
+        out = [{"label": "0", "down": not power, "led": False, "value": "off"}]
         for lvl, row in steps:
             down = power and row == fan_key
-            out.append({"label": str(lvl), "down": down, "led": down})
+            out.append({"label": str(lvl), "down": down, "led": down, "value": str(row)})
         if auto:
             down = power and auto[0] == fan_key
-            out.append({"label": "А", "down": down, "led": down})
+            out.append({"label": "А", "down": down, "led": down, "value": str(auto[0])})
         return out
 
     @staticmethod
@@ -723,4 +791,6 @@ class Fancoil(Tile):
             # зашитый в страницу набор кондиционера здесь не подходит.
             "ac_modes": buttons(modes),
             "ac_fans": buttons(fans),
+            # прежний пульт-дуга - только у look: classic (с 1.42)
+            "look": "classic" if ctx.opt("look") == "classic" else None,
         }

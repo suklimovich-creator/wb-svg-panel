@@ -87,6 +87,29 @@
     <stop offset=".55" stop-color="var(--glare)" stop-opacity=".35"/>
     <stop offset="1" stop-color="var(--glare)" stop-opacity="0"/>
   </radialGradient>
+  {#- Обои одной группой (1.42): их видно и за плитками, и сквозь линзу
+      стекла. Размер и место группы на странице - окно браузера в
+      координатах картинки: их ставит glassScroll(), и пятна под плиткой
+      совпадают с неподвижным фоном страницы. Без страницы - экран высоты. -#}
+  {% set wall_h = [height, width * 2.2]|min %}
+  <g id="{{ uid }}wallg" data-wall="1">
+    {% for i in range(1, 5) %}
+    <rect width="{{ width }}" height="{{ wall_h|round(1) }}" fill="url(#{{ uid }}wall{{ i }})"/>
+    {% endfor %}
+  </g>
+  {#- верхний блик «жидкого» стекла: светлая полоса у верхнего края -#}
+  <linearGradient id="{{ uid }}glass-top" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".22"/>
+    <stop offset=".28" stop-color="#FFFFFF" stop-opacity=".04"/>
+    <stop offset=".6" stop-color="#FFFFFF" stop-opacity="0"/>
+    <stop offset="1" stop-color="#FFFFFF" stop-opacity=".06"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}glass-in" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".55"/>
+    <stop offset=".3" stop-color="#FFFFFF" stop-opacity="0"/>
+    <stop offset=".75" stop-color="#FFFFFF" stop-opacity="0"/>
+    <stop offset="1" stop-color="#FFFFFF" stop-opacity=".28"/>
+  </linearGradient>
 {% endif %}
 {% for t in tiles %}
   {#- Обрезка - ровно по средней линии рамки, и рамка рисуется поверх:
@@ -115,12 +138,7 @@
 {#- Обои стекла (1.40): пятна на экран высоты (по пропорции телефона).
     На странице их рисует фон окна, неподвижный при прокрутке, а этот
     слой прячется: он нужен картинке без страницы (киоск, /panel.svg). -#}
-{% set wall_h = [height, width * 2.2]|min %}
-<g class="wall">
-  {% for i in range(1, 5) %}
-  <rect width="{{ width }}" height="{{ wall_h|round(1) }}" fill="url(#{{ uid }}wall{{ i }})"/>
-  {% endfor %}
-</g>
+<use href="#{{ uid }}wallg" xlink:href="#{{ uid }}wallg" class="wall"/>
 {% endif %}
 {% endif %}
 
@@ -128,20 +146,43 @@
 {#- Во вкладках полоса может стоять над шапкой - шапка сдвигается на её
     высоту. И вместо названия панели - значок и название открытой комнаты. -#}
 {% if head_dy %}<g transform="translate(0,{{ head_dy }})">{% endif %}
-{% if head_icon %}
+{% set nw = nav_w | default(0) %}
+{% if head_icon and not nw %}
 {#- Нажатие на шапку показывает кнопки страницы (панели, колонки, тема,
-    вид): во вкладках их полоса спрятана, на небольшом экране она лишняя. -#}
+    вид): во вкладках их полоса спрятана, на небольшом экране она лишняя.
+    С кнопками в шапке (1.44) это не нужно. -#}
 <rect width="{{ width }}" height="64" fill="transparent" data-headtap="1"/>
+{% endif %}
+{% if nw %}
+{#- Кнопки страницы в шапке (с 1.44): круглая «назад», как в окнах, и
+    шестерёнка - колонки, тема, вид разделов. Рисуются, только когда их
+    просит страница (nav=1): картинке без страницы они ни к чему. -#}
+{% set nr = nav_r %}{% set nk = (nr / 18) | round(3) %}
+<g data-nav="back" class="nav">
+  <circle cx="{{ 20 + nr }}" cy="34" r="{{ nr + 6 }}" fill="transparent"/>
+  <circle cx="{{ 20 + nr }}" cy="34" r="{{ nr }}" class="chip"/>
+  <path transform="translate({{ 20 + nr }},34) scale({{ nk }})" d="M3.5,-7.5l-7.5,7.5l7.5,7.5" class="nav-ic"/>
+</g>
+<g data-nav="menu" class="nav">
+  <circle cx="{{ width - 20 - nr }}" cy="34" r="{{ nr + 6 }}" fill="transparent"/>
+  <circle cx="{{ width - 20 - nr }}" cy="34" r="{{ nr }}" class="chip"/>
+  <g transform="translate({{ width - 20 - nr }},34) scale({{ nk }})">
+    <path d="M6.9,-2.1L9.5,-1.6L9.5,1.6L6.9,2.1L6.4,3.4L7.8,5.5L5.5,7.8L3.4,6.4L2.1,6.9L1.6,9.5L-1.6,9.5L-2.1,6.9L-3.4,6.4L-5.5,7.8L-7.8,5.5L-6.4,3.4L-6.9,2.1L-9.5,1.6L-9.5,-1.6L-6.9,-2.1L-6.4,-3.4L-7.8,-5.5L-5.5,-7.8L-3.4,-6.4L-2.1,-6.9L-1.6,-9.5L1.6,-9.5L2.1,-6.9L3.4,-6.4L5.5,-7.8L7.8,-5.5L6.4,-3.4Z" class="nav-ic thin"/>
+    <circle r="3.2" class="nav-ic thin"/>
+  </g>
+</g>
+{% endif %}
+{% if head_icon %}
 <g class="h1-ic"><use href="#{{ uid }}ic-{{ head_icon }}" xlink:href="#{{ uid }}ic-{{ head_icon }}"
-   x="20" y="19" width="28" height="28"/></g>
-<text x="54" y="44" class="h1">{{ title }}</text>
+   x="{{ 20 + nw }}" y="19" width="28" height="28"/></g>
+<text x="{{ 54 + nw }}" y="44" class="h1">{{ title }}</text>
 {% else %}
-<text x="20" y="44" class="h1">{{ title }}</text>
+<text x="{{ 20 + nw }}" y="44" class="h1">{{ title }}</text>
 {% endif %}
 {#- Часы - крупно, под ними день недели и дата (с 1.35): раньше было
     только мелкое время, и на стене его было не прочесть. -#}
-<text x="{{ width - 20 }}" y="38" class="clock" text-anchor="end">{{ updated }}</text>
-<text x="{{ width - 20 }}" y="54" class="h1-sub date" text-anchor="end">
+<text x="{{ width - 20 - nw }}" y="38" class="clock" text-anchor="end">{{ updated }}</text>
+<text x="{{ width - 20 - nw }}" y="54" class="h1-sub date" text-anchor="end">
   {{- today or '' }}{{ '' if connected else ' · нет связи с MQTT' }}</text>
 {% if head_dy %}</g>{% endif %}
 {% endif %}
@@ -254,16 +295,49 @@
 {% if depth == 'glass' %}
 {#- Стекло (1.40): налёт и отсвет - одним слоем под всеми плитками. -#}
 {% set glassy = tiles | rejectattr('kind', 'equalto', 'header') | list %}
+{% if not bare %}
+{#- Тень стекла (1.43): плитка парит над обоями. Тень только снаружи -
+    маска вырезает её из-под прозрачной плитки, иначе стекло темнело бы
+    изнутри. Одно размытие на всю панель. -#}
+<defs>
+  <filter id="{{ uid }}glass-sh" filterUnits="userSpaceOnUse" x="-30" y="-30"
+          width="{{ width + 60 }}" height="{{ height + 80 }}"><feGaussianBlur stdDeviation="11"/></filter>
+  <mask id="{{ uid }}glass-mask" maskUnits="userSpaceOnUse" x="-30" y="-30" width="{{ width + 60 }}" height="{{ height + 80 }}">
+    <rect x="-30" y="-30" width="{{ width + 60 }}" height="{{ height + 80 }}" fill="#FFFFFF"/>
+    {% for t in glassy %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="#000000"/>{% endfor %}
+  </mask>
+</defs>
+<g mask="url(#{{ uid }}glass-mask)" pointer-events="none">
+  <g filter="url(#{{ uid }}glass-sh)" opacity="{{ '.55' if PAL.is_dark(theme) else '.26' }}" style="fill:var(--shadow)">
+    {% for t in glassy %}<rect x="{{ t.x + 6 }}" y="{{ t.y + 12 }}" width="{{ t.w - 12 }}" height="{{ t.h - 8 }}" rx="{{ rx }}"/>{% endfor %}
+  </g>
+</g>
+{% endif %}
 <g class="glass-under" pointer-events="none">
   {% for t in glassy %}
+  {#- Линза (1.42): под плиткой те же обои, но крупнее (преломление) и
+      гуще - два слоя пятен вместо одного: цвета под стеклом ярче, чем
+      вокруг, и пятна у края плитки «съезжают», как в толстом стекле. -#}
+  {% if not bare %}
+  <g transform="translate({{ t.x }},{{ t.y }})" clip-path="url(#{{ uid }}clip{{ t.i }})">
+    <g transform="translate({{ t.w / 2 }} {{ t.h / 2 }}) scale(1.08) translate({{ -(t.x + t.w / 2) }} {{ -(t.y + t.h / 2) }})">
+      <use href="#{{ uid }}wallg" xlink:href="#{{ uid }}wallg"/>
+      <use href="#{{ uid }}wallg" xlink:href="#{{ uid }}wallg"/>
+    </g>
+  </g>
+  {% endif %}
   <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="glass-fill"/>
+  {% if t.tint and not t.on %}{#- цветное стекло (1.43) -#}
+  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="glass-tint-{{ t.tint }}"/>
+  {% endif %}
+  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glass-top)"/>
   {% if not bare %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glare)"/>{% endif %}
   {% endfor %}
 </g>
 {% endif %}
 
 {% for t in tiles %}
-<g transform="translate({{ t.x }},{{ t.y }})" class="{{ 'offline' if t.offline }}{{ ' tile-on' if t.on }}{{ ' inv' if t.inv }}"{{ t.attrs|safe }}>
+<g transform="translate({{ t.x }},{{ t.y }})" class="{{ 'offline' if t.offline }}{{ ' tile-on' if t.on }}{{ ' inv' if t.inv }}{{ ' tint tint-' ~ t.tint if t.tint }}"{{ t.attrs|safe }}>
   {% if   t.kind == 'chart'   %}{{ chart.tile_chart(t) }}
   {% elif t.kind == 'switch'  %}{{ basic.tile_switch(t) }}
   {% elif t.kind == 'curtain' %}{{ devices.tile_curtain(t) }}
@@ -281,6 +355,7 @@
   {% elif t.kind == 'camera' %}{{ basic.tile_camera(t) }}
   {% elif t.kind == 'list' %}{{ basic.tile_list(t) }}
   {% elif t.kind == 'agenda' %}{{ basic.tile_agenda(t) }}
+  {% elif t.kind == 'today' %}{{ basic.tile_today(t) }}
   {% elif t.kind == 'leak' %}{{ basic.tile_leak(t) }}
   {% elif t.kind == 'valve' %}{{ basic.tile_valve(t) }}
   {#- Телевизор рисуется как обычный выключатель: значок, обводка по
@@ -299,7 +374,11 @@
 {#- блик края стекла - поверх плиток, мимо нажатий -#}
 <g class="glass-rims" pointer-events="none">
   {% for t in glassy %}
+  <rect x="{{ t.x + 0.5 }}" y="{{ t.y + 0.5 }}" width="{{ t.w - 1 }}" height="{{ t.h - 1 }}" rx="{{ rx + 0.5 }}" class="glass-edge"/>
   <rect x="{{ t.x + 1.6 }}" y="{{ t.y + 1.6 }}" width="{{ t.w - 3.2 }}" height="{{ t.h - 3.2 }}" rx="{{ [rx - 0.6, 0]|max }}" class="glass-rim"/>
+  {#- вторая кромка внутри: толщина стекла - блик сверху слева и отсвет снизу справа -#}
+  <rect x="{{ t.x + 4 }}" y="{{ t.y + 4 }}" width="{{ t.w - 8 }}" height="{{ t.h - 8 }}" rx="{{ [rx - 3, 0]|max }}"
+        fill="none" stroke="url(#{{ uid }}glass-in)" stroke-width="2.4" opacity=".55"/>
   {% endfor %}
 </g>
 {% endif %}

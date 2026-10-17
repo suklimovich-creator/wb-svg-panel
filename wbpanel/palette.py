@@ -41,14 +41,15 @@ log = logging.getLogger("wb-svg-panel")
 BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_themes")
 
 #: Порядок в меню выбора темы: сначала светлые, потом тёмные, потом свои.
-ORDER = ("light", "autumn", "retro", "noir", "neumo", "glass-day", "dark", "graphite", "glass")
+ORDER = ("light", "autumn", "retro", "noir", "neumo", "glass-day", "dark", "graphite",
+         "noir-dark", "glass")
 
 #: Свойства темы, кроме цветов. Своя тема наследует незаданные.
 PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart", "depth", "edge",
-         "bevel", "radius")
+         "bevel", "radius", "page")
 _PROP_DEFAULTS = {"mode": "light", "on_style": "rim", "inv_kinds": (), "sheen": False,
                   "shadow": None, "chart": None, "depth": "soft", "edge": "teeth",
-                  "bevel": "round", "radius": 24}
+                  "bevel": "round", "radius": 24, "page": None}
 #: Форма - вторая ось темы (с 1.32): глубина плиток и органов управления.
 #: soft - мягкая тень снизу, как было; flat - без теней; neumo -
 #: неоморфизм: плитка из того же материала, что и фон, светлая тень
@@ -60,7 +61,16 @@ EDGES = ("teeth", "smooth", "knurl")
 #: без фаски (плоское лицо), острая (кольцо скоса вокруг плоского лица).
 BEVELS = ("round", "none", "sharp")
 #: Какие свойства какими значениями бывают - для проверки файлов.
-_CHOICES = {"depth": DEPTHS, "edge": EDGES, "bevel": BEVELS}
+#: Поле страницы (с 1.43): тёмное или светлое, если не как у плиток. У
+#: тёмного нуара плитки светлые (mode: light - от него тени и подписи
+#: на плитках), а поле, шапка и окна - тёмные.
+PAGES = ("light", "dark")
+#: Цвета карточек (с 1.43): color: у плитки. Сами цвета - переменные темы
+#: card-<имя>: у светлых пастель, у тёмных приглушённые. dark - тёмная
+#: карточка, как у графиков в ретро (inv).
+TINTS = ("sage", "mustard", "terracotta", "sky", "lilac", "sand")
+TINT_NAMES = TINTS + ("dark",)
+_CHOICES = {"depth": DEPTHS, "edge": EDGES, "bevel": BEVELS, "page": PAGES}
 
 #: Значение переменной: цвет, число или ссылка на другую переменную. Всё
 #: прочее не пропускаем - значения уходят прямо в <style> и в атрибуты, и
@@ -355,6 +365,12 @@ def is_dark(name):
     return prop(name, "mode") == "dark"
 
 
+def page_dark(name):
+    """Тёмное ли поле страницы: page у темы, иначе как плитки (mode)."""
+    page = prop(name, "page")
+    return page == "dark" if page in PAGES else is_dark(name)
+
+
 def info(name):
     """Всё, что шаблону и коду нужно о теме, кроме цветов."""
     theme = get(name)
@@ -425,14 +441,20 @@ def menu_entry(n):
     """Одна тема для страницы: цвета полей и пультов (см. menu)."""
     v = css_vars(n)
     tile = _parse(v.get("--tile"), v) or (217, 217, 220)
-    acc = _solid(v.get("--active"), v, tile) or (224, 155, 45)
+    # Акцент окон и пультов - свой у темы, у которой поле страницы не в
+    # тон плиткам (тёмный нуар, 1.43): чёрная «включённая» на тёмном окне
+    # не видна.
+    acc = (_solid(v.get("--page-accent"), v, tile) or _solid(v.get("--active"), v, tile)
+           or (224, 155, 45))
     heat = _solid(v.get("--ac-seg-heat"), v, tile) or (224, 102, 26)
     cool = _solid(v.get("--cool"), v, tile) or (59, 143, 212)
     page = info(n)["page_bg"]
     # Нагрев и холод на пульте - и дуга, и надпись: должны читаться на поле.
     field = _parse(page, v) or tile
     heat, cool = _lift(heat, field), _lift(cool, field)
-    return {"name": n, "title": get(n)["title"], "dark": is_dark(n),
+    # dark - про поле и окна страницы, а не про плитки (у тёмного нуара
+    # они расходятся, 1.43)
+    return {"name": n, "title": get(n)["title"], "dark": page_dark(n),
             "bg": page, "own": not get(n)["builtin"],
             "acc": _hex(acc), "acc2": _hex(_mix(acc, _WHITE, 0.28)),
             "accInk": _hex(_readable_on(acc, (255, 250, 242), (42, 26, 8))),
@@ -815,6 +837,7 @@ def _rules(dark, card):
         ("--glass-hi", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".55" if dark else ".95")),
         ("--glass-lo", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".10" if dark else ".40")),
         ("--glare", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".09" if dark else ".30")),
+        ("--glass-edge", ("--tile",), lambda v: "rgba(%s,%s)" % (("0,0,0", ".35") if dark else ("40,50,80", ".14"))),
         ("--glass-on", ("--active",), lambda v: _alpha(v["--active"], 0.40 if dark else 0.45)),
         ("--wall-1", ("--active",), lambda v: _alpha(_mix(v["--active"], _BLACK if dark else _WHITE, 0.25), 0.5)),
         ("--wall-2", ("--cool",), lambda v: _alpha(_mix(v["--cool"], _BLACK if dark else _WHITE, 0.3), 0.45)),
@@ -890,7 +913,7 @@ def _clean_draft(data):
     out["name"] = raw_name if _NAME_RE.match(raw_name) else (slug(raw_name or title) or "my-theme")
     parent = str(data.get("extends") or "")
     out["extends"] = parent if parent in _THEMES else None
-    for key in ("mode", "on_style", "depth", "edge", "bevel"):
+    for key in ("mode", "on_style", "depth", "edge", "bevel", "page"):
         if data.get(key) is not None:
             out[key] = str(data[key])
     if data.get("radius") is not None:
@@ -978,6 +1001,8 @@ def to_yaml(data, stamp=""):
         lines.append("extends: %s" % data["extends"])
     if data.get("mode") in ("light", "dark"):
         lines.append("mode: %s           # light | dark" % data["mode"])
+    if data.get("page") in PAGES:
+        lines.append("page: %s           # поле страницы, если не как у плиток" % data["page"])
     if data.get("on_style") in ("rim", "card"):
         lines.append("on_style: %s        # rim - рамка у включённой, card - тёмная карточка"
                      % data["on_style"].ljust(4))

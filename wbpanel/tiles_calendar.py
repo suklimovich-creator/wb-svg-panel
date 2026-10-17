@@ -86,6 +86,65 @@ def agenda_attr(days, tz, now):
     return ";".join(parts)
 
 
+def event_rows(ev_today, ev_tomorrow, now, tz, room, empty_text, fill=False):
+    """
+    Строки событий под плитку в room строк: (строки, сколько не влезло).
+
+    Сегодня: весь день, потом по времени. Не влезает - первыми уходят
+    прошедшие. День кончился или пуст - показываем завтра. Последняя
+    строка при нехватке места уступает «ещё N». Общее у расписания и
+    плитки «Сегодня» (1.43).
+
+    fill - завтра и тогда, когда сегодня ещё не кончилось, если под него
+    остаётся место: плитке «Сегодня» незачем держать пустой низ.
+    """
+    today = now.date()
+    upcoming = [e for e in ev_today if _state(e, now) in ("now", "next")]
+    rows = []
+    today_rows = list(ev_today)
+    pasts = [e for e in today_rows if _state(e, now) == "past"]
+    while len(today_rows) > room and pasts:
+        today_rows.remove(pasts.pop(0))
+    for ev in today_rows:
+        st = _state(ev, now)
+        rows.append({"kind": "ev", "state": st, "color": ev["color"],
+                     "time": ("весь день" if ev["all_day"] else
+                              ("сейчас" if st == "now" else _when_text(ev, today, tz))),
+                     "text": ev["title"]})
+    spare = room - len(rows)
+    if ev_tomorrow and ((not upcoming and spare >= 2) or
+                        (fill and spare >= min(3, 1 + len(ev_tomorrow)))):
+        rows.append({"kind": "sep", "text": "Завтра"})
+        for ev in ev_tomorrow:
+            rows.append({"kind": "ev", "state": "day" if ev["all_day"] else "next",
+                         "color": ev["color"],
+                         "time": "весь день" if ev["all_day"] else _hm(ev["start"].astimezone(tz)),
+                         "text": ev["title"]})
+    if not rows:
+        rows.append({"kind": "empty", "text": empty_text})
+    more = 0
+    shown = rows[:room]
+    if len(rows) > room and room > 0:
+        shown = rows[:room - 1]
+        more = len(rows) - len(shown)
+    return shown, more
+
+
+def summary(ev_today, now, tz):
+    """Одна строка про ближайшее: для мелкой плитки и подписи."""
+    cur = [e for e in ev_today if _state(e, now) == "now"]
+    nxt = [e for e in ev_today if _state(e, now) == "next"]
+    if cur:
+        return "сейчас: " + cur[0]["title"]
+    if nxt:
+        return "%s %s" % (_hm(nxt[0]["start"].astimezone(tz)), nxt[0]["title"])
+    if any(e["all_day"] for e in ev_today):
+        return next(e["title"] for e in ev_today if e["all_day"])
+    if ev_today:
+        return "сегодня больше ничего"
+    return "сегодня свободно"
+
+
 @tile("agenda")
 class Agenda(Tile):
     roles = ()
@@ -131,22 +190,13 @@ class Agenda(Tile):
         ev_tomorrow = calendars.day(names, tomorrow)
         base["_agenda"] = agenda_attr([(today, ev_today), (tomorrow, ev_tomorrow)], tz, now)
 
-        upcoming = [e for e in ev_today if _state(e, now) in ("now", "next")]
         cur = [e for e in ev_today if _state(e, now) == "now"]
         nxt = [e for e in ev_today if _state(e, now) == "next"]
         if never:
             base["status"] = ("нет связи с календарём" if any(s["error"] for s in errors)
                               else "загрузка…")
-        elif cur:
-            base["status"] = "сейчас: " + cur[0]["title"]
-        elif nxt:
-            base["status"] = "%s %s" % (_hm(nxt[0]["start"].astimezone(tz)), nxt[0]["title"])
-        elif any(e["all_day"] for e in ev_today):
-            base["status"] = next(e["title"] for e in ev_today if e["all_day"])
-        elif ev_today:
-            base["status"] = "сегодня больше ничего"
         else:
-            base["status"] = "сегодня свободно"
+            base["status"] = summary(ev_today, now, tz)
 
         width = float(ctx.opt("inner_w") or 0)
         height = float(ctx.opt("inner_h") or 0)
@@ -177,34 +227,8 @@ class Agenda(Tile):
         if text_width(base["date"], 13.5, LETTER) > head_room:
             base["date"] = ""
 
-        rows = []
-        # Сегодня: весь день, потом по времени. Не влезает - первыми
-        # уходят прошедшие.
-        today_rows = list(ev_today)
-        pasts = [e for e in today_rows if _state(e, now) == "past"]
-        while len(today_rows) > room and pasts:
-            today_rows.remove(pasts.pop(0))
-        for ev in today_rows:
-            st = _state(ev, now)
-            rows.append({"kind": "ev", "state": st, "color": ev["color"],
-                         "time": ("весь день" if ev["all_day"] else
-                                  ("сейчас" if st == "now" else _when_text(ev, today, tz))),
-                         "text": ev["title"]})
-        # День кончился или пуст - показываем завтра.
-        if not upcoming and room - len(rows) >= 2 and ev_tomorrow:
-            rows.append({"kind": "sep", "text": "Завтра"})
-            for ev in ev_tomorrow:
-                rows.append({"kind": "ev", "state": "day" if ev["all_day"] else "next",
-                             "color": ev["color"],
-                             "time": "весь день" if ev["all_day"] else _hm(ev["start"].astimezone(tz)),
-                             "text": ev["title"]})
-        if not rows:
-            rows.append({"kind": "empty", "text": base["status"]})
-
-        shown = rows[:room]
-        if len(rows) > room and room > 0:
-            shown = rows[:room - 1]
-            base["more"] = len(rows) - len(shown)
+        shown, base["more"] = event_rows(ev_today, ev_tomorrow, now, tz, room,
+                                         base["status"])
 
         y = top + size
         out = []

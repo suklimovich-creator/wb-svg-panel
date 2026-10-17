@@ -340,3 +340,4 @@ from . import tiles_fancoil  # noqa: E402,F401
 from . import tiles_lists  # noqa: E402,F401
 from . import tiles_water  # noqa: E402,F401
 from . import tiles_calendar  # noqa: E402,F401
+from . import tiles_today  # noqa: E402,F401

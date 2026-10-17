@@ -18,6 +18,13 @@ sheen: false   # отсвет даёт само стекло
 shadow: null   # тень под прозрачной плиткой легла бы внутрь неё
 depth: glass   # форма: стекло поверх обоев
 vars:
+  # цветное стекло для color: (1.43) - поверх налёта, полупрозрачно
+  card-sage: "#5E9A70"
+  card-mustard: "#B8963A"
+  card-terracotta: "#B8664A"
+  card-sky: "#4A7DB0"
+  card-lilac: "#8565B0"
+  card-sand: "#9A8A6E"
   bg-top: "#1B1D2C"
   bg-bottom: "#11121B"
   tile: "#25273A"   # непрозрачный цвет того же стекла - для пультов и подложек

@@ -90,6 +90,29 @@
  html.chrome-on #back,html.chrome-on #cols{opacity:1;pointer-events:auto;
                                             background:rgba(28,28,32,.96)}
  [data-headtap]{cursor:pointer}
+ /* Кнопки страницы в шапке панели (1.44): круглая «назад» и шестерёнка
+    рисуются в картинке, прежние кнопки сверху и полоса под ними не нужны. */
+ html.svgnav #back,html.svgnav #cols{display:none}
+ html.svgnav #host{padding-top:0}
+ #host [data-nav]{cursor:pointer}
+ #host [data-nav].down{opacity:.6}
+ /* Меню шестерёнки: колонки, тема, вид разделов - кнопками в один экран. */
+ #navmenu{position:fixed;z-index:20;right:12px;top:64px;width:320px;max-width:calc(100vw - 24px);
+          box-sizing:border-box;padding:14px 14px 10px;border-radius:20px;display:none;
+          background:rgba(30,30,34,.94);color:#F2F2F4;box-shadow:0 12px 36px rgba(0,0,0,.45);
+          -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+          font-size:14px;line-height:1.2;max-height:calc(100vh - 80px);overflow-y:auto}
+ #navmenu.open{display:block}
+ #navmenu.lt{background:rgba(250,250,252,.95);color:#1C1C1E;box-shadow:0 12px 36px rgba(0,0,0,.18)}
+ #navmenu .mh{font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;
+              opacity:.55;margin:2px 4px 8px}
+ #navmenu .mrow{display:flex;flex-wrap:wrap;margin:0 0 12px}
+ #navmenu .mrow b{margin:0 6px 6px 0;padding:8px 12px;border-radius:12px;font-weight:600;cursor:pointer;
+                  background:rgba(255,255,255,.08)}
+ #navmenu.lt .mrow b{background:rgba(0,0,0,.06)}
+ #navmenu .mrow b.on{background:var(--macc,#E09B2D);color:var(--macc-ink,#1B1B1F)}
+ #navmenu .mrow.num b{min-width:20px;text-align:center;padding:8px 10px}
+ #navmenu .mlink{display:block;margin:2px 4px 4px;color:inherit;opacity:.7;text-decoration:underline;cursor:pointer}
  #host [data-tabbar]{visibility:hidden}
  body.warned{padding-top:38px}
  body.warned #back,body.warned #cols{top:42px}
@@ -354,6 +377,20 @@
           justify-content:center;cursor:pointer;touch-action:manipulation}
  #ov .lst .lchk i{width:22px;height:22px;border-radius:50%;box-sizing:border-box;
           border:2px solid rgba(255,255,255,.45);display:block}
+ /* Лист в линейку (1.42), как на плитке: квадратики, строки по линейкам,
+    поле слева. */
+ #ov .lst.sheet .lrow{background:none;border-radius:0;margin:0;
+          border-bottom:1px solid rgba(255,255,255,.12)}
+ #ov .lst.sheet .lchk i{border-radius:5px}
+ #ov .lst.sheet .lrow .ltxt{border-left:1px solid rgba(224,155,45,.4);padding-left:10px;
+          align-self:stretch;display:flex;align-items:center}
+ #ov.lt .lst.sheet .lrow{background:none;border-bottom-color:rgba(0,0,0,.1)}
+ /* значки предметов в окнах (1.42): кран, шайба датчика, листок календаря */
+ #ov .lst .wpic{display:block;margin:6px auto 0;color:rgba(255,255,255,.85)}
+ #ov.lt .lst .wpic{color:#3A3B40}
+ #ov .lst .wrow .wpuck{flex:0 0 34px;color:rgba(255,255,255,.75)}
+ #ov.lt .lst .wrow .wpuck{color:#55575E}
+ #ov .lst .lhead .calp{flex:0 0 auto;margin-right:10px;align-self:center}
  #ov .lst .done .lchk i{background:#E09B2D;border-color:#E09B2D}
  #ov .lst .ltxt{flex:1;min-width:0;color:#fff;font-size:16px;line-height:1.3;
           padding:8px 2px;word-wrap:break-word;overflow-wrap:anywhere;cursor:text}
@@ -377,6 +414,7 @@
     состояние; кнопка крана одна и крупная, чтобы не промахнуться мимо. */
  /* Окно расписания: время слева узкой колонкой, название и место
     правее. Идущее сейчас подсвечено, прошедшее бледное. */
+ #ov .lst + .lst{margin-top:14px}
  #ov .lst.agw .lhead{margin-top:10px}
  #ov .lst.agw .lhead:first-child{margin-top:2px}
  #ov .lst .agrow{display:flex;align-items:flex-start;min-height:44px;
@@ -411,7 +449,7 @@
  #ov .lst .wbtn{display:block;text-align:center;padding:16px;border-radius:16px;
           font-size:17px;font-weight:650;cursor:pointer;margin-top:10px;
           touch-action:manipulation}
- #ov .lst .wbtn.close{background:#C4553B;color:#fff}
+ #ov .lst .wbtn.shut{background:#C4553B;color:#fff}
  #ov .lst .wbtn.open{background:#2F7DC4;color:#fff}
  #ov .lst .wbtn.hot.open{background:#D9822B}
  #ov .lst .wbtn.reset{background:rgba(255,255,255,.12);color:#fff}
@@ -573,6 +611,7 @@
 </style></head><body>
 <a id="back" href="./">← Панели</a>
 <div id="cols"></div>
+<div id="navmenu"></div>
 <div id="host">загрузка…</div>
 <div id="err"></div>
 <div id="warn8080"></div>
@@ -681,6 +720,18 @@ function glassScroll(){
   var W = +(svg.getAttribute('viewBox') || '0 0 0 0').split(' ')[2] || 1;
   var r = svg.getBoundingClientRect(), k = (r.width || W) / W;
   g.setAttribute('gradientTransform', 'translate(0 ' + (-r.top / k).toFixed(1) + ')');
+  // Обои в картинке (линза под стеклом, 1.42) - ровно окно браузера: пятна
+  // под плиткой совпадают с неподвижным фоном страницы.
+  var wall = host.querySelector('[data-wall]');
+  if (wall) {
+    var vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight;
+    var x = (-r.left / k).toFixed(1), y = (-r.top / k).toFixed(1);
+    var w = (vw / k).toFixed(1), h = (vh / k).toFixed(1), rs = wall.querySelectorAll('rect');
+    for (var i = 0; i < rs.length; i++) {
+      rs[i].setAttribute('x', x); rs[i].setAttribute('y', y);
+      rs[i].setAttribute('width', w); rs[i].setAttribute('height', h);
+    }
+  }
 }
 window.addEventListener('scroll', function(){
   if (glassRaf) return;
@@ -837,6 +888,8 @@ function toggleSection(node){
 
 function Q(){
   var parts = [];
+  // кнопки страницы - в шапке картинки (1.44); витрине тем они не нужны
+  if (!DEMO) parts.push('nav=' + NAV_S);
   if (COLS) parts.push('cols=' + COLS);
   if (THEME) parts.push('theme=' + THEME);
   if (MODE) parts.push('mode=' + MODE);
@@ -929,8 +982,98 @@ function drawCols(){
   box.className = 'touched';
   setTimeout(function(){ box.className = ''; }, 1800);
 }
+/* ---------- кнопки в шапке (1.44) ----------
+   «Назад» - туда же, куда вела прежняя «← Панели» (с учётом from=).
+   Шестерёнка открывает меню: колонки, тема, вид разделов. Выбор
+   применяется сразу, меню остаётся открытым - видно, как стало; закрывает
+   его шестерёнка или нажатие мимо. */
+var menuOpen = false;
+/* Во сколько раз крупнее кнопки шапки: картинка ужата под экран (панель
+   на 4 колонки на телефоне - вдвое), а палец - нет. Считаем по последней
+   картинке; поменялось - перезапросим. */
+var NAV_S = (function(){ try { return localStorage.getItem('wb-panel-navs') || '1.0'; } catch(e) { return '1.0'; } })();
+function navScale(){
+  var svg = host.querySelector('svg');
+  if (!svg || !svg.getAttribute('viewBox')) return;
+  var W = +svg.getAttribute('viewBox').split(' ')[2] || 0, shown = svg.getBoundingClientRect().width;
+  if (!W || !shown) return;
+  var k = Math.min(1.6, Math.max(1, W / shown));
+  var want = (Math.round(k * 5) / 5).toFixed(1);
+  if (want === NAV_S) return;
+  NAV_S = want;
+  try { localStorage.setItem('wb-panel-navs', want); } catch(e) {}
+  refresh(true);
+}
+function navTap(e){
+  if (!tapOk()) return;
+  var what = this.getAttribute('data-nav');
+  if (what === 'back') { fixBack(); location.href = document.getElementById('back').href; return; }
+  if (what === 'menu') { menuOpen ? closeMenu() : openMenu(this); }
+  if (e && e.stopPropagation) e.stopPropagation();
+}
+function openMenu(anchor){
+  menuOpen = true;
+  var m = document.getElementById('navmenu');
+  var r = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
+  if (r) {
+    m.style.top = Math.max(8, Math.round(r.bottom + 8)) + 'px';
+    m.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+  }
+  drawMenu();
+  m.classList.add('open');
+}
+function closeMenu(){
+  menuOpen = false;
+  document.getElementById('navmenu').classList.remove('open');
+}
+function drawMenu(){
+  var m = document.getElementById('navmenu');
+  var th = rootTheme(), info = THEME_INFO[th] || {};
+  m.classList.toggle('lt', !!PAGE_BG[th] && !DARK_THEME[th]);
+  if (m.style.setProperty) {
+    m.style.setProperty('--macc', info.acc || '#E09B2D');
+    m.style.setProperty('--macc-ink', info.accInk || '#1B1B1F');
+  }
+  function row(cls, items, cur, attr){
+    var h = '<div class="mrow' + (cls ? ' ' + cls : '') + '">';
+    items.forEach(function(it){
+      h += '<b ' + attr + '="' + it[0] + '"' + (it[0] === cur ? ' class="on"' : '') + '>' + it[1] + '</b>';
+    });
+    return h + '</div>';
+  }
+  var cols = [['', 'авто']].concat(['2','3','4','5','6','7','8','9'].map(function(v){ return [v, v]; }));
+  var html = '<div class="mh">Плиток в ряд</div>' + row('num', cols, COLS, 'data-v')
+           + '<div class="mh">Тема</div>' + row('', THEMES, THEME, 'data-t');
+  if (HAS_SECTIONS) html += '<div class="mh">Разделы</div>' + row('', MODES, MODE, 'data-m');
+  html += '<a class="mlink" data-go="themes">все темы на витрине…</a>';
+  m.innerHTML = html;
+  var btns = m.querySelectorAll('[data-v],[data-t],[data-m],[data-go]');
+  for (var i = 0; i < btns.length; i++) btns[i].onclick = function(e){
+    e.stopPropagation();
+    if (this.hasAttribute('data-go')) { location.href = 'themes' + (THEME ? '?theme=' + THEME : ''); return; }
+    if (this.hasAttribute('data-t')) saveTheme(this.getAttribute('data-t'));
+    else if (this.hasAttribute('data-m')) { MODE = this.getAttribute('data-m'); saveFold(); }
+    else saveCols(this.getAttribute('data-v'));
+    drawCols();
+    drawMenu();
+    refresh();
+    restartPoll();
+  };
+}
+// Нажатие мимо меню закрывает его (и не доходит до плитки под ним).
+document.addEventListener('pointerdown', function(e){
+  if (!menuOpen) return;
+  var m = document.getElementById('navmenu');
+  for (var n = e.target; n; n = n.parentNode) {
+    if (n === m || (n.getAttribute && n.getAttribute('data-nav') === 'menu')) return;
+  }
+  closeMenu();
+  e.preventDefault(); e.stopPropagation();
+  shieldUntil = Date.now() + 350;
+}, true);
+
 var INTERACTIVE = __INTERACTIVE__;
-window.addEventListener('resize', function(){ if (DOCK) dockBar(); });
+window.addEventListener('resize', function(){ if (DOCK) dockBar(); if (!DEMO) navScale(); });
 var host = document.getElementById('host'), err = document.getElementById('err');
 var ov = document.getElementById('ov');
 var paused = false, press = null;
@@ -1456,6 +1599,9 @@ function chartOv(node){
 }
 
 function expand(node){
+  // Фанкойл (с 1.42): короткое нажатие открывает тот же пульт, что и долгое.
+  if(node.getAttribute('data-kind') === 'fancoil' && node.getAttribute('data-look') !== 'classic')
+    return padFancoil(node);
   var i = node.getAttribute('data-i');
   // 40 px - поля самого оверлея (18 с каждой стороны) плюс запас на
   // полосу прокрутки. Раньше просили 90% ширины и получали заметные
@@ -1816,11 +1962,174 @@ function padXY(node){
    приложении. Тянешь влево - значения растут. Ниже режимы, питание и
    скорость вентилятора. */
 function padAC(node){
-  // С 1.15 у кондиционера колесо как на плитке; фанкойл живёт со старой дугой.
-  // look: classic - прежний пульт со шкалой, как до 1.15.
-  if(node.getAttribute('data-kind') === 'ac' && node.getAttribute('data-look') !== 'classic')
-    return padDisk(node);
+  // С 1.15 у кондиционера колесо как на плитке; у фанкойла с 1.42 - его
+  // пульт крупно (ползунок, решётка, клавиши). look: classic - прежние.
+  if(node.getAttribute('data-look') !== 'classic'){
+    if(node.getAttribute('data-kind') === 'ac') return padDisk(node);
+    if(node.getAttribute('data-kind') === 'fancoil') return padFancoil(node);
+  }
   return padArc(node);
+}
+
+/* ---------- пульт фанкойла на весь экран (с 1.42) ----------
+   Картинку рисует сервер (плитка view=pad): шапка, режимы, ползунок,
+   решётка, табло, клавиши. Пульт двигает колпачок и сам рисует цифры
+   табло, пока ползунок тянут; нажатия - по data-z: back, power, mode, key. */
+var SEG7 = {'0':'abcdef','1':'bc','2':'abged','3':'abgcd','4':'fgbc','5':'afgcd',
+            '6':'afgedc','7':'abc','8':'abcdefg','9':'abcfgd','-':'g'};
+function sevenSegSvg(text, x, y, w, h, t, gap){
+  var hh = h / 2, k = t / 2, out = '';
+  function sk(p){ return (p[0] + (y + h - p[1]) * 0.1).toFixed(1) + ',' + p[1].toFixed(1); }
+  function hs(cx, cy){ return [[cx - w/2 + k, cy], [cx - w/2 + t, cy - k], [cx + w/2 - t, cy - k],
+                               [cx + w/2 - k, cy], [cx + w/2 - t, cy + k], [cx - w/2 + t, cy + k]]; }
+  function vs(cx, cy){ return [[cx, cy - hh/2 + k], [cx + k, cy - hh/2 + t], [cx + k, cy + hh/2 - t],
+                               [cx, cy + hh/2 - k], [cx - k, cy + hh/2 - t], [cx - k, cy - hh/2 + t]]; }
+  for(var i = 0; i < text.length; i++){
+    var ch = text.charAt(i);
+    if(ch === '.'){
+      out += '<circle cx="' + (x - gap / 2 + 1).toFixed(1) + '" cy="' + (y + h).toFixed(1) + '" r="' + (t * .62).toFixed(1) + '" class="fcp-ink"/>';
+      x += 5; continue;
+    }
+    var cx = x + w / 2, sh = {a: hs(cx, y), g: hs(cx, y + hh), d: hs(cx, y + h),
+      f: vs(x, y + hh / 2), b: vs(x + w, y + hh / 2), e: vs(x, y + hh * 1.5), c: vs(x + w, y + hh * 1.5)};
+    'abcdefg'.split('').forEach(function(n){
+      out += '<polygon points="' + sh[n].map(sk).join(' ') + '" class="' + ((SEG7[ch] || '').indexOf(n) >= 0 ? 'fcp-ink' : 'fcp-ghost') + '"/>';
+    });
+    x += w + gap;
+  }
+  return out;
+}
+function padFancoil(node){
+  var wrap = el('div', 'acscreen');
+  wrap.textContent = '…';
+  openOv([wrap]);
+  ov.classList.add('full');
+  var reloadT = null, busy = false, wired = false, G = null, D = null, gest = null;
+  var PADMAX = 722;
+  function size(){
+    var w = Math.max(240, Math.min(Math.round(window.innerWidth), PADMAX));
+    var h = Math.max(200, Math.min(Math.round(window.innerHeight), PADMAX));
+    var boxed = w < window.innerWidth - 1 || h < window.innerHeight - 1;
+    wrap.classList.toggle('boxed', boxed);
+    wrap.style.width = boxed ? w + 'px' : '';
+    wrap.style.height = boxed ? h + 'px' : '';
+    return [w, h];
+  }
+  function url(){
+    var sz = size();
+    return 'tile/' + encodeURIComponent(NAME) + '/' + node.getAttribute('data-i')
+         + '.svg?w=' + sz[0] + '&h=' + sz[1] + '&view=pad' + themeQ();
+  }
+  function load(){
+    if(busy){ schedule(800); return; }
+    fetch(url() + '&t=' + Date.now(), {cache: 'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(svg){
+        if(svg.indexOf('<svg') < 0) throw new Error('пустой ответ');
+        if(busy){ schedule(800); return; }
+        wrap.innerHTML = svg;
+        var root = wrap.querySelector('svg');
+        if(root){ root.setAttribute('width', '100%'); root.setAttribute('height', '100%'); }
+        wire();
+      })
+      .catch(function(e){ if(!G) wrap.textContent = 'Не удалось: ' + e.message; });
+  }
+  function schedule(ms){ clearTimeout(reloadT); reloadT = setTimeout(load, ms || 1500); }
+  var onResize = function(){ schedule(250); };
+  window.addEventListener('resize', onResize);
+  ovCleanup = function(){ window.removeEventListener('resize', onResize); clearTimeout(reloadT); ov.classList.remove('full'); };
+  load();
+
+  function num(a){ return parseFloat(G.getAttribute('data-' + a)); }
+  function wire(){
+    G = wrap.querySelector('[data-fcpad]');
+    if(!G) return;
+    D = {top: num('top'), bot: num('bot'), smin: num('smin'), smax: num('smax'), lo: num('lo'), hi: num('hi'),
+         step: num('step') || 0.5, cur: num('cur'), cap: num('cap'), t: num('target'),
+         seg: (G.getAttribute('data-seg') || '').split(',').map(parseFloat), on: G.getAttribute('data-on') === '1'};
+    if(!wired){ drag(wrap, move, done, begin); wired = true; }
+  }
+  function local(ev){
+    var pt = evPoint(ev), m = G && G.getScreenCTM();
+    if(!m) return {x: 0, y: 0};
+    var sp = G.ownerSVGElement.createSVGPoint();
+    sp.x = pt.clientX; sp.y = pt.clientY;
+    return sp.matrixTransform(m.inverse());
+  }
+  function closest(n, sel){
+    while(n && n.nodeType === 1){ if(n.matches ? n.matches(sel) : n.msMatchesSelector(sel)) return n; n = n.parentNode; }
+    return null;
+  }
+  function fy(t){ t = Math.max(D.smin, Math.min(D.smax, t)); return D.bot - (t - D.smin) * (D.bot - D.top) / ((D.smax - D.smin) || 1); }
+  function lcdText(t){ return isNaN(t) ? '--.-' : (t >= 99.95 ? String(Math.round(t)) : (Math.round(t * 2) / 2).toFixed(1)); }
+  function show(t){
+    var y = fy(t), capg = G.querySelector('.fcp-capg');
+    if(capg) capg.setAttribute('transform', 'translate(0 ' + (y - D.cap).toFixed(1) + ')');
+    var fill = G.querySelector('.fcp-fill');
+    if(fill && !isNaN(D.cur)){
+      fill.setAttribute('y', Math.min(D.cur, y).toFixed(1));
+      fill.setAttribute('height', Math.abs(D.cur - y).toFixed(1));
+    }
+    var lg = G.querySelector('.fcp-lcdbox .fcp-lcdg');
+    if(lg && D.seg.length === 6){
+      var old = lg.querySelectorAll('polygon, circle');
+      for(var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
+      var tmp = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      tmp.innerHTML = sevenSegSvg(lcdText(t), D.seg[0], D.seg[1], D.seg[2], D.seg[3], D.seg[4], D.seg[5]);
+      while(tmp.firstChild) lg.insertBefore(tmp.firstChild, lg.firstChild);
+    }
+  }
+  function valueAt(y){
+    var t = D.smin + (D.bot - y) * (D.smax - D.smin) / ((D.bot - D.top) || 1);
+    t = Math.max(D.lo, Math.min(D.hi, t));
+    return Math.round(t / D.step) * D.step;
+  }
+  function fail(e){ flash('Не удалось: ' + e.message); }
+  function begin(e){
+    if(!G) return;
+    busy = true;
+    var p = local(e), z = closest(e.target, '[data-z]');
+    gest = {zone: z ? z.getAttribute('data-z') : '', el: z, y0: p.y, moved: false, t: D.t};
+  }
+  function move(e){
+    if(!gest || !G) return;
+    var p = local(e);
+    if(Math.abs(p.y - gest.y0) > 4) gest.moved = true;
+    if(gest.zone === 'slider' && gest.moved){ gest.t = valueAt(p.y); show(gest.t); }
+  }
+  function done(){
+    busy = false;
+    var g = gest; gest = null;
+    if(!g || !G) return;
+    var power = node.getAttribute('data-topic');
+    if(g.zone === 'slider'){
+      if(!g.moved){ g.t = valueAt(g.y0); show(g.t); }
+      var tt = node.getAttribute('data-ac-target');
+      if(tt && !isNaN(g.t) && g.t !== D.t){ D.t = g.t; pub(tt, g.t).catch(fail); }
+      schedule(1500); return;
+    }
+    if(g.moved) return;
+    if(g.zone === 'back'){ closeOv(); return; }
+    if(g.zone === 'power'){
+      if(power) pub(power, D.on ? node.getAttribute('data-off') : node.getAttribute('data-on')).catch(fail);
+      schedule(700); return;
+    }
+    if(g.zone === 'mode'){
+      var mt = node.getAttribute('data-ac-mode'), jobs = [];
+      if(!D.on && power) jobs.push(pub(power, node.getAttribute('data-on')));
+      if(mt) jobs.push(pub(mt, g.el.getAttribute('data-v')));
+      Promise.all(jobs).catch(fail); schedule(700); return;
+    }
+    if(g.zone === 'key'){
+      var v = g.el.getAttribute('data-v'), ft = node.getAttribute('data-ac-fan'), js = [];
+      if(v === 'off'){ if(power && D.on) js.push(pub(power, node.getAttribute('data-off'))); }
+      else {
+        if(!D.on && power) js.push(pub(power, node.getAttribute('data-on')));
+        if(ft) js.push(pub(ft, v));
+      }
+      Promise.all(js).catch(fail); schedule(700); return;
+    }
+  }
 }
 
 /* ---------- пульт кондиционера на весь экран (с 1.16) ----------
@@ -2794,6 +3103,9 @@ function bind(root){
   // не включает и не выключает, это способ смотреть.
   var heads = within(root, '[data-headtap]');
   for (var hh = 0; hh < heads.length; hh++) heads[hh].onclick = showChrome;
+  var navs = within(root, '[data-nav]');
+  for (var nv = 0; nv < navs.length; nv++) navs[nv].onclick = navTap;
+  document.documentElement.classList.toggle('svgnav', !!host.querySelector('[data-nav]'));
   var folds = within(root, '[data-section]');
   for (var f = 0; f < folds.length; f++) {
     folds[f].onclick = function(){ if (tapOk()) toggleSection(this); };
@@ -2886,6 +3198,7 @@ function bind(root){
         else if(this.getAttribute('data-pad') === 'valve') openPad(this);
         // Расписание: смотреть, а не переключать - сразу окно.
         else if(this.getAttribute('data-pad') === 'agenda') openPad(this);
+        else if(this.getAttribute('data-pad') === 'today') openPad(this);
         else if(this.getAttribute('data-topic')) toggle(this);
       }
       press = null;
@@ -3681,10 +3994,18 @@ function padTVFlat(node){
    поменять с другого телефона, сценарием или быстрой командой. Строку
    ввода перерисовка не трогает - иначе набранное пропадало бы. */
 function padList(node){
+  var v = listView(node);
+  if(!v) return;
+  openOv([v.box]); v.start();
+  ovCleanup = v.stop;
+}
+/* Содержимое окна списка - отдельно от окна: его же ставит над
+   расписанием окно плитки «Сегодня» (1.43). */
+function listView(node){
   var name = node.getAttribute('data-list');
-  if(!name) return;
+  if(!name) return null;
   var url = 'api/list/' + encodeURIComponent(name);
-  var box = el('div','lst');
+  var box = el('div','lst sheet');
   var head = el('div','lhead'), ttl = el('div','lttl', node.getAttribute('data-title') || ''),
       cnt = el('div','lcnt');
   head.appendChild(ttl); head.appendChild(cnt);
@@ -3815,10 +4136,9 @@ function padList(node){
     return n + ' ' + w;
   }
 
-  openOv([box]);
-  load();
-  timer = setInterval(load, 3000);
-  ovCleanup = function(){ clearInterval(timer); };
+  return {box: box,
+          start: function(){ load(); timer = setInterval(load, 3000); },
+          stop: function(){ clearInterval(timer); }};
 }
 
 /* ---------- вода ----------
@@ -3855,6 +4175,7 @@ function padLeak(node){
       var p = item.split('|');
       var on = p[1] === '1', unknown = p[1] === '?';
       var r = el('div', 'wrow' + (on ? ' wet' : ''));
+      var pk = el('div'); pk.innerHTML = puckSvg(on); r.appendChild(pk.firstChild);
       r.appendChild(el('div','wname', p[0]));
       // Время - последнего сообщения датчика: у сработавшего это момент
       // срабатывания, у сухого - когда он последний раз отчитался.
@@ -3901,6 +4222,11 @@ function padLeak(node){
    переезжало на следующее событие без переоткрытия. Перерисовываем, только
    если строки поменялись: иначе прокрутка длинного дня прыгала бы. */
 function padAgenda(node){
+  var v = agendaView(node);
+  openOv([v.box]); v.start();
+  ovCleanup = v.stop;
+}
+function agendaView(node){
   var box = el('div','lst agw');
   var body = el('div');
   box.appendChild(body);
@@ -3919,6 +4245,12 @@ function padAgenda(node){
         if (any && !cnt) body.appendChild(el('div','agempty','Ничего не запланировано'));
         var h = el('div','lhead');
         var label = p[1] || '';
+        // Листок календаря у сегодняшнего дня (1.42), как на плитке.
+        if(!any){
+          var now = new Date(), pg = el('div');
+          pg.innerHTML = calPageSvg(now.getDate(), ['вс','пн','вт','ср','чт','пт','сб'][now.getDay()], 30);
+          h.appendChild(pg.firstChild);
+        }
         h.appendChild(el('div','lttl', label.charAt(0).toUpperCase() + label.slice(1)));
         body.appendChild(h);
         any = true; cnt = 0;
@@ -3945,18 +4277,67 @@ function padAgenda(node){
     if (any && !cnt) body.appendChild(el('div','agempty','Ничего не запланировано'));
     if (!any) body.appendChild(el('div','agempty','Календарь ещё не загружен'));
   }
-  draw();
-  var timer = setInterval(draw, 10000);
-  openOv([box]);
-  ovCleanup = function(){ clearInterval(timer); };
+  var timer = null;
+  return {box: box,
+          start: function(){ draw(); timer = setInterval(draw, 10000); },
+          stop: function(){ clearInterval(timer); }};
+}
+
+/* «Сегодня» (1.43): лист дел с галочками, под ним расписание - те же
+   окна, что у отдельных плиток, одно над другим. */
+function padToday(node){
+  var parts = [], views = [];
+  var lv = listView(node);
+  if(lv){ views.push(lv); parts.push(lv.box); }
+  if(node.getAttribute('data-agenda')){
+    var av = agendaView(node);
+    views.push(av); parts.push(av.box);
+  }
+  if(!parts.length) return;
+  openOv(parts);
+  views.forEach(function(v){ v.start(); });
+  ovCleanup = function(){ views.forEach(function(v){ v.stop(); }); };
+}
+
+/* Значки предметов для окон (1.42) - те же, что на плитках. */
+function faucetSvg(opened, color, size){
+  var k = size / 100, drop = opened
+    ? '<path d="M73.7,77C70,83 66.3,86.6 66.3,91.3a7.4,7.4 0 0 0 14.8,0C81.1,86.6 77.4,83 73.7,77z" fill="' + color + '" stroke="' + color + '" stroke-width="3"/>' : '';
+  var handle = opened
+    ? '<path d="M27.4,3H17A6,6 0 0 0 17,15H27.4M39.8,3H50A6,6 0 0 1 50,15H39.8"/>'
+    : '<rect x="26.4" y="2.2" width="14.4" height="13.6" rx="5"/>';
+  return '<svg class="wpic" width="' + Math.round(92 * k) + '" height="' + size + '" viewBox="-4 -2 92 102" fill="none" stroke="currentColor"'
+    + ' stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"' + (opened ? '' : ' opacity=".55"') + '>'
+    + '<rect x="1" y="28" width="10" height="38" rx="5"/>'
+    + '<path d="M11,32.4H20M11,48H20M47,32.4H64A19,19 0 0 1 83,51.4V60.5M47,48H56.6A7.8,7.8 0 0 1 64.4,55.8V60.5M30,15.6V25M37.2,15.6V25"/>'
+    + '<rect x="64.4" y="60.5" width="18.6" height="10.5" rx="1.5"/><rect x="20" y="25" width="27" height="30" rx="4"/>'
+    + handle + '<circle cx="33.6" cy="9" r="6.4"/>' + drop + '</svg>';
+}
+function puckSvg(wet){
+  return '<svg class="wpuck" width="34" height="24" viewBox="0 0 34 24">'
+    + (wet ? '<ellipse cx="17" cy="17" rx="16" ry="5" fill="#3B8FD4" opacity=".45"/>' : '')
+    + '<ellipse cx="17" cy="14" rx="12" ry="5" fill="currentColor" opacity=".55"/>'
+    + '<ellipse cx="17" cy="11" rx="12" ry="5" fill="currentColor"/>'
+    + '<circle cx="17" cy="11" r="1.8" fill="' + (wet ? '#FF5A4E' : '#2A2B30') + '">'
+    + (wet ? '<animate attributeName="opacity" values="1;.2;1" dur="1s" repeatCount="indefinite"/>' : '') + '</circle></svg>';
+}
+function calPageSvg(day, wd, s){
+  s = s || 30;
+  var acc = (THEME_INFO[rootTheme()] || {}).acc || '#E09B2D';
+  return '<svg class="calp" width="' + s + '" height="' + Math.round(s * 1.14) + '" viewBox="0 -4 30 36">'
+    + '<rect x="0" y="0" width="30" height="31.8" rx="5" fill="#F4F4F6" stroke="rgba(0,0,0,.12)"/>'
+    + '<path d="M0,5 a5,5 0 0 1 5,-5 h20 a5,5 0 0 1 5,5 v4 h-30z" fill="' + acc + '"/>'
+    + '<text x="15" y="7" font-size="6" font-weight="700" text-anchor="middle" fill="#fff">' + wd.toUpperCase() + '</text>'
+    + '<text x="15" y="26.4" font-size="15" font-weight="700" text-anchor="middle" fill="#1C1C1E">' + day + '</text>'
+    + '<rect x="6.6" y="-3" width="3" height="7" rx="1.5" fill="#8E8E93"/><rect x="20.4" y="-3" width="3" height="7" rx="1.5" fill="#8E8E93"/></svg>';
 }
 
 function padValve(node){
   var box = el('div','lst');
   var head = el('div','lhead'), ttl = el('div','lttl', node.getAttribute('data-title') || 'Кран');
   head.appendChild(ttl); box.appendChild(head);
-  var big = el('div','wbig'), sub = el('div','wsub'), act = el('div'), warn = el('div');
-  box.appendChild(big); box.appendChild(sub); box.appendChild(act); box.appendChild(warn);
+  var pic = el('div'), big = el('div','wbig'), sub = el('div','wsub'), act = el('div'), warn = el('div');
+  box.appendChild(pic); box.appendChild(big); box.appendChild(sub); box.appendChild(act); box.appendChild(warn);
   var hot = node.getAttribute('data-water') === 'hot';
   // Куда просили перевести кран: пока прибор не ответил, пишем «…ется».
   var want = null, wantUntil = 0;
@@ -3966,6 +4347,11 @@ function padValve(node){
     var opened = node.getAttribute('data-state') === '1';
     var alarm = node.getAttribute('data-alarm') === '1';
     if(want !== null && (want === opened || Date.now() > wantUntil)) want = null;
+    var picKey = (opened ? 1 : 0) + (hot ? 'h' : 'c');
+    if(pic.getAttribute('data-k') !== picKey){
+      pic.setAttribute('data-k', picKey);
+      pic.innerHTML = faucetSvg(opened, hot ? '#D9433C' : '#3B8FD4', 120);
+    }
     big.textContent = want === null ? (opened ? 'Открыт' : 'Перекрыт')
                                     : (want ? 'Открывается…' : 'Перекрывается…');
     var st = node.getAttribute('data-status') || '';
@@ -3975,7 +4361,9 @@ function padValve(node){
                     + (!opened && why ? ' · перекрыл датчик: ' + why
                        : (!opened && alarm ? ' · перекрыт из-за протечки' : ''));
     act.innerHTML = '';
-    var b = el('div', 'wbtn ' + (opened ? 'close' : 'open') + (hot ? ' hot' : '')
+    // не «close»: так зовётся круглая «назад» окна (#ov .close, 1.35), и
+    // кнопка уезжала к ней в угол
+    var b = el('div', 'wbtn ' + (opened ? 'shut' : 'open') + (hot ? ' hot' : '')
                     + (want !== null ? ' off' : ''),
                opened ? 'Перекрыть воду' : 'Открыть воду');
     b.onclick = function(){
@@ -4012,6 +4400,7 @@ function openPad(node){
   else if(pad==='leak') padLeak(node);
   else if(pad==='valve') padValve(node);
   else if(pad==='agenda') padAgenda(node);
+  else if(pad==='today') padToday(node);
 }
 
 /* ---------- обновление ---------- */
@@ -4149,6 +4538,7 @@ function applySvg(svg, seq){
   pageBg(root);
   dockBar();
   glassScroll();
+  if (!DEMO) setTimeout(navScale, 0);
   host.classList.remove('wait');
   err.style.display = 'none';
   if (AUTO_PAD) {

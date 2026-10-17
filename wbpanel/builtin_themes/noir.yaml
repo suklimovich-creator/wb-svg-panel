@@ -21,6 +21,13 @@ chart:
   power: "#2A2623"
   palette: ["#B0552E", "#466A85", "#2A2623", "#5A7A55", "#7A5E85", "#8C8780"]
 vars:
+  # карточки color: - выцветшие (1.43)
+  card-sage: "#D2D6C5"
+  card-mustard: "#E4D6B0"
+  card-terracotta: "#E4CDBE"
+  card-sky: "#CDD5DB"
+  card-lilac: "#D9CFD6"
+  card-sand: "#EAE2D3"
   bg-top: "#EFECE7"
   bg-bottom: "#E5E1DA"
   tile: "#E2DBD0"

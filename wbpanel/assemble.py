@@ -206,6 +206,14 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     style = palette.info(conf["theme"])
     form.use(style)                 # край колёс - для геометрии (form.py)
     inv_kind = conf.get("type") in style["inv_kinds"]
+    # Свой цвет карточки (с 1.43): color: sage и т. п. Шестнадцатеричный
+    # color у лампы - цвет света, не карточки: его не трогаем.
+    tint = conf.get("color")
+    tint = tint.strip().lower() if isinstance(tint, str) else None
+    if tint not in palette.TINT_NAMES:
+        tint = None
+    if tint == "dark":
+        inv_kind, tint = True, None
     if inv_kind:
         # Тёмная карточка графика: подписи считаем как для тёмной темы.
         conf["theme"] = "dark"
@@ -223,6 +231,7 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # если тема так делает.
     tile["inv"] = tile["kind"] not in INV_SKIP and (
         inv_kind or bool(style["card"] and tile.get("on")))
+    tile["tint"] = tint
 
     # Служебные поля реестра до шаблона доходить не должны.
     zones = tile.pop("_zones", None) or []
@@ -463,8 +472,14 @@ def tab_bar(sections, hidden, state, width, y, icons=None, labels=False):
     return tabs, plate, (current[0] if current else None), bar_h
 
 
+#: Кнопки страницы в шапке (с 1.44): круглая «назад» слева и шестерёнка
+#: справа - диаметр и промежуток до названия и часов.
+NAV_D = 36
+NAV_GAP = 10
+
+
 def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
-            closed=(), opened=None, mode=None):
+            closed=(), opened=None, mode=None, nav=False):
     big_cols = int(cols or panel_conf.get("cols", 4))
     interactive = bool(panel_conf.get("interactive",
                        (config.get("interactive", False) if config else False)))
@@ -617,13 +632,18 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
     # Без связи справа ещё «· нет связи с MQTT» - чипы отходят левее.
     # С 1.35 часы крупнее и с датой под ними: чипы - левее их блока.
     clock_w = clock_width(state.connected)
+    # Кнопки страницы в шапке (1.44): слева «назад», справа шестерёнка -
+    # название и часы отходят на их ширину.
+    nav_r = round(NAV_D / 2.0 * float(nav), 1) if nav else 0
+    nav_w = (nav_r * 2 + NAV_GAP) if nav else 0
     # Во вкладках чипы открытого раздела - в шапке, рядом с чипами панели:
     # своего заголовка у раздела нет.
     top_chips = place_chips(build_status(panel_conf, state)
                             + list(tab_open["chips"] if tab_open else []),
-                            width - PAD - clock_w, 20 + head_dy,
-                            left=PAD + (34 if head_icon else 0)
+                            width - PAD - clock_w - nav_w, 20 + head_dy,
+                            left=PAD + nav_w + (34 if head_icon else 0)
                             + text_width(title, 26) * 1.1 + 14 if title else None)
     return out, width, height, headers, top_chips, {
         "mode": mode, "tabs": tabs, "tab_plate": tab_plate, "dock": dock,
-        "title": title, "head_icon": head_icon, "head_dy": head_dy}
+        "title": title, "head_icon": head_icon, "head_dy": head_dy,
+        "nav_w": nav_w, "nav_r": nav_r}

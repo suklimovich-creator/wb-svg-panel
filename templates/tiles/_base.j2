@@ -31,7 +31,10 @@
   .depth-glass .chip.on { fill: var(--glass-on); }
   .depth-glass .tabbar { fill: var(--glass-tint); }
   .glass-fill { fill: url(#{{ uid }}glass); }
-  .glass-rim  { fill: none; stroke: url(#{{ uid }}glass-rim); stroke-width: 1.2; }
+  .glass-rim  { fill: none; stroke: url(#{{ uid }}glass-rim); stroke-width: 1.4; }
+  /* волосяной контур снаружи: на светлых обоях белый блик сам по себе не
+     отделяет плитку от фона (1.43) */
+  .glass-edge { fill: none; stroke: var(--glass-edge); stroke-width: 1; }
 
 
   /* ---- тёмная карточка (inv) ----------------------------------------
@@ -104,12 +107,13 @@
   .graphite .tick.major { opacity: .12; }
 
   /* ---- типографика ------------------------------------------------------ */
-  .h1     { font-size: calc(26px * var(--fs)); font-weight: 700; letter-spacing: -.6px; fill: var(--ink); }
-  .h1-sub { font-size: calc(13px * var(--fs)); font-weight: 500; fill: var(--ink-faint); }
-  .clock  { font-size: calc(24px * var(--fs)); font-weight: 600; fill: var(--ink-dim);
+  /* шапка и разделы лежат на поле страницы - его цветами (1.43) */
+  .h1     { font-size: calc(26px * var(--fs)); font-weight: 700; letter-spacing: -.6px; fill: var(--page-ink); }
+  .h1-sub { font-size: calc(13px * var(--fs)); font-weight: 500; fill: var(--page-faint); }
+  .clock  { font-size: calc(24px * var(--fs)); font-weight: 600; fill: var(--page-dim);
             letter-spacing: -.3px; font-variant-numeric: tabular-nums; }
-  .h1-sub.date { font-size: calc(12px * var(--fs)); fill: var(--ink-dim); opacity: .85; }
-  .h2     { font-size: calc(18px * var(--fs)); font-weight: 650; letter-spacing: -.3px; fill: var(--ink); }
+  .h1-sub.date { font-size: calc(12px * var(--fs)); fill: var(--page-dim); opacity: .85; }
+  .h2     { font-size: calc(18px * var(--fs)); font-weight: 650; letter-spacing: -.3px; fill: var(--page-ink); }
   /* подложка заголовка раздела: подсказывает, что по строке можно нажать */
   /* Полоса раздела (заголовок в гармошке). Цвет и плотность - из темы:
      при общей прозрачности .35 в нуаре и графите полоса сливалась с фоном. */
@@ -119,7 +123,7 @@
      подложка цвета плитки, пилюли, открытая залита цветом включённого */
   .tabbar     { fill: var(--tile); }
   .tabbar-line { fill: var(--ink); opacity: .10; }
-  .h1-ic      { color: var(--ink); }
+  .h1-ic      { color: var(--page-ink); }
   .tab-pill   { fill: var(--ac-pill); }
   .tab.on .tab-pill { fill: var(--ac-pill-on); }
   .tab-ic     { color: var(--ink); }
@@ -129,7 +133,11 @@
   .tab-t      { font-size: calc(12px * var(--fs)); font-weight: 600; fill: var(--ink); }
   .tab.on .tab-t { fill: var(--ac-pill-ink); }
   .tab-alarm  { fill: #C4553B; }
-  .fold-arrow { fill: none; stroke: var(--ink-dim);
+  /* кнопки страницы в шапке (1.44): кружки как чипы, значок - цветом их текста */
+  .nav        { cursor: pointer; }
+  .nav-ic     { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .nav-ic.thin { stroke-width: 1.7; }
+  .fold-arrow { fill: none; stroke: var(--page-dim);
                 stroke-width: calc(2px * var(--fs));
                 stroke-linecap: round; stroke-linejoin: round; }
   .name   { font-size: calc(15px * var(--fs));   font-weight: 500; fill: var(--ink); }
@@ -263,6 +271,7 @@
   /* лист в линейку, листок календаря, кран, датчик протечки (1.41) */
   .li-rule   { stroke: var(--ink-faint); stroke-width: .8; opacity: .55; }
   .li-margin { stroke: var(--active); stroke-width: 1; opacity: .35; }
+  .td-div    { stroke: var(--active); stroke-width: 1.2; opacity: .45; stroke-dasharray: 2 4; stroke-linecap: round; }
   .li-box    { fill: none; stroke: var(--ink-dim); stroke-width: 1.4; }
   .li-empty  { fill: var(--ink-faint); font-weight: 500; }
   .calp-page { fill: var(--key-hi); stroke: var(--edge); stroke-width: .8; }
@@ -280,9 +289,11 @@
   .vlv-cap   { fill: var(--key-hi); stroke: var(--key-side); stroke-width: .8; }
   .vlv-lever-hl { stroke: #FFFFFF; stroke-opacity: .45; stroke-width: 1.4; stroke-linecap: round; }
   .vlv.nodata .vlv-lever { fill: var(--ink-faint); }
-  .fct > *   { fill: none; stroke: var(--stroke); stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
-  .fct.shut > * { stroke: var(--ink-dim); }
-  .fct > .fct-drop { stroke-width: 3; }
+  /* свойства - группе, дети наследуют: знак «больше» в стилях ломал
+     разбор панели как XML-картинки (1.43) */
+  .fct       { fill: none; stroke: var(--stroke); stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
+  .fct.shut  { stroke: var(--ink-dim); }
+  .fct .fct-drop { stroke-width: 3; }
   .puck-side { fill: var(--key-side); }
   .puck-top  { fill: url(#{{ uid }}metal); stroke: var(--key-side); stroke-width: .6; }
   .puck-hl   { fill: #FFFFFF; opacity: .35; }
@@ -298,6 +309,16 @@
   /* Протечка: красная во всю плитку, видно с другого конца коридора.
      Цвет один в обеих темах - тревога не должна зависеть от оформления. */
   .plate.alarm   { fill: #C4553B; stroke: #C4553B; }
+  /* Свой цвет карточки (color: у плитки, 1.43). Переменная --tile - для
+     вырезов внутри плитки (в браузере), правило у .plate - для плоской
+     подстановки, где переменных нет. Включённая, тревога и сработавшая
+     сцена - как обычно. */
+  {% for c in PAL.TINTS %}
+  .tint-{{ c }} { --tile: var(--card-{{ c }}); }
+  .tint-{{ c }}:not(.fired) .plate:not(.on):not(.alarm) { fill: var(--card-{{ c }}); }
+  .glass-tint-{{ c }} { fill: var(--card-{{ c }}); opacity: .45; }
+  {% endfor %}
+  .depth-glass .tint .plate:not(.on):not(.alarm) { fill: transparent; }
   /* Перекрытый кран: красная рамка. Открытый - норма и рамки не имеет. */
   .plate.closed  { stroke: #C4553B; stroke-width: var(--active-w); }
   .valve-mark    { font-size: calc(12px * var(--fs)); font-weight: 650;

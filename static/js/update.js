@@ -46,6 +46,7 @@ var shownHead = null, shownParts = null, shownSvg = null, patchWhy = '', perfMer
 /* Части - куски текста ответа (TEXT_PARTS) или, если резка однажды не
    сошлась с разбором браузера, сериализованные узлы, как до 1.48. */
 var TEXT_PARTS = true;
+var SVG_NS = 'http://www.w3.org/2000/svg';
 var PART_OPEN = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">';
 /* Плитки с мгновенным откликом: индекс -> до какого времени не трогать.
    Пока прибор не ответил, сервер присылает плитку в прежнем виде, и без
@@ -130,9 +131,22 @@ function splitMain(t, at){
     i = gt + 1;
   }
 }
-/* Несколько частей - одним маленьким документом. */
-function parseParts(list){
+/* Несколько частей - одним маленьким документом. Сначала разбором HTML
+   прямо в контексте главной группы (createContextualFragment, 1.48): узлы
+   сразу в этом документе, копировать их importNode не нужно - вдвое
+   быстрее. Не вышло (старый браузер, не те узлы) - разбором XML. */
+var HTML_PARTS = !!(document.createRange && window.Range && Range.prototype.createContextualFragment);
+function parseParts(list, cg){
   if (!list.length) return [];
+  if (HTML_PARTS && cg) {
+    try {
+      var r = document.createRange();
+      r.selectNodeContents(cg);
+      var got = kids(r.createContextualFragment(list.join('')));
+      if (got.length === list.length && got[0].namespaceURI === SVG_NS) { got.local = true; return got; }
+    } catch (e) {}
+    HTML_PARTS = false;
+  }
   var doc = XP.parseFromString(PART_OPEN + list.join('') + '</svg>', 'image/svg+xml');
   if (!doc || !doc.documentElement || doc.getElementsByTagName('parsererror').length) return null;
   var k = kids(doc.documentElement);
@@ -190,7 +204,7 @@ function sync(strs, nodesFor, cg){
       if (holds[plan[q]]) newHolds[q] = holds[plan[q]];
       cursor = nextEl(ck[plan[q]]);
     } else {
-      var node = document.importNode(fresh[f++], true);
+      var node = fresh.local ? fresh[f++] : document.importNode(fresh[f++], true);
       cg.insertBefore(node, cursor);
       added.push(node);
     }
@@ -198,7 +212,8 @@ function sync(strs, nodesFor, cg){
   shownParts = strs;
   holds = newHolds;
   if (!same) perfMerged++;
-  for (var b = 0; b < added.length; b++) bind(added[b]);
+  for (var b = 0; b < added.length; b++) bind(added[b], true);
+  if (added.length) bindPanel();
   return true;
 }
 
@@ -216,7 +231,7 @@ function patchText(svg, at, headRaw){
   var ok = sync(strs, function(need){
     var list = [];
     for (var i = 0; i < need.length; i++) list.push(strs[need[i]]);
-    return parseParts(list);
+    return parseParts(list, cg);
   }, cg);
   if (!ok) { patchWhy = 'не разобрать часть'; return false; }
   var sz = sizeOfHead(headRaw);

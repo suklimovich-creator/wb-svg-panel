@@ -52,19 +52,11 @@ function within(root, sel){
   return out;
 }
 
-function bind(root){
-  root = root || host;
-  // Заголовки разделов работают и без interactive: сворачивание ничего
-  // не включает и не выключает, это способ смотреть.
-  var heads = within(root, '[data-headtap]');
-  for (var hh = 0; hh < heads.length; hh++) heads[hh].onclick = showChrome;
-  var navs = within(root, '[data-nav]');
-  for (var nv = 0; nv < navs.length; nv++) navs[nv].onclick = navTap;
+/* Что видно по всей панели: кнопки шапки, вид разделов. После точечной
+   замены - один раз на все новые части, а не на каждую (1.48): поиск по
+   всей картинке на старом планшете стоит миллисекунды. */
+function bindPanel(){
   document.documentElement.classList.toggle('svgnav', !!host.querySelector('[data-nav]'));
-  var folds = within(root, '[data-section]');
-  for (var f = 0; f < folds.length; f++) {
-    folds[f].onclick = function(){ if (tapOk()) toggleSection(this); };
-  }
   // Вид разделов узнаём по разметке после каждой замены: точечная замена
   // тоже может принести другой ряд вкладок.
   SECT_MODE = host.querySelector('[data-tab="1"]') ? 'tabs'
@@ -72,6 +64,21 @@ function bind(root){
   var had = HAS_SECTIONS;
   HAS_SECTIONS = host.querySelector('[data-section]') !== null || MODE !== '';
   if (had !== HAS_SECTIONS && !colsOpen) drawCols();
+}
+/* partOnly - только обработчики внутри root, без bindPanel(). */
+function bind(root, partOnly){
+  root = root || host;
+  // Заголовки разделов работают и без interactive: сворачивание ничего
+  // не включает и не выключает, это способ смотреть.
+  var heads = within(root, '[data-headtap]');
+  for (var hh = 0; hh < heads.length; hh++) heads[hh].onclick = showChrome;
+  var navs = within(root, '[data-nav]');
+  for (var nv = 0; nv < navs.length; nv++) navs[nv].onclick = navTap;
+  var folds = within(root, '[data-section]');
+  for (var f = 0; f < folds.length; f++) {
+    folds[f].onclick = function(){ if (tapOk()) toggleSection(this); };
+  }
+  if (!partOnly) bindPanel();
 
   if(!INTERACTIVE) return;
   var nodes = within(root, '[data-topic],[data-expand],[data-pad],[data-href],[data-chart]');

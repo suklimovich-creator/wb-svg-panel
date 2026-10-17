@@ -190,9 +190,11 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       await p.waitForTimeout(1800);
       const st = await p.evaluate(() => fetch(svgUrl(Q()).replace(/have=[^&]*&/, ''), {cache: 'no-store'})
         .then(r => r.text()).then(t => {
-          const fresh = partsOf(mainOf(parseSvg(t)));
+          // часы живые: минута может смениться между ответами
+          const live = a => a.filter(x => !/class="(clock|h1-sub date)"/.test(x));
+          const fresh = live(partsOf(mainOf(parseSvg(t))));
           const root = parseSvg(t), cur = document.querySelector('#host svg');
-          const shown = partsOf(mainOf(cur));
+          const shown = live(partsOf(mainOf(cur)));
           return {merged: perfMerged, n: shown.length, same: fresh.join('') === shown.join('')
             && root.getAttribute('viewBox') === cur.getAttribute('viewBox')
             && root.getAttribute('height') === cur.getAttribute('height')};
@@ -202,7 +204,7 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
         ({lean: r.headers.get('X-Panel-Lean'), h: r.headers.get('X-Panel-Height'),
           shown: document.querySelector('#host svg').getAttribute('height')})));
       st.lean = lean.lean === '1' && lean.h === lean.shown;
-      st.text = await p.evaluate(() => TEXT_PARTS);
+      st.text = await p.evaluate(() => TEXT_PARTS && HTML_PARTS);
       ok('свёртка раздела без полной замены', st.merged > before.merged && st.same && st.lean && st.text && st.n !== before.n,
          JSON.stringify([before, st]));
       await p.evaluate(() => { MODE = ''; FOLDED = []; saveFold(); });

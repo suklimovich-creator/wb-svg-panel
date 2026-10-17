@@ -547,7 +547,7 @@ function perfDraw(){
     + '\nверсия панели ' + APP + (LITE ? ' · облегчённо' + (LITE_MODE === 'auto' ? ' (авто)' : '') : '')
     + ' · тема ' + (rootTheme() || '?')
     + '\nобновление: разбор+вставка ' + perfStat(perfS.apply) + ' (медиана / худшее)'
-    + '\n  точечно ' + perfS.patched + ' (со сдвигом ' + perfMerged + (TEXT_PARTS ? '' : ', через разбор') + '), целиком ' + perfS.full + perfWhyText()
+    + '\n  точечно ' + perfS.patched + ' (со сдвигом ' + perfMerged + (TEXT_PARTS ? (HTML_PARTS ? '' : ', части XML') : ', через разбор') + '), целиком ' + perfS.full + perfWhyText()
     + ', без головы ' + perfS.lean
     + ', последнее ' + Math.round(perfS.bytes / 1024) + ' КБ'
     + '\nпрокрутка: кадр ' + perfStat(perfS.frames) + (perfS.frames.length ? '' : ' — полистайте панель');

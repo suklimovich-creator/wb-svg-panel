@@ -105,13 +105,16 @@ def render_panel(name, cols=None):
     # его рядом с числом колонок.
     closed = [p for p in (request.args.get("closed") or "").split(",") if p]
     opened = request.args.get("open") or None
+    # Вид разделов на этом устройстве (с 1.36): list, accordion или tabs.
+    # Нет - как в конфиге панели.
+    mode = request.args.get("mode") or None
 
     theme = panel_theme(panel_conf)
     # Тема нужна и сборке: подписи графиков красятся под цвет подложки.
     panel_conf = dict(panel_conf, theme=theme)
-    tiles, width, height, headers, top_chips = prepare(
+    tiles, width, height, headers, top_chips, sect = prepare(
         panel_conf, st, hist, cols=cols, all_panels=all_panels,
-        name=name, closed=closed, opened=opened)
+        name=name, closed=closed, opened=opened, mode=mode)
     template = _template(panel_conf.get("template", "panel.svg.j2"))
     return template.render(
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
@@ -121,7 +124,13 @@ def render_panel(name, cols=None):
         tiles=tiles,
         headers=headers,
         top_chips=top_chips,
-        accordion=bool(panel_conf.get("accordion")),
+        accordion=sect["mode"] == "accordion",
+        section_mode=sect["mode"],
+        tabs=sect["tabs"],
+        tab_plate=sect["tab_plate"],
+        tab_dock=sect["dock"],
+        head_icon=sect["head_icon"],
+        head_dy=sect["head_dy"],
         plate_sections=bool(panel_conf.get("section_plate",
                                            config.get("section_plate", True))),
         width=width,
@@ -129,7 +138,7 @@ def render_panel(name, cols=None):
         rx=palette.info(theme)["radius"],
         theme=theme,
         shadows=bool(panel_conf.get("shadows", config.get("shadows", True))),
-        title=panel_conf.get("title", ""),
+        title=sect["title"] if sect["mode"] == "tabs" else panel_conf.get("title", ""),
         updated=clock_now()[0],
         today=clock_now()[1],
         connected=st.connected,
@@ -591,10 +600,11 @@ def _refresh_every():
 def _panel_args(name, cols):
     closed = tuple(p for p in (request.args.get("closed") or "").split(",") if p)
     opened = request.args.get("open") or None
+    mode = request.args.get("mode") or None
     flat = request.args.get("flat") not in ("0", "false", "no")
     asked = request.args.get("theme")
     theme = asked if asked and palette.exists(asked) else None
-    return closed, opened, flat, theme
+    return closed, opened, flat, theme, mode
 
 
 def panel_version(name):
@@ -615,11 +625,11 @@ def cached_panel(name, cols):
     её старой версией: страница увидит, что отстала, и спросит снова через
     секунду. Так пачка изменений даёт одну отрисовку, а не десять.
     """
-    closed, opened, flat, _asked = _panel_args(name, cols)
+    closed, opened, flat, _asked, mode = _panel_args(name, cols)
     # В ключе - тема, которая получится на самом деле: у theme: auto она
     # меняется на закате, и кэш не должен отдать дневную картинку ночью.
     theme = panel_theme(config.panels.get(name) or {})
-    base = (name, cols, closed, opened, flat, theme, getattr(config, "_mtime", 0),
+    base = (name, cols, closed, opened, mode, flat, theme, getattr(config, "_mtime", 0),
             palette.version())
     bucket = int(time.time() // _refresh_every())
     with _RENDER_LOCK:

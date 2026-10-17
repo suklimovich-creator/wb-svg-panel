@@ -272,6 +272,10 @@ class Valve(Tile):
             "water": water_kind if water_kind in WATER_COLOR else "cold",
             "water_color": WATER_COLOR.get(water_kind, WATER_COLOR["cold"]),
             "icon": ctx.opt("icon", "tap"),
+            # look: ball (с 1.41) - шаровой кран рисунком вместо значка
+            "ball": str(ctx.opt("look") or "") == "ball",
+            # свой значок у плитки - вместо рисунка крана
+            "icon_set": bool(ctx.conf.get("icon")) if hasattr(ctx, "conf") else False,
             "status": status,
             "always_status": True,
             "who": who,

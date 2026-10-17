@@ -81,6 +81,8 @@ max 65535, и шкалу по нему не построить. Сам приб�
         4: {title: "стоит", off: true}
 """
 
+import math
+
 from .geometry import _fmt, text_width
 from .registry import Tile, Zone, tile
 from .tiles import DIAL_START, DIAL_SWEEP, dial_arc, dial_point
@@ -90,10 +92,10 @@ from .tiles import DIAL_START, DIAL_SWEEP, dial_arc, dial_point
 #: valve - участвует ли в режиме клапан (в вентиляции он закрыт всегда),
 #: cool - дуга красится синим: прибору идти вниз, а не вверх.
 FANCOIL_MODES = (
-    (0, {"title": "Охлаждение", "icon": "snow", "verb": "Охлаждает",
+    (0, {"title": "Охлаждение", "short": "холод", "icon": "snow", "verb": "Охлаждает",
          "cool": True}),
-    (1, {"title": "Нагрев", "icon": "heat", "verb": "Греет"}),
-    (2, {"title": "Вентиляция", "icon": "fan", "verb": "Продув",
+    (1, {"title": "Нагрев", "short": "тепло", "icon": "heat", "verb": "Греет"}),
+    (2, {"title": "Вентиляция", "short": "обдув", "icon": "fan", "verb": "Продув",
          "valve": False}),
 )
 
@@ -230,6 +232,206 @@ def build_gauge(width, height, lo, hi, current, target, cx):
     return out
 
 
+# ---------------------------------------------------------------------------
+# Фанкойл «пультом» (с 1.37) - широкая плитка как настенный прибор.
+#
+# Слева ползунок-фейдер уставки: колпачок стоит на уставке, в прорези цветом
+# режима залито «сейчас -> уставка». В середине квадратная решётка, за ней
+# пропеллер (крутится, пока крутится вентилятор), под ней табло с уставкой
+# сегментными цифрами. Справа «сейчас», клавиши скорости как у старого
+# вентилятора (нажатая утоплена, её светодиод горит; «0» - выключен), внизу
+# режим и клапан. Рисуется в своей рамке 354×170 и масштабируется в плитку.
+# ---------------------------------------------------------------------------
+
+PANEL_W, PANEL_H = 354.0, 170.0
+SLIDER_X, SLIDER_TOP, SLIDER_BOT = 46.0, 22.0, 148.0
+GRILLE_W, RIGHT_X = 90.0, 202.0
+GRILLE_X = round((SLIDER_X + 20 + RIGHT_X - 10) / 2 - GRILLE_W / 2)
+
+#: Сегменты цифр табло: какие горят у какой цифры.
+SEG = {"0": "abcdef", "1": "bc", "2": "abged", "3": "abgcd", "4": "fgbc", "5": "afgcd",
+       "6": "afgedc", "7": "abc", "8": "abcdefg", "9": "abcfgd", "-": "g"}
+
+
+def seven_seg(text, x, y, w, h, t, gap):
+    """
+    Сегментные цифры, как на табло настенного термостата: все семь сегментов
+    каждой цифры, у каждого - горит ли. Незажжённые рисуются бледно - так
+    табло выглядит табло. Наклон - как у настоящих индикаторов.
+    """
+    hh, k = h / 2.0, t / 2.0
+    polys, dots = [], []
+
+    def sk(p):
+        return "%.1f,%.1f" % (p[0] + (y + h - p[1]) * 0.1, p[1])
+
+    def hs(cx, cy):
+        return [(cx - w / 2 + k, cy), (cx - w / 2 + t, cy - k), (cx + w / 2 - t, cy - k),
+                (cx + w / 2 - k, cy), (cx + w / 2 - t, cy + k), (cx - w / 2 + t, cy + k)]
+
+    def vs(cx, cy):
+        return [(cx, cy - hh / 2 + k), (cx + k, cy - hh / 2 + t), (cx + k, cy + hh / 2 - t),
+                (cx, cy + hh / 2 - k), (cx - k, cy + hh / 2 - t), (cx - k, cy - hh / 2 + t)]
+
+    for ch in text:
+        if ch == ".":
+            dots.append({"x": round(x - gap / 2.0 + 1, 1), "y": round(y + h, 1), "r": round(t * .62, 1)})
+            x += 5
+            continue
+        cx = x + w / 2.0
+        shapes = {"a": hs(cx, y), "g": hs(cx, y + hh), "d": hs(cx, y + h),
+                  "f": vs(x, y + hh / 2), "b": vs(x + w, y + hh / 2),
+                  "e": vs(x, y + hh * 1.5), "c": vs(x + w, y + hh * 1.5)}
+        for name in "abcdefg":
+            polys.append({"p": " ".join(sk(q) for q in shapes[name]),
+                          "on": name in SEG.get(ch, "")})
+        x += w + gap
+    return polys, dots
+
+
+def _fc_blade(cx, cy, r, base):
+    def p(rr, d):
+        a = base + d
+        return "%.1f,%.1f" % (cx + rr * math.cos(a), cy + rr * math.sin(a))
+    return "M%s Q%s %s Q%s %sZ" % (p(8, -0.25), p(r * 0.8, -0.1), p(r, 0.4), p(r * 0.6, 0.85), p(8, 0.6))
+
+
+def lcd_text(target):
+    """Строка табло: уставка с шагом 0.5, «--.-» без данных."""
+    if target is None:
+        return "--.-"
+    if float(target) >= 99.95:
+        return "%.0f" % float(target)
+    return "%.1f" % (round(float(target) * 2) / 2.0)
+
+
+def lcd_block(x, y, w, h, target, dh_max, level=None, auto=False, deg=True):
+    """
+    Табло уставки в рамке x, y, w, h: сегментные цифры по центру рамки и «°C».
+    Высота цифр - по высоте рамки, но не больше dh_max и не шире рамки: три
+    цифры, точка, наклон и «°C» должны поместиться внутри стекла с полями.
+    level - столбики вентилятора справа (как на табло BAC-1000), None - без них.
+    """
+    bars = 18.0 if level is not None else 0.0
+    unit = 15.0 if deg else 0.0
+    room = w - 16 - unit - bars                       # поля по 8 от рамки
+    # ширина надписи: 3 цифры по 0.52 dh, два зазора, точка, наклон 0.1 dh
+    dh = min(h - 16, dh_max, (room - 13) / 1.66)
+    dw, gap = dh * 0.52, max(3.0, dh * 0.14)
+    tw = 3 * dw + 2 * gap + 5 + dh * 0.1
+    x0 = x + 8 + (room - tw) / 2.0
+    y0 = y + (h - dh) / 2.0
+    polys, dots = seven_seg(lcd_text(target), x0, y0, dw, dh, max(2.2, dh * 0.11), gap)
+    out = {"x": x, "y": y, "w": w, "h": h, "polys": polys, "dots": dots,
+           "cx": round(x0 + tw + 2, 1), "cy": round(y0 + 8, 1), "deg": deg, "bars": []}
+    if level is not None:
+        bx = x + w - 8 - bars + 2
+        for i in range(3):
+            bh = dh * (0.4 + 0.3 * i)
+            out["bars"].append({"x": round(bx + i * 5.5, 1), "y": round(y0 + dh - bh, 1),
+                                "w": 3.6, "h": round(bh, 1), "on": i < level})
+        out["auto"] = {"x": round(bx + 7.3, 1), "y": round(y0 + 6, 1)} if auto else None
+    return out
+
+
+def grille_block(x, y, w, level, spin):
+    """Квадратная решётка с пропеллером за ней."""
+    cx, cy, r = x + w / 2.0, y + w / 2.0, w / 2.0 - 8
+    pitch = (w - 8) / 8.0
+    return {"x": x, "y": y, "w": w, "cx": cx, "cy": cy,
+            "slats": [round(y + 6 + i * pitch, 1) for i in range(8)],
+            "blades": [_fc_blade(cx, cy, r, math.radians(i * 72)) for i in range(5)],
+            "hub": round(w * 0.1, 1), "spin": spin,
+            "dur": {1: 2.4, 2: 1.3, 3: 0.7}.get(level, 1.3)}
+
+
+def slider_block(sx, top, bot, lo, hi, current, target, power, labels=True):
+    """Ползунок уставки: деления, прорезь, заливка факт -> уставка, колпачок."""
+    lo, hi = float(lo), float(hi)
+    span = (hi - lo) or 1.0
+
+    def fy(t):
+        t = max(lo, min(hi, float(t)))
+        return bot - (t - lo) * (bot - top) / span
+
+    ticks = []
+    t = int(math.ceil(lo))
+    while t <= hi:
+        major = t % 2 == 0
+        ticks.append({"x1": sx - (22 if major else 18), "x2": sx - 12, "y": round(fy(t), 1),
+                      "major": major, "label": t if labels and t % 4 == 0 else None})
+        t += 1
+    cap_y = round(fy(target if target is not None else (lo + hi) / 2.0), 1)
+    cur_y = round(fy(current), 1) if current is not None else None
+    fill = None
+    if power and cur_y is not None and target is not None and abs(cur_y - cap_y) > 1:
+        fill = {"y": min(cur_y, cap_y), "h": round(abs(cur_y - cap_y), 1)}
+    return {"sx": sx, "ticks": ticks, "slot_y": top - 8, "slot_h": bot - top + 16,
+            "cap_y": cap_y, "cur_y": cur_y, "fill": fill}
+
+
+def build_panel(lo, hi, current, target, power, tone, level, keys, mode, valve, spinning, spin):
+    """Всё для широкой плитки-пульта в рамке 354×170 (см. выше)."""
+    out = slider_block(SLIDER_X, SLIDER_TOP, SLIDER_BOT, lo, hi, current, target, power)
+    gx, gy, gw = GRILLE_X, 12.0, GRILLE_W
+    wy = gy + gw + 8
+    n = len(keys)
+    kgap = 6.0
+    kw = (PANEL_W - 14 - RIGHT_X - kgap * (n - 1)) / float(n)
+    key_list = []
+    for i, k in enumerate(keys):
+        x = RIGHT_X + i * (kw + kgap)
+        key_list.append(dict(k, x=round(x, 1), w=round(kw, 1), cx=round(x + kw / 2, 1)))
+    out.update({
+        "tone": tone,
+        "grille": grille_block(gx, gy, gw, level, bool(spin and power and spinning)),
+        "lcd": lcd_block(gx, wy, gw, PANEL_H - 6 - wy, target, 30.0),
+        "right": RIGHT_X, "keys": key_list, "ky": 66.0, "kh": 44.0,
+        "mode": mode, "valve": valve, "vx": PANEL_W - 14 - 46 - 16 - 5, "ml": 142.0,
+    })
+    return out
+
+
+#: Квадратная плитка фанкойла (1×1) - своя рамка 170×170.
+SQUARE = 170.0
+
+
+def tag_width(text, size=11.0):
+    """Ширина подписи .tag: прописные полужирные с разрядкой 0.4 px."""
+    return text_width(text, size, 0.70) + 0.4 * len(text)
+
+
+def fit_title(text, size, room):
+    """Название в отведённую ширину: не влезло - обрезаем с многоточием."""
+    if tag_width(text, size) <= room:
+        return text
+    while text and tag_width(text + "…", size) > room:
+        text = text[:-1]
+    return text.rstrip() + "…"
+
+
+def build_square(lo, hi, current, target, power, tone, level, auto, mode, spinning, spin,
+                 title):
+    """
+    Фанкойл на плитке 1×1 (с 1.38) - «фейдер», тем же языком, что широкий
+    пульт: слева ползунок уставки, справа решётка с пропеллером и под ней
+    табло с уставкой и столбиками скорости. Сверху слева - текущая
+    температура, справа - значок режима и название.
+    """
+    out = slider_block(36.0, 36.0, 148.0, lo, hi, current, target, power, labels=False)
+    out.update({
+        "tone": tone, "mode": mode,
+        "grille": grille_block(68.0, 32.0, 88.0, level, bool(spin and power and spinning)),
+        "lcd": lcd_block(68.0, 126.0, 88.0, 34.0, target, 22.0,
+                         level if power else 0, auto and power, False),
+        # 156 - правый край, значок режима 14 и зазор 4, текущая слева до 52
+        "title": fit_title(title, 11, SQUARE - 14 - 14 - 4 - 52),
+    })
+    out["icon_x"] = round(SQUARE - 14 - (tag_width(out["title"]) + 4
+                                         if out["title"] else 0) - 14, 1)
+    return out
+
+
 @tile("fancoil")
 class Fancoil(Tile):
     """Фанкойл: циферблат термостата плюс колонка режима, скорости и клапана."""
@@ -293,7 +495,55 @@ class Fancoil(Tile):
 
         target_num = self.number(target)
         big = 30.0 * float(ctx.opt("fs", 1.0))
+
+        # Широкая плитка - пультом (с 1.37); look: classic - прежний циферблат.
+        panel = None
+        if side and ctx.opt("look") != "classic":
+            if mode.get("cool"):
+                tone = "cool"
+            elif not uses_valve:
+                tone = "fan"
+            else:
+                tone = "heat"
+            panel = build_panel(
+                ctx.opt("scale_min", 14), ctx.opt("scale_max", 30), current, target,
+                power, tone, self.level_of(fan, fact) if power else 0,
+                self.keys(fans, fan_key, power), {"icon": mode.get("icon", "fan"),
+                                                  "title": (mode.get("short") or mode.get("title") or "—").lower(),
+                                                  "on": power},
+                (bool(valve) if valve is not None and uses_valve else None), active,
+                ctx.opt("spin", True))
+            scale = min(width / PANEL_W, height / PANEL_H)
+            panel["k"] = round(scale, 4)
+            panel["dx"] = round((width - PANEL_W * scale) / 2.0, 1)
+            panel["dy"] = round((height - PANEL_H * scale) / 2.0, 1)
+            panel["title"] = str(ctx.opt("title") or "").upper()
+            panel["current"] = _fmt(current, 1) if current is not None else "--"
+        elif (not side and ctx.opt("look") != "classic"
+              and min(width, height) >= 120):
+            # Квадратная плитка (с 1.38) - тот же прибор, только мельче.
+            if mode.get("cool"):
+                tone = "cool"
+            elif not uses_valve:
+                tone = "fan"
+            else:
+                tone = "heat"
+            panel = build_square(
+                ctx.opt("scale_min", 14), ctx.opt("scale_max", 30), current, target,
+                power, tone, self.level_of(fan, fact) if power else 0,
+                bool(fan.get("auto")),
+                {"icon": mode.get("icon", "fan"),
+                 "title": (mode.get("short") or mode.get("title") or "—").lower(), "on": power},
+                active, ctx.opt("spin", True), str(ctx.opt("title") or "").upper())
+            scale = min(width / SQUARE, height / SQUARE)
+            panel["k"] = round(scale, 4)
+            panel["dx"] = round((width - SQUARE * scale) / 2.0, 1)
+            panel["dy"] = round((height - SQUARE * scale) / 2.0, 1)
+            panel["current"] = _fmt(current, 1) if current is not None else "--"
+            panel["square"] = True
+
         return {
+            "panel": panel,
             "dial": gauge,
             "side": self.side_box(width, height) if side and gauge else None,
             "rows": self.rows(width, height, mode, fan, fact, valve, power)
@@ -327,6 +577,25 @@ class Fancoil(Tile):
             "lo": float(ctx.opt("temp_min", 16)),
             "hi": float(ctx.opt("temp_max", 30)),
         }
+
+    @staticmethod
+    def keys(fans, fan_key, power):
+        """
+        Клавиши скорости: «0» (выключен), ступени по возрастанию и «А», если
+        прибор умеет авто. Утоплена одна - по цели скорости; у выключенного
+        прибора - «0». Светодиод горит у утопленной, кроме «0».
+        """
+        steps = sorted(((body.get("level"), row) for row, body in fans if body.get("level")),
+                       key=lambda pair: pair[0])
+        auto = [row for row, body in fans if body.get("auto")]
+        out = [{"label": "0", "down": not power, "led": False}]
+        for lvl, row in steps:
+            down = power and row == fan_key
+            out.append({"label": str(lvl), "down": down, "led": down})
+        if auto:
+            down = power and auto[0] == fan_key
+            out.append({"label": "А", "down": down, "led": down})
+        return out
 
     @staticmethod
     def side_box(width, height):

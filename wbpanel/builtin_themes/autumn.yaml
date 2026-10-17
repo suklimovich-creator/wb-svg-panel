@@ -61,3 +61,13 @@ vars:
   ac-pill: "#F1ECE5"
   ac-pill-on: "#8A4A20"
   ac-pill-ink: "#FFF4E4"
+  # механика фанкойла и кружков кондиционера (1.37): колодец, клавиша,
+  # фаска, утопленная клавиша, погашенный светодиод, стекло табло
+  well: "#E0DFDF"
+  key-hi: "#FFFFFF"
+  key-lo: "#F4F4F3"
+  key-side: "#D2D1D1"
+  key-in-a: "#DBDBDA"
+  key-in-b: "#EFEFEF"
+  led-off: "#B7B6B5"
+  lcd: "#FFFFFF"

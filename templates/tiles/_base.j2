@@ -22,6 +22,17 @@
 {{ PAL.css()|safe }}
   .sheen     { pointer-events: none; }
 
+  /* ---- стекло (depth: glass, 1.40) -----------------------------------
+     Налёт, отсвет и блик рисуют слои под и над плитками (panel.svg.j2),
+     сама подложка плитки прозрачна. Включённая светится изнутри. */
+  .depth-glass .plate, .depth-glass .inv .plate { fill: transparent; stroke: none; }
+  .depth-glass .plate.on, .depth-glass .inv .plate.on { fill: url(#{{ uid }}glass-on); stroke: none; }
+  .depth-glass .chip { fill: var(--glass-tint); stroke: var(--glass-lo); }
+  .depth-glass .chip.on { fill: var(--glass-on); }
+  .depth-glass .tabbar { fill: var(--glass-tint); }
+  .glass-fill { fill: url(#{{ uid }}glass); }
+  .glass-rim  { fill: none; stroke: url(#{{ uid }}glass-rim); stroke-width: 1.2; }
+
 
   /* ---- тёмная карточка (inv) ----------------------------------------
      Значки красятся через currentColor (см. .icon): color на группе
@@ -104,6 +115,20 @@
      при общей прозрачности .35 в нуаре и графите полоса сливалась с фоном. */
   .section-plate { fill: var(--section); opacity: var(--section-op); }
   /* стрелка у заголовка раздела: вниз - раскрыт, вправо - свёрнут */
+  /* вкладки разделов (1.36): как выбор режима в пульте кондиционера -
+     подложка цвета плитки, пилюли, открытая залита цветом включённого */
+  .tabbar     { fill: var(--tile); }
+  .tabbar-line { fill: var(--ink); opacity: .10; }
+  .h1-ic      { color: var(--ink); }
+  .tab-pill   { fill: var(--ac-pill); }
+  .tab.on .tab-pill { fill: var(--ac-pill-on); }
+  .tab-ic     { color: var(--ink); }
+  .tab.on .tab-ic { color: var(--ac-pill-ink); }
+  /* значок открытой вкладки - цветом подписи пилюли, а не рамки включённого */
+  .tab .icon, .h1-ic .icon { stroke: currentColor; }
+  .tab-t      { font-size: calc(12px * var(--fs)); font-weight: 600; fill: var(--ink); }
+  .tab.on .tab-t { fill: var(--ac-pill-ink); }
+  .tab-alarm  { fill: #C4553B; }
   .fold-arrow { fill: none; stroke: var(--ink-dim);
                 stroke-width: calc(2px * var(--fs));
                 stroke-linecap: round; stroke-linejoin: round; }
@@ -235,6 +260,39 @@
   .ag-date   { fill: var(--ink-dim); font-weight: 500; }
   .li        { fill: var(--ink); font-weight: 450; }
   .li-dot    { fill: var(--ink-dim); }
+  /* лист в линейку, листок календаря, кран, датчик протечки (1.41) */
+  .li-rule   { stroke: var(--ink-faint); stroke-width: .8; opacity: .55; }
+  .li-margin { stroke: var(--active); stroke-width: 1; opacity: .35; }
+  .li-box    { fill: none; stroke: var(--ink-dim); stroke-width: 1.4; }
+  .li-empty  { fill: var(--ink-faint); font-weight: 500; }
+  .calp-page { fill: var(--key-hi); stroke: var(--edge); stroke-width: .8; }
+  .calp-band { fill: var(--active); }
+  .calp-wd   { fill: #FFFFFF; font-weight: 700; letter-spacing: .3px; }
+  .calp-day  { fill: var(--ink); font-weight: 700; letter-spacing: -.5px; }
+  .calp-ring { fill: var(--ink-dim); }
+  .vlv-pipe  { fill: url(#{{ uid }}metal); }
+  .vlv-hl    { stroke: #FFFFFF; stroke-opacity: .35; stroke-width: 1; }
+  .vlv-edge  { stroke: var(--key-side); stroke-width: 1; }
+  .vlv-water { opacity: .55; }
+  .vlv-nut   { fill: var(--key-lo); stroke: var(--key-side); stroke-width: .8; }
+  .vlv-facet { stroke: var(--key-side); stroke-width: .7; opacity: .7; }
+  .vlv-body  { fill: url(#{{ uid }}metal); stroke: var(--key-side); stroke-width: .8; }
+  .vlv-cap   { fill: var(--key-hi); stroke: var(--key-side); stroke-width: .8; }
+  .vlv-lever-hl { stroke: #FFFFFF; stroke-opacity: .45; stroke-width: 1.4; stroke-linecap: round; }
+  .vlv.nodata .vlv-lever { fill: var(--ink-faint); }
+  .fct > *   { fill: none; stroke: var(--stroke); stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
+  .fct.shut > * { stroke: var(--ink-dim); }
+  .fct > .fct-drop { stroke-width: 3; }
+  .puck-side { fill: var(--key-side); }
+  .puck-top  { fill: url(#{{ uid }}metal); stroke: var(--key-side); stroke-width: .6; }
+  .puck-hl   { fill: #FFFFFF; opacity: .35; }
+  .puck-led  { fill: var(--led-off); }
+  .puck.wet .puck-led { fill: #FF5A4E; }
+  .onlight .puck-side { fill: rgba(255,255,255,.45); }
+  .onlight .puck-top  { fill: rgba(255,255,255,.92); stroke: none; }
+  .onlight .puck.wet .puck-led { fill: #C4553B; }
+  .puddle    { fill: #FFFFFF; opacity: .28; }
+  .ripple    { fill: none; stroke: #FFFFFF; stroke-width: 1.2; }
   .li-more   { fill: var(--ink-dim); font-weight: 450; }
   .li-count  { font-size: calc(17px * var(--fs)); font-weight: 600; fill: var(--ink-dim); }
   /* Протечка: красная во всю плитку, видно с другого конца коридора.
@@ -376,6 +434,40 @@
     <stop offset="1" stop-color="var(--sheen-on)" stop-opacity="0"/>
   </radialGradient>
   {% endif %}
+  {% if PAL.info(theme).depth == 'glass' %}
+  {#- Стекло (1.40): налёт плитки сверху вниз, блик края (светлый сверху
+      слева, едва заметный снизу справа), свечение включённой изнутри и
+      пятна обоев. Отсвет (glare) - в координатах панели: страница
+      сдвигает его вместе с прокруткой, и плитки, проезжая под светом
+      сверху экрана, светлеют и гаснут. -#}
+  <linearGradient id="{{ uid }}glass" x1="0" y1="0" x2=".35" y2="1">
+    <stop offset="0" stop-color="var(--glass-tint)"/>
+    <stop offset="1" stop-color="var(--glass-tint2)"/>
+  </linearGradient>
+  <linearGradient id="{{ uid }}glass-rim" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="var(--glass-hi)"/>
+    <stop offset=".38" stop-color="var(--glass-lo)"/>
+    <stop offset=".62" stop-color="var(--glass-lo)" stop-opacity="0"/>
+    <stop offset="1" stop-color="var(--glass-lo)"/>
+  </linearGradient>
+  <radialGradient id="{{ uid }}glass-on" cx=".3" cy=".3" r=".95">
+    <stop offset="0" stop-color="var(--glass-on)"/>
+    <stop offset=".6" stop-color="var(--glass-on)" stop-opacity=".25"/>
+    <stop offset="1" stop-color="var(--glass-on)" stop-opacity="0"/>
+  </radialGradient>
+  {% for var, x, y, rx_, ry_ in PAL.WALL_SPOTS %}
+  <radialGradient id="{{ uid }}wall{{ loop.index }}" cx="{{ x }}" cy="{{ y }}" r="1"
+                  gradientTransform="translate({{ x }} {{ y }}) scale({{ rx_ }} {{ ry_ }}) translate({{ -x }} {{ -y }})">
+    <stop offset="0" stop-color="var({{ var }})"/>
+    <stop offset="1" stop-color="var({{ var }})" stop-opacity="0"/>
+  </radialGradient>
+  {% endfor %}
+  {% endif %}
+  {#- Металл трубы, корпуса крана и шайбы датчика (1.41): сверху светлее. -#}
+  <linearGradient id="{{ uid }}metal" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="var(--key-hi)"/>
+    <stop offset="1" stop-color="var(--key-lo)"/>
+  </linearGradient>
   <linearGradient id="{{ uid }}bg" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="var(--bg-top)"/>
     <stop offset="1" stop-color="var(--bg-bottom)"/>
@@ -552,11 +644,17 @@
     <path class="icon" d="M15.6 3.4c-2 2.4-.6 3.9.4 5.2 1 1.3 1.6 3-.4 5"/>
     <path class="icon" d="M4.5 20.6h15"/>
   </symbol>
-  <symbol id="{{ uid }}ic-tap" viewBox="0 0 24 24">
-    <path class="icon" d="M4 12h6.4a3 3 0 0 1 3 3v.8"/>
-    <path class="icon" d="M10.4 12V8.6a3 3 0 0 1 3-3H20"/>
-    <path class="icon" d="M17 5.6v6"/>
-    <path class="icon" d="M13.4 18.2s2 2.1 2 3.1a2 2 0 1 1-4 0c0-1 2-3.1 2-3.1z"/>
+  {#- Кран (1.41): классический - ручка-барашек, корпус, излив, капля.
+      Нарисован в рамке 100×100, линия 7 - те же ~1.8 px на значке 27 px. -#}
+  <symbol id="{{ uid }}ic-tap" viewBox="0 0 100 100">
+    <g transform="translate(8 0)" class="icon" style="stroke-width:7">
+      <rect x="1" y="28" width="10" height="38" rx="5"/>
+      <path d="M11,32.4H20M11,48H20M47,32.4H64A19,19 0 0 1 83,51.4V60.5M47,48H56.6A7.8,7.8 0 0 1 64.4,55.8V60.5M30,15.6V25M37.2,15.6V25M27.4,3H17A6,6 0 0 0 17,15H27.4M39.8,3H50A6,6 0 0 1 50,15H39.8"/>
+      <rect x="64.4" y="60.5" width="18.6" height="10.5" rx="1.5"/>
+      <rect x="20" y="25" width="27" height="30" rx="4"/>
+      <circle cx="33.6" cy="9" r="6.4"/>
+      <path d="M73.7,77C70,83 66.3,86.6 66.3,91.3a7.4,7.4 0 0 0 14.8,0C81.1,86.6 77.4,83 73.7,77z"/>
+    </g>
   </symbol>
   <symbol id="{{ uid }}ic-sun" viewBox="0 0 24 24">
     <circle class="icon" cx="12" cy="12" r="4.2"/>
@@ -726,6 +824,26 @@
   <symbol id="{{ uid }}ic-socket" viewBox="0 0 24 24">
     <rect class="icon" x="3.5" y="3.5" width="17" height="17" rx="5"/>
     <path class="icon" d="M9.5 9.8v2.4M14.5 9.8v2.4"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-bed" viewBox="0 0 24 24">
+    <path class="icon" d="M3.5 6v13M3.5 15.5h17V19"/>
+    <path class="icon" d="M10 15.5v-4.3h8.3a2.2 2.2 0 0 1 2.2 2.2v2.1"/>
+    <circle class="icon" cx="6.9" cy="12.4" r="1.7"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-bath" viewBox="0 0 24 24">
+    <path class="icon" d="M2.8 12h18.4v2.2a4.6 4.6 0 0 1-4.6 4.6H7.4a4.6 4.6 0 0 1-4.6-4.6z"/>
+    <path class="icon" d="M7 18.8l-.9 1.8M17 18.8l.9 1.8"/>
+    <path class="icon" d="M5.6 12V6.3a2.1 2.1 0 0 1 4-0.9"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-shower" viewBox="0 0 24 24">
+    <path class="icon" d="M5 20.5V8.2a4.2 4.2 0 0 1 4.2-4.2h.6A4.2 4.2 0 0 1 14 8.2"/>
+    <path class="icon" d="M10.4 8.6h7.2"/>
+    <path class="icon" d="M11.6 12v1.4M14 12v1.4M16.4 12v1.4M12.8 15.8v1.4M15.2 15.8v1.4"/>
+  </symbol>
+  <symbol id="{{ uid }}ic-child" viewBox="0 0 24 24">
+    <circle class="icon" cx="12" cy="6.8" r="3"/>
+    <path class="icon" d="M8.6 20.6l1.2-8h4.4l1.2 8"/>
+    <path class="icon" d="M9.8 13.4L6 11M14.2 13.4L18 11"/>
   </symbol>
 {% endmacro %}
 

@@ -828,3 +828,368 @@ def _rot(p, deg):
     a = math.radians(deg)
     x, y = p
     return (x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a))
+
+
+# ---------------------------------------------------------------------------
+# Колесо плитки (с 1.37) - по образцу приложения Haier.
+#
+# Ось колеса над плиткой, на её вертикальной оси; видна нижняя дуга.
+# Уставка крупно наверху, шкала прокручена так, что выбранный градус стоит
+# под выемкой тонкой внутренней дуги. Обод нейтральный, светится только
+# отрезок от «сейчас» до уставки - цветом режима, с мягким ореолом: сразу
+# видно, сколько прибору осталось догнать. Внизу «сейчас» у левой стенки и
+# кружки вентилятора и жалюзи справа.
+# ---------------------------------------------------------------------------
+
+ARC_FAN = {"low": 1, "medium": 2, "high": 3, "quiet": 1}
+
+
+def _blade(cx, cy, r, base):
+    """Лопасть вентилятора в кружке: одна форма, повёрнутая на base градусов."""
+    def p(rr, d):
+        a = math.radians(base + d)
+        return "%.2f,%.2f" % (cx + rr * r * math.cos(a), cy + rr * r * math.sin(a))
+    return "M%s Q%s %s Q%s %sZ" % (p(0.22, -18), p(0.80, -40), p(0.74, 16), p(0.46, 30), p(0.22, 26))
+
+
+def fan_disc(cx, cy, r, fan, quiet, power):
+    """
+    Кружок вентилятора тем же языком, что кружки жалюзи: три одинаковые
+    лопасти ровно через 120°, горит столько, какая скорость; «авто» - кружок
+    залит, как у качания жалюзи.
+    """
+    auto = power and fan == "auto"
+    level = 3 if fan == "auto" else ARC_FAN.get("quiet" if quiet else fan, 0)
+    blades = [{"d": _blade(cx, cy, r, -90 + 120 * i), "act": power and i < level}
+              for i in range(3)]
+    return {"cx": _r(cx), "cy": _r(cy), "r": _r(r), "auto": auto, "blades": blades,
+            "hub": _r(r * 0.16)}
+
+
+def build_arc(w, h, fs, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
+              swing=None, swing_h=None, step=1.0):
+    """Всё для колеса плитки w×h (см. выше). Плитка шкалу не крутит."""
+    lo, hi = float(lo), float(hi)
+    hh = min(float(h), float(w))          # высокая плитка: колесо в верхнем квадрате
+    RR = 0.88 * w
+    boty = 0.72 * hh
+    cx, cy = w / 2.0, boty - RR
+    per = 34.0 * fs
+    ad = per / RR                          # радиан на градус шкалы
+    value = tgt if tgt is not None else (lo + hi) / 2.0
+    value = max(lo, min(hi, float(value)))
+
+    def ang(t):                            # теплее - вправо
+        return (t - value) * ad
+
+    def pol(r, a):
+        return cx + r * math.sin(a), cy + r * math.cos(a)
+
+    amax = math.asin(min(1.0, (w / 2.0 + 4) / RR))
+
+    def arc(r, a_right, a_left):
+        p0, p1 = pol(r, a_right), pol(r, a_left)
+        return "M%.1f,%.1f A%.1f,%.1f 0 0 1 %.1f,%.1f" % (p0[0], p0[1], r, r, p1[0], p1[1])
+
+    kind = layout_kind(mode, cur, tgt)
+    tone = "fan" if mode == "fan_only" else kind
+
+    ticks, labels = [], []
+    n = int(round((hi - lo) * 2))
+    for i in range(n + 1):
+        t = lo + i * 0.5
+        a = ang(t)
+        if abs(a) > amax:
+            continue
+        whole = abs(t - round(t)) < 0.01
+        p1, p2 = pol(RR - 1, a), pol(RR - (9.0 if whole else 5.0) * fs, a)
+        ticks.append({"x1": _r(p1[0]), "y1": _r(p1[1]), "x2": _r(p2[0]), "y2": _r(p2[1]), "major": whole})
+        if whole and abs(a) <= amax * 0.78:
+            lp = pol(RR - 22.0 * fs, a)
+            labels.append({"x": _r(lp[0]), "y": _r(lp[1] + 4 * fs), "ry": _r(lp[1]),
+                           "rot": _r(-math.degrees(a)), "text": "%d°" % round(t),
+                           "sel": abs(t - value) < 0.5})
+
+    # тонкая внутренняя дуга с выемкой-указателем посередине
+    ri = RR - 44.0 * fs
+    half = math.atan(10.0 * fs / ri)
+    a0 = math.asin(min(1.0, (w / 2.0 + 10) / ri))
+    pl, pn0, pn1, pr, tip = pol(ri, -a0), pol(ri, -half), pol(ri, half), pol(ri, a0), pol(ri + 7.0 * fs, 0)
+    inner = "M%.1f,%.1f A%.1f,%.1f 0 0 0 %.1f,%.1f L%.1f,%.1f L%.1f,%.1f A%.1f,%.1f 0 0 0 %.1f,%.1f" % (
+        pl[0], pl[1], ri, ri, pn0[0], pn0[1], tip[0], tip[1], pn1[0], pn1[1], ri, ri, pr[0], pr[1])
+
+    seg, dot = None, None
+    if cur is not None:
+        ac = max(-amax, min(amax, ang(float(cur))))
+        d = pol(RR, ac)
+        dot = {"x": _r(d[0]), "y": _r(d[1]), "r": _r(3.4 * fs)}
+        if power and tgt is not None and abs(ac) > 0.01:
+            seg = arc(RR, max(ac, 0.0), min(ac, 0.0))
+    s1, s2 = pol(RR - 13.0 * fs, 0), pol(RR + 7.0 * fs, 0)
+
+    digits = 0 if float(step) >= 1 else 1
+    num = _num(tgt, digits)
+    if tgt is not None and digits and abs(tgt - round(tgt)) < 0.05:
+        num = _num(tgt, 0)
+
+    # кружки справа внизу: вентилятор и жалюзи, какие есть
+    r = 11.5 * fs
+    yb = h - 23.0 * fs
+    x = w - 14.0 * fs - r
+    discs = []
+    if swing_h is not None:
+        discs.append(("louver", louver_icon(x, yb, "h", swing_h, r / 12.0, 12.0)))
+        x -= 2 * r + 5 * fs
+    if swing is not None:
+        discs.append(("louver", louver_icon(x, yb, "v", swing, r / 12.0, 12.0)))
+        x -= 2 * r + 5 * fs
+    discs.append(("fan", fan_disc(x, yb, r, fan, quiet, power)))
+    discs.reverse()
+
+    word = MODE_WORD.get(mode, mode or "") if power else "выкл"
+    isz = 13.0 * fs
+    return {
+        "tone": tone, "w": w, "h": h, "fs": _r(fs),
+        "rim": arc(RR, amax, -amax), "seg": seg, "dot": dot, "rr": _r(RR),
+        "set": {"x1": _r(s1[0]), "y1": _r(s1[1]), "x2": _r(s2[0]), "y2": _r(s2[1]), "w": _r(3 * fs)},
+        "ticks": ticks, "labels": labels, "lab": _r(11 * fs), "lab_sel": _r(13 * fs),
+        "inner": inner,
+        "num": {"text": num, "x": _r(cx + 2 * fs), "y": _r(0.376 * hh), "size": _r(40 * fs),
+                "deg": _r(17 * fs), "dy": _r(-20 * fs)},
+        "tag_y": _r(24 * fs), "tag_x": _r(16 * fs), "tag_size": _r(11 * fs),
+        "mode": {"word": word, "icon": MODE_ICON.get(mode) or ("sun" if kind == "heat" else "snow"),
+                 "x": _r(w - 16 * fs), "y": _r(24 * fs), "size": _r(10.5 * fs),
+                 "ix": _r(w - 16 * fs - text_width(word, 10.5 * fs, 0.58) - 4 * fs - isz),
+                 "iy": _r(24 * fs - isz * 0.82), "isize": _r(isz)},
+        "now": {"x": _r(16 * fs), "ly": _r(h - 37 * fs), "y": _r(h - 14 * fs),
+                "lsize": _r(9.5 * fs), "size": _r(21 * fs), "deg": _r(11 * fs), "dy": _r(-9 * fs),
+                "text": _num(cur, 1)},
+        "discs": discs,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Пульт на весь экран тем же колесом (с 1.39) - плитка, только крупно.
+#
+# Ось колеса над экраном, видна нижняя дуга со шкалой; шкала крутится под
+# неподвижной риской уставки (пульт вертит группу .acs-scale, как у
+# прежнего диска). Сверху «назад», название и питание, под ними режим
+# словом (нажатие - выбор режима) и уставка крупно. Под дугой «сейчас»,
+# ниже кружки вентилятора и жалюзи с подписями. Нажатие на вентилятор
+# переключает скорость по кругу, на жалюзи - открывает шторку с
+# положениями тем же рядом, что выбор режима.
+# Экран стоя и квадрат - всё столбиком; на боку колесо слева, кружки
+# столбиком справа.
+# ---------------------------------------------------------------------------
+
+SWING_TITLE = {"v": "вверх-вниз", "h": "влево-вправо"}
+
+
+def _fan_word(fan, quiet):
+    if quiet:
+        return "тихо"
+    if fan == "auto":
+        return "авто"
+    level = ARC_FAN.get(fan)
+    return ("скорость %d" % level) if level else "—"
+
+
+def _swing_word(axis, value):
+    order = SWING_H if axis == "h" else SWING_V
+    value = (value or "").strip()
+    if value == "auto":
+        return "качание"
+    if value in order:
+        return "положение %d" % (order.index(value) + 1)
+    return "—"
+
+
+def build_screen_arc(w, h, mode, power, tgt, cur, lo, hi, fan="", quiet=False,
+                     swing=None, swing_h=None, step=1.0):
+    """Всё для пульта w×h колесом линиями (см. выше)."""
+    w, h = float(w), float(h)
+    wide = w > 1.15 * h
+    if wide:
+        u = min(w / 740.0, h / 440.0)
+        wl = w * 0.6
+        y_mode = 74.0 * u
+    else:
+        u = min(w / 390.0, h / 600.0)
+        wl = w
+        y_mode = 96.0 * u
+    fs = 2.0 * u
+    lo, hi = float(lo), float(hi)
+    value = tgt if tgt is not None else (lo + hi) / 2.0
+    value = max(lo, min(hi, float(value)))
+    no_target = mode == "fan_only"
+
+    RR = 0.92 * wl
+    cx = wl / 2.0
+    num_y = y_mode + 100.0 * u
+    boty = num_y + 98.0 * u
+    cy = boty - RR
+    per = 34.0 * fs
+    dpd = -per / RR * 180.0 / math.pi      # градусов на градус шкалы; теплее - вправо
+    a_sp = 90.0
+
+    def ang(t):
+        return a_sp + (t - value) * dpd
+
+    def pol(r, a):
+        a = math.radians(a)
+        return cx + r * math.cos(a), cy + r * math.sin(a)
+
+    amax = math.degrees(math.asin(min(1.0, (wl / 2.0 + 6) / RR)))
+
+    def arc(r, a_from, a_to):
+        p0, p1 = pol(r, a_from), pol(r, a_to)
+        return "M%.1f,%.1f A%.1f,%.1f 0 0 %d %.1f,%.1f" % (
+            p0[0], p0[1], r, r, 1 if a_to > a_from else 0, p1[0], p1[1])
+
+    kind = layout_kind(mode, cur, tgt)
+    tone = "fan" if mode == "fan_only" else kind
+    lab_r = RR - 22.0 * fs
+
+    ticks, labels = [], []
+    for i in range(int(round((hi - lo) * 2)) + 1):
+        t = lo + i * 0.5
+        a = ang(t)
+        whole = abs(t - round(t)) < 0.01
+        p1, p2 = pol(RR - 1, a), pol(RR - (9.0 if whole else 5.0) * fs, a)
+        ticks.append({"t": t, "major": whole, "x1": _r(p1[0]), "y1": _r(p1[1]),
+                      "x2": _r(p2[0]), "y2": _r(p2[1])})
+        if whole:
+            lp = pol(lab_r, a)
+            labels.append({"t": t, "text": "%d°" % round(t), "x": _r(lp[0]), "y": _r(lp[1] + 4 * fs),
+                           "ry": _r(lp[1]), "rot": _r(a - 90.0),
+                           "sel": abs(t - value) < 0.01 and not no_target,
+                           "hide": not (9 < lp[0] < wl - 9 and 9 < lp[1] < h - 9)})
+
+    ri = RR - 44.0 * fs
+    half = math.degrees(math.atan(10.0 * fs / ri))
+    a0 = math.degrees(math.asin(min(1.0, (wl / 2.0 + 10) / ri)))
+    pl, pn0, pn1, pr, tip = (pol(ri, 90 + a0), pol(ri, 90 + half), pol(ri, 90 - half),
+                             pol(ri, 90 - a0), pol(ri + 7.0 * fs, 90))
+    inner = "M%.1f,%.1f A%.1f,%.1f 0 0 0 %.1f,%.1f L%.1f,%.1f L%.1f,%.1f A%.1f,%.1f 0 0 0 %.1f,%.1f" % (
+        pl[0], pl[1], ri, ri, pn0[0], pn0[1], tip[0], tip[1], pn1[0], pn1[1], ri, ri, pr[0], pr[1])
+
+    seg, dot = None, None
+    if cur is not None and not no_target:
+        ac = ang(float(cur))
+        d = pol(RR, ac)
+        dot = {"x": _r(d[0]), "y": _r(d[1]), "r": _r(3.4 * fs)}
+        if power and abs(float(cur) - value) > 0.05:
+            seg = arc(RR, ac, a_sp)
+    s1, s2 = pol(RR - 13.0 * fs, 90), pol(RR + 7.0 * fs, 90)
+
+    digits = 0 if float(step) >= 1 else 1
+    num_text = "—" if no_target else _num(tgt, digits)
+    if tgt is not None and digits and abs(tgt - round(tgt)) < 0.05:
+        num_text = _num(tgt, 0)
+
+    # режим: значок и слово по центру, нажатие открывает выбор
+    word = MODE_WORD.get(mode, mode or "") if power else "выкл"
+    ms = 16.0 * u
+    isz = ms * 1.35
+    ww = text_width(word, ms, 0.58)
+    mx0 = cx - (isz + 6 * u + ww) / 2.0
+    mode_info = {"word": word, "icon": MODE_ICON.get(mode) or ("sun" if kind == "heat" else "snow"),
+                 "ix": _r(mx0), "iy": _r(y_mode - isz * 0.8), "isize": _r(isz),
+                 "x": _r(mx0 + isz + 6 * u), "y": _r(y_mode), "size": _r(ms),
+                 "hit": [_r(mx0 - 12 * u), _r(y_mode - isz - 10 * u),
+                         _r(isz + ww + 30 * u), _r(isz + 22 * u)]}
+
+    now = {"x": _r(cx), "ly": _r(boty + 44 * u), "y": _r(boty + 86 * u),
+           "lsize": _r(14 * u), "size": _r(40 * u), "deg": _r(20 * u), "dy": _r(-18 * u),
+           "text": _num(cur, 1)}
+
+    # кружки: вентилятор и жалюзи, какие есть
+    keys = [("fan", None, fan)]
+    if swing is not None:
+        keys.append(("vdial", "v", swing))
+    if swing_h is not None:
+        keys.append(("hdial", "h", swing_h))
+    discs = []
+    if wide:
+        r = 30.0 * u
+        pitch = 2 * r + 26 * u
+        x = wl + 30 * u + r
+        y0 = h / 2.0 - pitch * (len(keys) - 1) / 2.0 + 10 * u
+        pos = [(x, y0 + i * pitch) for i in range(len(keys))]
+    else:
+        r = 34.0 * u
+        pitch = 2 * r + 46 * u
+        top = boty + 100 * u
+        y = top + max(0.0, (h - top - (2 * r + 50 * u)) / 2.0) + r
+        pos = [(w / 2.0 + (i - (len(keys) - 1) / 2.0) * pitch, y) for i in range(len(keys))]
+    for (zone, axis, val), (x, y) in zip(keys, pos):
+        if zone == "fan":
+            ic = fan_disc(x, y, r, fan, quiet, power)
+            title, vw = "вентилятор", _fan_word(fan, quiet)
+        else:
+            ic = louver_icon(x, y, axis, val, r / 12.0, 12.0)
+            title, vw = SWING_TITLE[axis], _swing_word(axis, val)
+        if wide:
+            cap = {"x": _r(x + r + 14 * u), "y1": _r(y - 3 * u), "y2": _r(y + 17 * u), "anchor": "start"}
+        else:
+            cap = {"x": _r(x), "y1": _r(y + r + 22 * u), "y2": _r(y + r + 42 * u), "anchor": "middle"}
+        cap.update({"title": title, "value": vw, "s1": _r(12 * u), "s2": _r(15 * u)})
+        discs.append({"zone": zone, "kind": "fan" if zone == "fan" else "louver", "ic": ic,
+                      "cap": cap, "hit": _r(r + 14 * u), "x": _r(x), "y": _r(y)})
+
+    # шторки выбора: режим, вентилятор, жалюзи - один ряд кнопок у верхнего края
+    def sheet(name, items):
+        n = len(items)
+        cw = (w - 24 - (n - 1) * 6) / float(n)
+        isz_ = min(cw * .5, 34 * u)
+        font = min(12.5 * u, cw * .22)
+        pad = max(5.0, isz_ * .22)
+        pill = pad * 2 + isz_ + font * 1.2
+        out = []
+        for i, it in enumerate(items):
+            x = 12 + i * (cw + 6)
+            icx, icy = x + cw / 2.0, 12 + pad + isz_ / 2.0
+            it = dict(it)
+            it.update({"x": _r(x), "w": _r(cw), "tx": _r(icx), "ix": _r(icx - isz_ / 2.0),
+                       "iy": _r(icy - isz_ / 2.0), "isize": _r(isz_)})
+            if it.get("fan") is not None:
+                it["disc"] = fan_disc(icx, icy, isz_ / 2.0, it["fan"], it["fan"] == "quiet", True)
+            if it.get("axis"):
+                it["disc"] = louver_icon(icx, icy, it["axis"], it["value"], isz_ / 21.0, 12.0)
+            out.append(it)
+        return {"name": name, "items": out, "y": 12, "pill": _r(pill), "font": _r(font),
+                "ty": _r(12 + pad + isz_ + font * 1.0), "h": _r(pill + 24),
+                "sw": _r(max(1.0, isz_ / 24.0))}
+
+    fan_now = "quiet" if quiet else fan
+    # Скорость шторки не открывает: нажатие на кружок сразу переключает
+    # следующую (1 - 2 - 3 - авто - тихо), вариантов мало и они по кругу.
+    sheets = [sheet("mode", [{"value": k, "word": nm, "icon": MODE_ICON.get(k) or "snow",
+                              "on": k == mode} for k, nm in MODES])]
+    for zone, axis, val in keys[1:]:
+        order = SWING_H if axis == "h" else SWING_V
+        items = [{"value": "auto", "word": "качание", "axis": axis, "on": (val or "") == "auto"}]
+        items += [{"value": v, "word": str(i + 1), "axis": axis, "on": v == val}
+                  for i, v in enumerate(order)]
+        sheets.append(sheet(zone, items))
+
+    btn = 20.0 * u
+    return {
+        "arc": True, "wide": wide, "orient": "landscape" if wide else "portrait",
+        "kind": kind, "tone": tone, "w": _r(w), "h": _r(h), "wl": _r(wl), "fs": _r(fs), "u": _r(u),
+        "cx": _r(cx), "cy": _r(cy), "r": _r(RR), "rr": _r(RR), "dpd": round(dpd, 5),
+        "a_sp": a_sp, "value": value, "lo": lo, "hi": hi, "cur": cur, "no_target": no_target,
+        "lab_r": _r(lab_r), "box": [0, 0, 0, 0],
+        "rim": arc(RR, 90 + amax, 90 - amax), "inner": inner, "seg": seg, "dot": dot,
+        "set": {"x1": _r(s1[0]), "y1": _r(s1[1]), "x2": _r(s2[0]), "y2": _r(s2[1]), "w": _r(3 * fs)},
+        "ticks": ticks, "labels": labels, "lab": _r(11 * fs), "tk_w": _r(1.2 * u), "tk_w2": _r(0.9 * u),
+        "num": {"text": num_text, "x": _r(cx + 2 * fs), "y": _r(num_y), "size": _r(96 * u),
+                "deg": _r(40 * u), "dy": _r(-46 * u)},
+        "mode": mode_info, "now": now, "discs": discs, "sheets": sheets,
+        "wheel_hit": [0, 0, _r(wl), _r(boty + 30 * u)],
+        "back": {"x": _r(30 * u), "y": _r(34 * u), "r": _r(btn)},
+        "power": {"x": _r(w - 30 * u), "y": _r(34 * u), "r": _r(btn)},
+        "name": {"x": _r(cx if not wide else w / 2.0), "y": _r(40 * u), "size": _r(17 * u)},
+        "fan_state": "quiet" if quiet else (fan or ""),
+        "glow": [_r(18 * fs), _r(8 * fs), _r(4 * fs)], "blur": [_r(6 * fs), _r(2.4 * fs)],
+    }

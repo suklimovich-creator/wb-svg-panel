@@ -41,7 +41,7 @@ log = logging.getLogger("wb-svg-panel")
 BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_themes")
 
 #: Порядок в меню выбора темы: сначала светлые, потом тёмные, потом свои.
-ORDER = ("light", "autumn", "retro", "noir", "neumo", "dark", "graphite")
+ORDER = ("light", "autumn", "retro", "noir", "neumo", "glass-day", "dark", "graphite", "glass")
 
 #: Свойства темы, кроме цветов. Своя тема наследует незаданные.
 PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart", "depth", "edge",
@@ -53,7 +53,7 @@ _PROP_DEFAULTS = {"mode": "light", "on_style": "rim", "inv_kinds": (), "sheen": 
 #: soft - мягкая тень снизу, как было; flat - без теней; neumo -
 #: неоморфизм: плитка из того же материала, что и фон, светлая тень
 #: сверху-слева и тёмная снизу-справа, включённая - утоплена.
-DEPTHS = ("soft", "flat", "neumo")
+DEPTHS = ("soft", "flat", "neumo", "glass")
 #: Край ручек и колёс (с 1.34): зубцы, гладкий, рифлёный.
 EDGES = ("teeth", "smooth", "knurl")
 #: Фаска ручек и клавиш (с 1.34): скруглённая (мягкий блик, как было),
@@ -344,6 +344,10 @@ def classes(name):
     """
     ch = [t["name"] for t in chain(name)]
     rest = ch[1:] if len(ch) > 1 else ch
+    # Стекло (с 1.40) - своими правилами (.depth-glass .plate и т. п.):
+    # класс формы, а не имени, чтобы его получили и свои темы со стеклом.
+    if info(name)["depth"] == "glass":
+        rest = rest + ["depth-glass"]
     return " ".join(rest)
 
 
@@ -437,7 +441,33 @@ def menu_entry(n):
             # как плитки, - глубина, край, фаска и цвета двух теней
             "depth": info(n)["depth"], "edge": info(n)["edge"], "bevel": info(n)["bevel"],
             "neu": _hex(_parse(v.get("--neu-light"), v) or _WHITE),
+            # обои стекла (1.40) - для неподвижного фона страницы
+            "wall": wall_css(n),
             "shd": _hex(_parse(v.get("--shadow"), v) or _BLACK)}
+
+
+#: Пятна обоев стекла: (переменная, центр x и y, радиусы x и y) - доли
+#: экрана. Те же числа у картинки (panel.svg.j2) и у фона страницы.
+WALL_SPOTS = (("--wall-1", .18, .22, .42, .28), ("--wall-2", .88, .38, .38, .32),
+              ("--wall-3", .40, .88, .50, .36), ("--wall-4", .75, .75, .28, .22))
+
+
+def wall_css(n):
+    """Обои стекла как CSS-фон страницы; не стекло - пустая строка."""
+    if info(n)["depth"] != "glass":
+        return ""
+    v = css_vars(n)
+    parts = []
+    for var, x, y, rx, ry in WALL_SPOTS:
+        c = _rgba(v.get(var), v)
+        if c:
+            col = "rgba(%d,%d,%d,%.3f)" % (c[0], c[1], c[2], c[3])
+            parts.append("radial-gradient(%d%% %d%% at %d%% %d%%, %s 0%%, rgba(%d,%d,%d,0) 100%%)"
+                         % (rx * 100, ry * 100, x * 100, y * 100, col, c[0], c[1], c[2]))
+    top = _hex(_parse(v.get("--bg-top"), v) or (20, 20, 30))
+    bot = _hex(_parse(v.get("--bg-bottom"), v) or (16, 16, 24))
+    parts.append("linear-gradient(180deg, %s, %s)" % (top, bot))
+    return ", ".join(parts)
 
 
 #: Основные цвета темы для страницы /themes: (ключ, переменная, подпись).
@@ -757,6 +787,39 @@ def _rules(dark, card):
          lambda v: _hex(_mix(v["--bg-bottom"], _WHITE, 0.16 if dark else 0.72))),
         ("--inv-accent", ("--active", "--inv-tile"),
          lambda v: _hex(_lift(v["--active"], v["--inv-tile"]))),
+        # Механика фанкойла и кружков кондиционера (1.37): колодец под
+        # клавишами и ползунком, лицо клавиши, фаска, утопленная клавиша,
+        # погашенный светодиод, стекло табло. Всё - от цвета плитки: на
+        # тёмной - темнее и с бликом, на светлой - светлее и с тенью.
+        ("--well", ("--tile", "--ink"),
+         lambda v: _hex(_mix(v["--tile"], _BLACK, 0.42) if dark else _mix(v["--tile"], v["--ink"], 0.14))),
+        ("--key-hi", ("--tile",),
+         lambda v: _hex(_mix(v["--tile"], _WHITE, 0.16 if dark else 0.6))),
+        ("--key-lo", ("--tile", "--ink"),
+         lambda v: _hex(_mix(v["--tile"], _WHITE, 0.06) if dark else _mix(v["--tile"], v["--ink"], 0.05))),
+        ("--key-side", ("--tile", "--ink"),
+         lambda v: _hex(_mix(v["--tile"], _BLACK, 0.45) if dark else _mix(v["--tile"], v["--ink"], 0.2))),
+        ("--key-in-a", ("--tile", "--ink"),
+         lambda v: _hex(_mix(v["--tile"], _BLACK, 0.12) if dark else _mix(v["--tile"], v["--ink"], 0.16))),
+        ("--key-in-b", ("--tile", "--ink"),
+         lambda v: _hex(_mix(v["--tile"], _WHITE, 0.05) if dark else _mix(v["--tile"], v["--ink"], 0.07))),
+        ("--led-off", ("--tile", "--ink"),
+         lambda v: _hex(_mix(v["--tile"], _BLACK, 0.55) if dark else _mix(v["--tile"], v["--ink"], 0.32))),
+        ("--lcd", ("--tile",),
+         lambda v: _hex(_mix(v["--tile"], _BLACK, 0.4) if dark else _mix(v["--tile"], _WHITE, 0.45))),
+        # Стекло (depth: glass, 1.40): налёт плитки сверху вниз, блик края,
+        # отсвет от света сверху экрана, свечение включённой. И обои -
+        # четыре приглушённых пятна, от акцента, холода и текста.
+        ("--glass-tint", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".075" if dark else ".46")),
+        ("--glass-tint2", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".025" if dark else ".24")),
+        ("--glass-hi", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".55" if dark else ".95")),
+        ("--glass-lo", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".10" if dark else ".40")),
+        ("--glare", ("--tile",), lambda v: "rgba(255,255,255,%s)" % (".09" if dark else ".30")),
+        ("--glass-on", ("--active",), lambda v: _alpha(v["--active"], 0.40 if dark else 0.45)),
+        ("--wall-1", ("--active",), lambda v: _alpha(_mix(v["--active"], _BLACK if dark else _WHITE, 0.25), 0.5)),
+        ("--wall-2", ("--cool",), lambda v: _alpha(_mix(v["--cool"], _BLACK if dark else _WHITE, 0.3), 0.45)),
+        ("--wall-3", ("--ink", "--cool"), lambda v: _alpha(_mix(v["--cool"], (120, 90, 200), 0.6), 0.4)),
+        ("--wall-4", ("--active",), lambda v: _alpha(_mix(v["--active"], (190, 90, 130), 0.6), 0.35)),
     ]
 
 

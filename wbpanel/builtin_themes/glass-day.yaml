@@ -1,0 +1,38 @@
+# Встроенная тема wb-svg-panel: стекло днём (с 1.40).
+#
+# То же стекло, что «стекло», на светлых обоях: персик, небо, мята и
+# роза, приглушённые. Налёт плотнее - тёмный текст на пёстром фоне иначе
+# читается хуже.
+name: glass-day
+title: "стекло днём"
+extends: light
+derive: true
+mode: light
+on_style: rim
+inv_kinds: []
+sheen: false
+shadow: null
+depth: glass
+vars:
+  bg-top: "#EEF0F5"
+  bg-bottom: "#F1EDE8"
+  tile: "#F3F4F8"
+  edge: "rgba(255,255,255,.55)"
+  edge-w: "1"
+  active: "#D9822F"
+  active-w: "1.5"
+  ink: "#1D2333"
+  ink-dim: "rgba(29,35,51,.62)"
+  ink-faint: "rgba(29,35,51,.30)"
+  section: "rgba(255,255,255,.40)"
+  section-op: "1"
+  glass-tint: "rgba(255,255,255,.48)"
+  glass-tint2: "rgba(255,255,255,.26)"
+  glass-hi: "rgba(255,255,255,.95)"
+  glass-lo: "rgba(255,255,255,.45)"
+  glare: "rgba(255,255,255,.30)"
+  glass-on: "rgba(236,160,80,.42)"
+  wall-1: "rgba(236,190,150,.55)"
+  wall-2: "rgba(164,196,226,.55)"
+  wall-3: "rgba(184,220,200,.55)"
+  wall-4: "rgba(226,188,202,.45)"

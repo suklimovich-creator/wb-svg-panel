@@ -264,7 +264,29 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     return tile
 
 
-def folded_sections(panel_conf, sections, closed, opened):
+#: Как показаны разделы панели: списком (каждый сворачивается сам),
+#: гармошкой (раскрыт один) или вкладками (ряд вкладок, виден один).
+SECTION_MODES = ("list", "accordion", "tabs")
+
+
+def section_mode(panel_conf, asked=None):
+    """
+    Режим разделов панели.
+
+    asked - выбор устройства (параметр mode в адресе): планшету на стене
+    нужны вкладки, а телефону - гармошка, хотя панель одна. Без выбора -
+    как в конфиге: tabs: true, иначе accordion: true, иначе список.
+    """
+    if asked in SECTION_MODES:
+        return asked
+    if panel_conf.get("tabs"):
+        return "tabs"
+    if panel_conf.get("accordion"):
+        return "accordion"
+    return "list"
+
+
+def folded_sections(panel_conf, sections, closed, opened, mode=None):
     """
     Какие разделы свёрнуты.
 
@@ -277,20 +299,172 @@ def folded_sections(panel_conf, sections, closed, opened):
     раздел раньше не делало ничего, и свернуть панель целиком было
     нельзя, хотя список одних заголовков - самый быстрый способ дойти
     до нужной комнаты.
+
+    Вкладки (tabs, с 1.36): как гармошка, но «свёрнуты все» не бывает -
+    без открытой вкладки под рядом пусто.
+
+    Раздел без заголовка не сворачивается ни в каком режиме: нажать, чтобы
+    раскрыть его обратно, не на что. До 1.36 гармошка прятала такой раздел,
+    стоило открыть соседний. Во вкладках он виден всегда, под их рядом.
     """
-    keys = [key for _t, _tiles, _src, key in sections if key]
+    mode = mode or section_mode(panel_conf)
+    keys = [key for title, _tiles, _src, key in sections if key and title]
     if not keys:
         return set()
-    if panel_conf.get("accordion"):
-        if opened == "-":
+    if mode in ("accordion", "tabs"):
+        if opened == "-" and mode == "accordion":
             return set(keys)
         current = opened if opened in keys else keys[0]
         return set(k for k in keys if k != current)
     return set(k for k in keys if k in closed)
 
 
+#: Значок вкладки по названию раздела, если icon: не задан. Ищется
+#: начало слова: «Гостиная», «гостевая» - диван, «Спальня» - кровать.
+TAB_ICONS = (
+    (("дом", "весь", "все", "главн", "сводк"), "home"),
+    (("гост", "зал"), "sofa"),
+    (("кух", "столов"), "dish"),
+    (("спал",), "bed"),
+    (("ван", "сануз", "туалет"), "bath"),
+    (("душ",), "shower"),
+    (("дет",), "child"),
+    (("прих", "корид", "холл", "тамбур"), "door"),
+    (("кабин", "библ"), "book"),
+    (("протеч", "вод"), "leak"),
+    (("отопл", "тепл"), "heat"),
+    (("кондиц", "клим"), "ac-unit"),
+    (("балк", "лодж", "окн"), "window"),
+    (("сцен", "свет"), "bulb"),
+    (("улиц", "двор", "сад", "погод"), "sun"),
+    (("камер",), "camera"),
+)
+
+
+#: Смещение рисунка значка от центра его квадрата 24×24 (замерено по
+#: границам штрихов). Во вкладке значок стоит один в круге, и рисунок,
+#: сидящий в квадрате выше или ниже середины, видно сразу: блюдо кухни
+#: уезжало вверх на полторы единицы. Нет в таблице - рисунок по центру.
+ICON_SHIFT = {
+    "undo": (0, 2), "power": (0, -0.67), "cart": (-0.6, 0.35), "strip": (0, 1.05),
+    "blind": (0, 1.15), "thermo": (0, 0.75), "drop": (0, -1.35), "co2": (-0.2, 1.1),
+    "wind": (-0.75, -1), "tap": (0, 2.45), "tv": (0, 0.4), "motion": (0, -0.5),
+    "person": (0, -0.5), "leak": (-0.65, 0.09), "ac-unit": (-1.6, -2.79),
+    "vacuum": (-1.3, -1.07), "swing": (0, 0.75), "next": (0.75, 0),
+    "cloud": (0.48, -0.18), "cloud-sun": (0.56, -0.99), "fog": (0.28, -1.88),
+    "dish": (0, -1.5), "sofa": (0, 0.9), "bed": (0, 0.5), "bath": (0, 0.4),
+    "shower": (-0.7, 0.25),
+}
+
+
+def tab_icon(section, source, title):
+    """Значок вкладки: icon у раздела, у панели-источника, иначе по названию."""
+    if section:
+        return str(section)
+    if isinstance(source, dict) and source.get("icon"):
+        return str(source["icon"])
+    words = str(title or "").lower().replace("-", " ").split()
+    for stems, icon in TAB_ICONS:
+        if any(w.startswith(st) for w in words for st in stems):
+            return icon
+    return "home"
+
+
+#: Вкладки (1.36) - для небольших экранов на стене: полоса во всю ширину
+#: впритык к нижнему или верхнему краю, в ней ряд «пилюль», как выбор
+#: режима в пульте кондиционера. Название открытой комнаты - в шапке со
+#: значком, поэтому на вкладках по умолчанию одни значки: зачем писать
+#: «Гостиная» дважды. tab_labels: true добавляет подписи, если влезают.
+TAB_GAP = 6
+TAB_PAD = 6          # поля полосы
+TAB_ICON = 22        # значок без подписи
+TAB_ICON_S = 18      # значок над подписью
+TAB_FONT = 12
+TAB_H = 46           # пилюля со значком и подписью
+TAB_H_ICON = 40      # только значок
+TAB_MAX_W = 120      # шире пилюля не растёт: три вкладки - не три полосы
+
+
+def tab_bar(sections, hidden, state, width, y, icons=None, labels=False):
+    """
+    Полоса вкладок (режим tabs): -> (вкладки, полоса, открытая, высота).
+
+    Полоса от края до края панели; пилюли одинаковой ширины по центру.
+    Чипов закрытых разделов не видно, поэтому тревогу (протечка,
+    «проветрить») вкладка показывает сама - красной точкой.
+    """
+    items = []
+    for title, _tiles, src, key in sections:
+        if not key or not title:
+            continue
+        chips = build_status(src, state)
+        items.append({"title": str(title), "key": key, "active": key not in hidden,
+                      "alarm": any(c.get("alarm") for c in chips), "chips": chips,
+                      "icon": tab_icon((icons or {}).get(key), src, title)})
+    if not items:
+        return [], None, None, 0
+    n = len(items)
+    inner = width - 2 * (PAD - TAB_PAD) - 2 * TAB_PAD
+    w = min(TAB_MAX_W, (inner - TAB_GAP * (n - 1)) / float(n))
+    # Круглые кнопки (без подписей): диаметр - по высоте ряда, но не шире
+    # своей доли - девять комнат на экране 320 px тоже должны встать.
+
+    # Подпись - название, не влезло - первое слово («Протечки и отопление»
+    # -> «Протечки»). Только если влезли у всех: ряд, где у одних вкладок
+    # слово, а у других нет, читается хуже ряда значков.
+    words = False
+    if labels:
+        def fits(text):
+            return text_width(text, TAB_FONT) * 1.05 + 12 <= w
+        for it in items:
+            first = it["title"].split()[0] if it["title"].split() else ""
+            it["label"] = it["title"] if fits(it["title"]) else (first if fits(first) else None)
+        words = all(it["label"] for it in items)
+    h = TAB_H if words else min(TAB_H_ICON, w)
+    bar_h = h + 2 * TAB_PAD
+    plate = {"y": y, "w": width, "h": bar_h,
+             # линия - со стороны плиток: сверху у нижней полосы
+             "line_y": y if y > 0 else y + bar_h - 1}
+    row_w = n * w + (n - 1) * TAB_GAP
+    x = (width - row_w) / 2.0
+    isz = TAB_ICON_S if words else min(TAB_ICON, round(h * 0.55))
+    tabs = []
+    for it in items:
+        cx = x + w / 2.0
+        top = y + TAB_PAD
+        if words:
+            iy = top + 6
+            ty = top + 6 + isz + TAB_FONT + 1
+        else:
+            iy = top + (h - isz) / 2.0
+            ty = None
+        # Без подписей кнопка круглая, значок - в её центре; место между
+        # кругами - просвет, нажатие ловит вся доля ряда.
+        round_ = not words
+        bx, bw = (cx - h / 2.0, h) if round_ else (x, w)
+        tabs.append({
+            "round": round_, "cx": round(cx, 1), "cy": round(top + h / 2.0, 1),
+            "r": h / 2.0, "hit_x": round(x - TAB_GAP / 2.0, 1), "hit_w": round(w + TAB_GAP, 1),
+            "key": it["key"], "title": it["title"], "icon": it["icon"],
+            "label": it.get("label") if words else None,
+            "active": it["active"], "alarm": it["alarm"] and not it["active"],
+            "x": round(bx, 1), "y": top, "w": round(bw, 1), "h": h,
+            # рисунок значка - в центр круга, а не его квадрат
+            "ix": round(cx - isz / 2.0 - ICON_SHIFT.get(it["icon"], (0, 0))[0] * isz / 24.0, 2),
+            "iy": round(iy - (0 if words else ICON_SHIFT.get(it["icon"], (0, 0))[1] * isz / 24.0), 2),
+            "isize": isz,
+            "tx": round(cx, 1), "ty": ty,
+            # точка тревоги - на краю круга, под 45° вверх-вправо
+            "dot_x": round(cx + h * 0.36 if round_ else bx + bw - 9, 1),
+            "dot_y": round(top + h * 0.14 if round_ else top + 9, 1),
+        })
+        x += w + TAB_GAP
+    current = [it for it in items if it["active"]]
+    return tabs, plate, (current[0] if current else None), bar_h
+
+
 def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
-            closed=(), opened=None):
+            closed=(), opened=None, mode=None):
     big_cols = int(cols or panel_conf.get("cols", 4))
     interactive = bool(panel_conf.get("interactive",
                        (config.get("interactive", False) if config else False)))
@@ -304,7 +478,32 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
 
     right_edge = PAD * 2 + cols * CELL + (cols - 1) * GAP - PAD
 
-    hidden = folded_sections(panel_conf, sections, set(closed or ()), opened)
+    mode = section_mode(panel_conf, mode)
+    # Вкладки из одного раздела - лишний ряд над ним: показываем списком.
+    if mode == "tabs" and len([k for t, _x, _s, k in sections if k and t]) < 2:
+        mode = "list"
+    hidden = folded_sections(panel_conf, sections, set(closed or ()), opened, mode)
+
+    tabs, tab_plate, tab_open, tab_h = [], None, None, 0
+    dock = "top"
+    head_dy = 0
+    if mode == "tabs":
+        # tabs: bottom - полоса у нижнего края, как в приложениях на
+        # телефоне; true / top - у верхнего, над шапкой.
+        dock = "bottom" if str(panel_conf.get("tabs")).lower() == "bottom" else "top"
+        # icon: у раздела в конфиге - по тому же имени, что у раздела в адресе
+        icons = {}
+        for sec in panel_conf.get("sections") or []:
+            if isinstance(sec, dict) and sec.get("icon"):
+                icons[sec.get("key") or sec.get("from") or sec.get("title") or ""] = sec["icon"]
+        width_full = PAD * 2 + cols * CELL + (cols - 1) * GAP
+        tabs, tab_plate, tab_open, tab_h = tab_bar(
+            sections, hidden, state, width_full, 0, icons,
+            bool(panel_conf.get("tab_labels")))
+        if dock == "top":
+            # Полоса сверху, впритык к краю; шапка и плитки - под ней.
+            head_dy = tab_h
+            y_cursor += tab_h
 
     for title, tiles_conf, status_src, key in sections:
         folded = bool(key) and key in hidden
@@ -313,7 +512,7 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             for conf in tiles_conf:
                 if isinstance(conf, dict) and conf.get("type") == "link":
                     conf.setdefault("_from", name)
-        if title:
+        if title and mode != "tabs":
             # Было 6: чипы высотой 36 подходили вплотную к плиткам сверху.
             y_cursor += 14
             hd = {"title": title, "x": PAD, "y": y_cursor + 22, "chips": [],
@@ -390,14 +589,41 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
     width = PAD * 2 + cols * CELL + (cols - 1) * GAP
     height = max(y_cursor - GAP + PAD, PAD * 2 + HEADER)
 
+    if tabs and dock == "bottom":
+        # Полоса - под плитками, впритык к нижнему краю панели. У края
+        # экрана её держит страница: она прикалывает копию полосы к низу
+        # окна, а эта, невидимая, оставляет под неё место в прокрутке.
+        bar_y = height
+        for t in tabs:
+            t["y"] += bar_y
+            t["cy"] = round(t["cy"] + bar_y, 1)
+            t["iy"] = round(t["iy"] + bar_y, 2)
+            t["dot_y"] += bar_y
+            if t["ty"] is not None:
+                t["ty"] += bar_y
+        tab_plate["y"] += bar_y
+        tab_plate["line_y"] = bar_y
+        height = int(round(bar_y + tab_h))
+
     # Статусы самой панели - в шапке, левее часов: справа стоит время,
     # и наезжать на него нельзя.
     # Заголовок панели: базовая линия на 44, значит середина чипа на 38.
     title = str(panel_conf.get("title") or "")
+    # Во вкладках шапка называет открытую комнату и рисует её значок: то же
+    # слово на вкладке и над плитками было бы повтором.
+    head_icon = None
+    if tab_open:
+        title, head_icon = tab_open["title"], tab_open["icon"]
     # Без связи справа ещё «· нет связи с MQTT» - чипы отходят левее.
     # С 1.35 часы крупнее и с датой под ними: чипы - левее их блока.
     clock_w = clock_width(state.connected)
-    top_chips = place_chips(build_status(panel_conf, state),
-                            width - PAD - clock_w, 20,
-                            left=PAD + text_width(title, 26) * 1.1 + 14 if title else None)
-    return out, width, height, headers, top_chips
+    # Во вкладках чипы открытого раздела - в шапке, рядом с чипами панели:
+    # своего заголовка у раздела нет.
+    top_chips = place_chips(build_status(panel_conf, state)
+                            + list(tab_open["chips"] if tab_open else []),
+                            width - PAD - clock_w, 20 + head_dy,
+                            left=PAD + (34 if head_icon else 0)
+                            + text_width(title, 26) * 1.1 + 14 if title else None)
+    return out, width, height, headers, top_chips, {
+        "mode": mode, "tabs": tabs, "tab_plate": tab_plate, "dock": dock,
+        "title": title, "head_icon": head_icon, "head_dy": head_dy}

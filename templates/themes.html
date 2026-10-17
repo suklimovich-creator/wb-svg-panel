@@ -231,7 +231,8 @@ function drawInfo(){
   var meta = [where];
   if (t.extends) meta.push('наследует <b>' + esc((BY[t.extends] || {}).title || t.extends) + '</b>');
   meta.push(t.mode === 'dark' ? 'тёмная' : 'светлая');
-  meta.push(t.on_style === 'card' ? 'включённая — тёмная карточка' : 'включённая — рамка');
+  meta.push(t.depth === 'glass' ? 'включённая — свечение в стекле' :
+            t.on_style === 'card' ? 'включённая — тёмная карточка' : 'включённая — рамка');
   meta.push(DEPTH_RU[t.depth] || DEPTH_RU.soft);
   meta.push('край — ' + (EDGE_RU[t.edge] || EDGE_RU.teeth).toLowerCase() +
             ', фаска — ' + (BEVEL_RU[t.bevel] || BEVEL_RU.round).toLowerCase() +
@@ -411,7 +412,7 @@ var KEYS = [['bg', 'bg-bottom', 'Фон', 'страница и поля вокр
             ['cool', 'cool', 'Холод', 'охлаждение, «не греет»'],
             ['shadow', 'shadow', 'Тень', 'цвет теней плиток'],
             ['card', 'inv-tile', 'Карточка', 'включённая плитка при «тёмной карточке»']];
-var DEPTH_RU = {soft: 'мягкая тень', flat: 'плоско', neumo: 'неоморфизм'};
+var DEPTH_RU = {soft: 'мягкая тень', flat: 'плоско', neumo: 'неоморфизм', glass: 'стекло'};
 var EDGE_RU = {teeth: 'Зубцы', smooth: 'Гладкий', knurl: 'Насечка'};
 var BEVEL_RU = {round: 'Мягкая', none: 'Плоская', sharp: 'Острая'};
 var RADIUS_RU = {'6': 'Острые', '14': 'Средние', '24': 'Мягкие', '34': 'Круглые'};
@@ -650,9 +651,10 @@ function drawEditor(){
     '<div class="seg" id="e-style"><b data-v="rim">Рамка</b><b data-v="card">Тёмная карточка</b></div></div>' +
     '<div class="note">Включённая плитка: рамкой акцента или тёмной карточкой.</div>' +
     '<div class="two"><div class="seg" id="e-depth"><b data-v="soft">Мягкая тень</b>' +
-    '<b data-v="flat">Плоско</b><b data-v="neumo">Неоморфизм</b></div></div>' +
+    '<b data-v="flat">Плоско</b><b data-v="neumo">Неоморфизм</b><b data-v="glass">Стекло</b></div></div>' +
     '<div class="note">Форма. Неоморфизм: плитка того же цвета, что и фон, её отделяют ' +
-    'светлая тень сверху-слева и тёмная снизу-справа, включённая — утоплена.</div>' +
+    'светлая тень сверху-слева и тёмная снизу-справа, включённая — утоплена. Стекло: ' +
+    'прозрачные плитки поверх неподвижных обоев.</div>' +
     '<div class="two">' + segOf('e-edge', EDGE_RU) + '</div>' +
     '<div class="note">Край ручек и колёс: термостат, кондиционер, телевизор.</div>' +
     '<div class="two">' + segOf('e-bevel', BEVEL_RU) + '</div>' +

@@ -117,6 +117,11 @@ class TodoList(Tile):
         base["more_y"] = round(y, 1)
         base["size"] = round(size, 1)
         base["dot_r"] = round(max(2.5, size * 0.2), 1)
+        # Лист в линейку (с 1.41): линии под каждой строкой, сколько их
+        # влезает, - и у пустого списка, чтобы он выглядел чистым листом.
+        base["sheet"] = True
+        base["rules"] = [round(top + size + i * line + size * 0.5, 1) for i in range(room)]
+        base["box"] = round(size * 0.72, 1)
         if not opened:
             base["status"] = "пусто"
             if view["done"]:

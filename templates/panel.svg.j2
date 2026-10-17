@@ -77,6 +77,17 @@
     <feGaussianBlur stdDeviation="10"/>
   </filter>
 {% endif %}
+{% if depth == 'glass' %}
+  {#- Отсвет стекла (1.40): свет сверху экрана. В координатах панели, а не
+      плитки: страница сдвигает его на величину прокрутки (data-glare), и
+      блик переезжает с плитки на плитку, пока они едут под ним. -#}
+  <radialGradient id="{{ uid }}glare" gradientUnits="userSpaceOnUse" data-glare="1"
+                  cx="{{ (width * 0.22)|round(1) }}" cy="0" r="{{ (width * 1.25)|round(1) }}">
+    <stop offset="0" stop-color="var(--glare)"/>
+    <stop offset=".55" stop-color="var(--glare)" stop-opacity=".35"/>
+    <stop offset="1" stop-color="var(--glare)" stop-opacity="0"/>
+  </radialGradient>
+{% endif %}
 {% for t in tiles %}
   {#- Обрезка - ровно по средней линии рамки, и рамка рисуется поверх:
       заливка уходит под неё без зазора. Раньше обрезали на точку внутрь,
@@ -99,16 +110,40 @@
 <g>
 {#- bare - плитка для пульта: фон страницы под ней не нужен, она лежит на оверлее. -#}
 {% if not bare %}
-<rect width="{{ width }}" height="{{ height }}" fill="url(#{{ uid }}bg)"/>
+<rect width="{{ width }}" height="{{ height }}" fill="url(#{{ uid }}bg)"{% if depth == 'glass' %} class="wall"{% endif %}/>
+{% if depth == 'glass' %}
+{#- Обои стекла (1.40): пятна на экран высоты (по пропорции телефона).
+    На странице их рисует фон окна, неподвижный при прокрутке, а этот
+    слой прячется: он нужен картинке без страницы (киоск, /panel.svg). -#}
+{% set wall_h = [height, width * 2.2]|min %}
+<g class="wall">
+  {% for i in range(1, 5) %}
+  <rect width="{{ width }}" height="{{ wall_h|round(1) }}" fill="url(#{{ uid }}wall{{ i }})"/>
+  {% endfor %}
+</g>
+{% endif %}
 {% endif %}
 
 {% if title %}
+{#- Во вкладках полоса может стоять над шапкой - шапка сдвигается на её
+    высоту. И вместо названия панели - значок и название открытой комнаты. -#}
+{% if head_dy %}<g transform="translate(0,{{ head_dy }})">{% endif %}
+{% if head_icon %}
+{#- Нажатие на шапку показывает кнопки страницы (панели, колонки, тема,
+    вид): во вкладках их полоса спрятана, на небольшом экране она лишняя. -#}
+<rect width="{{ width }}" height="64" fill="transparent" data-headtap="1"/>
+<g class="h1-ic"><use href="#{{ uid }}ic-{{ head_icon }}" xlink:href="#{{ uid }}ic-{{ head_icon }}"
+   x="20" y="19" width="28" height="28"/></g>
+<text x="54" y="44" class="h1">{{ title }}</text>
+{% else %}
 <text x="20" y="44" class="h1">{{ title }}</text>
+{% endif %}
 {#- Часы - крупно, под ними день недели и дата (с 1.35): раньше было
     только мелкое время, и на стене его было не прочесть. -#}
 <text x="{{ width - 20 }}" y="38" class="clock" text-anchor="end">{{ updated }}</text>
 <text x="{{ width - 20 }}" y="54" class="h1-sub date" text-anchor="end">
   {{- today or '' }}{{ '' if connected else ' · нет связи с MQTT' }}</text>
+{% if head_dy %}</g>{% endif %}
 {% endif %}
 
 {#- Строка состояния комнаты: чипы справа от заголовка раздела.
@@ -143,6 +178,37 @@
 </g>
 {% endfor %}
 {% endfor %}
+
+{#- Вкладки (режим tabs, с 1.36): ряд «пилюль», как выбор режима в пульте
+    кондиционера, - значок над подписью, на узком ряду одни значки. Видна
+    одна комната, переключение только нажатием: смахивание на стене путают
+    с прокруткой. Красная точка - тревога в закрытой вкладке. -#}
+{% if tabs %}
+{% set tp = tab_plate %}
+<g data-tabbar="{{ tab_dock }}" data-bar-y="{{ tp.y }}" data-bar-h="{{ tp.h }}">
+<rect x="0" y="{{ tp.y }}" width="{{ tp.w }}" height="{{ tp.h }}" class="tabbar"/>
+<rect x="0" y="{{ tp.line_y }}" width="{{ tp.w }}" height="1" class="tabbar-line"/>
+{% for t in tabs %}
+<g data-section="{{ t.key }}" data-folded="{{ 0 if t.active else 1 }}" data-tab="1" class="tab{{ ' on' if t.active }}">
+  <rect x="{{ t.hit_x }}" y="{{ t.y }}" width="{{ t.hit_w }}" height="{{ t.h }}" fill="transparent"/>
+  {% if t.round %}
+  <circle cx="{{ t.cx }}" cy="{{ t.cy }}" r="{{ t.r }}" class="tab-pill"/>
+  {% else %}
+  <rect x="{{ t.x }}" y="{{ t.y }}" width="{{ t.w }}" height="{{ t.h }}" rx="{{ [rx, t.h / 2] | min }}" class="tab-pill"/>
+  {% endif %}
+  <g class="tab-ic"><use href="#{{ uid }}ic-{{ t.icon }}" xlink:href="#{{ uid }}ic-{{ t.icon }}"
+     x="{{ t.ix }}" y="{{ t.iy }}" width="{{ t.isize }}" height="{{ t.isize }}"/></g>
+  {% if t.label %}
+  <text x="{{ t.tx }}" y="{{ t.ty }}" text-anchor="middle" class="tab-t">{{ t.label }}</text>
+  {% endif %}
+  <title>{{ t.title }}</title>
+  {% if t.alarm %}
+  <circle cx="{{ t.dot_x }}" cy="{{ t.dot_y }}" r="4" class="tab-alarm"/>
+  {% endif %}
+</g>
+{% endfor %}
+</g>
+{% endif %}
 
 {% for c in top_chips or [] %}
 <g transform="translate({{ c.x }},{{ c.y }})">
@@ -185,6 +251,17 @@
 </g>
 {% endif %}
 
+{% if depth == 'glass' %}
+{#- Стекло (1.40): налёт и отсвет - одним слоем под всеми плитками. -#}
+{% set glassy = tiles | rejectattr('kind', 'equalto', 'header') | list %}
+<g class="glass-under" pointer-events="none">
+  {% for t in glassy %}
+  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="glass-fill"/>
+  {% if not bare %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glare)"/>{% endif %}
+  {% endfor %}
+</g>
+{% endif %}
+
 {% for t in tiles %}
 <g transform="translate({{ t.x }},{{ t.y }})" class="{{ 'offline' if t.offline }}{{ ' tile-on' if t.on }}{{ ' inv' if t.inv }}"{{ t.attrs|safe }}>
   {% if   t.kind == 'chart'   %}{{ chart.tile_chart(t) }}
@@ -218,5 +295,13 @@
   {% if t.zones %}{{ base.zone_rects(t) }}{% endif %}
 </g>
 {% endfor %}
+{% if depth == 'glass' %}
+{#- блик края стекла - поверх плиток, мимо нажатий -#}
+<g class="glass-rims" pointer-events="none">
+  {% for t in glassy %}
+  <rect x="{{ t.x + 1.6 }}" y="{{ t.y + 1.6 }}" width="{{ t.w - 3.2 }}" height="{{ t.h - 3.2 }}" rx="{{ [rx - 0.6, 0]|max }}" class="glass-rim"/>
+  {% endfor %}
+</g>
+{% endif %}
 </g>
 </svg>

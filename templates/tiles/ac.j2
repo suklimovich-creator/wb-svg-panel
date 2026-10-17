@@ -62,6 +62,32 @@
   .acd-now           { fill: var(--ink-dim); font-weight: 500; }
   .acd-cur           { fill: var(--ink); font-weight: 650; letter-spacing: -1px; }
   .acd-name          { fill: var(--ink); font-weight: 500; }
+  /* ---- колесо плитки по образцу Haier (с 1.37) ------------------------
+     Цвет режима - отдельными селекторами: своя переменная при сплошной
+     отрисовке (flat) не доживает. */
+  .acw-col           { color: var(--active); }
+  .acw.cool .acw-col { color: var(--ac-seg-cool); }
+  .acw.heat .acw-col { color: var(--ac-seg-heat); }
+  .acw.fan .acw-col  { color: var(--ink-dim); }
+  .acw.off .acw-col  { color: var(--ink-dim); }
+  .acw-word          { fill: currentColor; font-weight: 600; }
+  .acw-num           { fill: var(--ink); font-weight: 650; letter-spacing: -1px; }
+  .acw.off .acw-num  { fill: var(--ink-dim); }
+  .acw-inner         { fill: none; stroke: var(--ink); opacity: .3; stroke-width: 1.2; }
+  .acw-tk            { stroke: var(--ink); opacity: .3; }
+  .acw-tk.mj         { opacity: .6; }
+  .acw-lab           { fill: var(--ink-dim); }
+  .acw-lab.sel       { fill: var(--ink); font-weight: 650; }
+  .acw-rim           { fill: none; stroke: var(--ink-faint); stroke-width: 1.6; }
+  .acw-seg           { fill: none; stroke: currentColor; stroke-linecap: round; }
+  .acw-glow          { fill: none; stroke: currentColor; stroke-linecap: round; opacity: .38; }
+  .acw-glow2         { fill: none; stroke: currentColor; stroke-linecap: round; opacity: .55; }
+  .acw-set           { stroke: var(--active); stroke-linecap: round; }
+  .acw.cool .acw-set { stroke: var(--ac-seg-cool); }
+  .acw.heat .acw-set { stroke: var(--ac-seg-heat); }
+  .acw.off .acw-set  { stroke: var(--ink-dim); }
+  .acw-dot           { fill: var(--tile); stroke: var(--ink); }
+  .acw-blade         { fill: none; }
   /* значки жалюзи: веер лопастей и стрелка качания */
   .acl-bg            { fill: var(--ac-pill); }
   .acl.swing .acl-bg { fill: var(--ac-pill-on); }
@@ -148,6 +174,16 @@
   .acs-pill-ic.on    { color: var(--ac-pill-ink); }
   .acs-shade         { fill: var(--shadow); }
   .acs-lit           { fill: none; stroke: #FFFFFF; stroke-opacity: .14; }
+  /* ---- пульт колесом линиями (с 1.39): классы прежнего пульта, цвета плитки ---- */
+  .acs.acp .acs-seg  { fill: none; stroke: currentColor; stroke-linecap: round; }
+  .acs.acp .acs-seg[data-k="g1"] { opacity: .38; }
+  .acs.acp .acs-seg[data-k="g2"] { opacity: .55; }
+  .acs.acp .acs-lab  { fill: var(--ink-dim); font-weight: 500; }
+  .acs.acp .acs-lab.sel { fill: var(--ink); font-weight: 700; }
+  .acp-hit           { fill: var(--ink); opacity: .05; }
+  .acp-val           { fill: var(--ink); font-weight: 650; }
+  .acs.acp.off .acp-val { fill: var(--ink-dim); }
+  .acp-pon .acl-bg   { fill: var(--ac-pill-ink); opacity: .25; }
 {% endmacro %}
 
 {#- ---- кондиционер ----
@@ -155,8 +191,12 @@
     приглушённые. Отдельной цифры под дугой нет, она дублировала. Внизу
     фактическая температура и режим работы. -#}
 {% macro tile_ac(t) %}
-  {% if t.screen %}
+  {% if t.screen and t.screen.arc %}
+  {{ screen_arc(t) }}
+  {% elif t.screen %}
   {{ screen(t) }}
+  {% elif t.arc and not t.compact and t.h >= 150 %}
+  {{ arcwheel(t) }}
   {% elif t.disk and not t.compact and t.h >= 150 %}
   {{ disk(t) }}
   {% else %}
@@ -223,6 +263,72 @@
   {% endif %}
 {% endmacro %}
 
+
+
+{#- ---- кондиционер: колесо по образцу Haier (с 1.37) ----
+    Ось над плиткой, видна нижняя дуга. Уставка крупно наверху и под
+    выемкой тонкой внутренней дуги; обод нейтральный, светится отрезок от
+    «сейчас» (точка) до уставки (риска) - цветом режима, с ореолом. Внизу
+    «сейчас» у левой стенки и кружки вентилятора и жалюзи. -#}
+{% macro arcwheel(t) %}
+  {% set a = t.arc %}
+  {{ base.plate(dict(t, on=False)) }}
+  <filter id="{{ uid }}acg{{ t.i }}" filterUnits="userSpaceOnUse" x="-60" y="-60"
+          width="{{ a.w + 120 }}" height="{{ a.h + 120 }}"><feGaussianBlur stdDeviation="{{ 6 * a.fs }}"/></filter>
+  <filter id="{{ uid }}acs{{ t.i }}" filterUnits="userSpaceOnUse" x="-60" y="-60"
+          width="{{ a.w + 120 }}" height="{{ a.h + 120 }}"><feGaussianBlur stdDeviation="{{ 2.4 * a.fs }}"/></filter>
+  <g clip-path="url(#{{ uid }}clip{{ t.i }})" class="acw {{ a.tone }}{{ ' off' if not t.on }}">
+    <text x="{{ a.tag_x }}" y="{{ a.tag_y }}" font-size="{{ a.tag_size }}" class="tag">{{ t.title|upper }}</text>
+    {% set m = a.mode %}
+    <g class="acw-col"><use href="#{{ uid }}ic-{{ m.icon }}" xlink:href="#{{ uid }}ic-{{ m.icon }}"
+       x="{{ m.ix }}" y="{{ m.iy }}" width="{{ m.isize }}" height="{{ m.isize }}"/>
+    <text x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" text-anchor="end" class="acw-word">{{ m.word }}</text></g>
+    <text x="{{ a.num.x }}" y="{{ a.num.y }}" font-size="{{ a.num.size }}" text-anchor="middle" class="acw-num">{{ a.num.text }}{% if a.num.text != '--' %}<tspan
+          font-size="{{ a.num.deg }}" dy="{{ a.num.dy }}">°</tspan>{% endif %}</text>
+    <path d="{{ a.inner }}" class="acw-inner"/>
+    {% for k in a.ticks %}
+    <line x1="{{ k.x1 }}" y1="{{ k.y1 }}" x2="{{ k.x2 }}" y2="{{ k.y2 }}" class="acw-tk{{ ' mj' if k.major }}"/>
+    {% endfor %}
+    {% for l in a.labels %}
+    <text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ a.lab_sel if l.sel else a.lab }}" text-anchor="middle"
+          class="acw-lab{{ ' sel' if l.sel }}" transform="rotate({{ l.rot }} {{ l.x }} {{ l.ry }})">{{ l.text }}</text>
+    {% endfor %}
+    <path d="{{ a.rim }}" class="acw-rim"/>
+    {% if a.seg %}
+    <g class="acw-col">
+      <path d="{{ a.seg }}" class="acw-glow" stroke-width="{{ 18 * a.fs }}" filter="url(#{{ uid }}acg{{ t.i }})"/>
+      <path d="{{ a.seg }}" class="acw-glow2" stroke-width="{{ 8 * a.fs }}" filter="url(#{{ uid }}acs{{ t.i }})"/>
+      <path d="{{ a.seg }}" class="acw-seg" stroke-width="{{ 4 * a.fs }}"/>
+    </g>
+    {% endif %}
+    <line x1="{{ a.set.x1 }}" y1="{{ a.set.y1 }}" x2="{{ a.set.x2 }}" y2="{{ a.set.y2 }}" stroke-width="{{ a.set.w }}" class="acw-set"/>
+    {% if a.dot %}<circle cx="{{ a.dot.x }}" cy="{{ a.dot.y }}" r="{{ a.dot.r }}" class="acw-dot" stroke-width="{{ 1.6 * a.fs }}"/>{% endif %}
+    {% set n = a.now %}
+    <text x="{{ n.x }}" y="{{ n.ly }}" font-size="{{ n.lsize }}" class="acd-now">сейчас</text>
+    <text x="{{ n.x }}" y="{{ n.y }}" font-size="{{ n.size }}" class="acd-cur">{{ n.text }}{% if n.text != '--' %}<tspan
+          class="acd-deg" font-size="{{ n.deg }}" dy="{{ n.dy }}">°</tspan>{% endif %}</text>
+    {% for kind, ic in a.discs %}
+    {% if kind == 'fan' %}
+    <g class="acl{{ ' swing' if ic.auto }}">
+      <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.r }}" class="acl-bg"/>
+      {% for b in ic.blades %}
+      <path d="{{ b.d }}" class="acl-b acw-blade{{ ' act' if b.act }}" stroke-width="{{ (1.6 if b.act and not ic.auto else 1.15) * a.fs }}"/>
+      {% endfor %}
+      <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.hub }}" class="acl-b acw-blade{{ ' act' if t.on }}" stroke-width="{{ 1.1 * a.fs }}"/>
+    </g>
+    {% else %}
+    <g class="acl{{ ' swing' if ic.swing and t.on }}">
+      <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.r }}" class="acl-bg"/>
+      {% for b in ic.blades %}
+      <line x1="{{ b.x1 }}" y1="{{ b.y1 }}" x2="{{ b.x2 }}" y2="{{ b.y2 }}" stroke-width="{{ b.w }}"
+            class="acl-b{{ ' act' if b.act and t.on }}"/>
+      {% endfor %}
+      <path d="{{ ic.arrow }}" class="acl-a" stroke-width="{{ ic.sw }}"/>
+    </g>
+    {% endif %}
+    {% endfor %}
+  </g>
+{% endmacro %}
 
 
 {#- ---- кондиционер: залитое колесо ----
@@ -412,7 +518,9 @@
               stroke-width="{{ f.sw_on if t.on and g.i == f.ring else f.sw }}"/>
       {% endfor %}
       <g transform="translate({{ f.x }} {{ f.y }})" pointer-events="none">
-        <g class="{{ 'acs-spin' if f.spin }}" style="animation-duration: {{ f.spin or 1 }}s">
+        {#- Не крутится (с 1.37): на панели это был единственный элемент,
+            движущийся сам; скорость и так видна по кольцам. -#}
+        <g>
           <path d="{{ f.blades }}" class="acs-blade in"/>
           <circle r="{{ f.hub }}" class="acs-hubc in" stroke-width="{{ f.hubw }}"/>
         </g>
@@ -502,5 +610,139 @@
       </g>
       {% endfor %}
     </g>
+  </g>
+{% endmacro %}
+
+
+{#- ---- пульт на весь экран колесом линиями (с 1.39) ----
+    То же колесо, что на плитке, только крупно. Пульт (padDisk в
+    wrapper.html) крутит группу .acs-scale вокруг оси над экраном и
+    перерисовывает отрезок .acs-seg, не запрашивая картинку заново. Имена
+    классов и data-атрибуты - те же, что у прежнего диска. -#}
+{% macro disc_icon(kind, ic, k, on) %}
+  {% if kind == 'fan' %}
+    <g class="acl{{ ' swing' if ic.auto }}">
+      <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.r }}" class="acl-bg"/>
+      {% for b in ic.blades %}
+      <path d="{{ b.d }}" class="acl-b acw-blade{{ ' act' if b.act }}" stroke-width="{{ (1.6 if b.act and not ic.auto else 1.15) * k }}"/>
+      {% endfor %}
+      <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.hub }}" class="acl-b acw-blade{{ ' act' if on }}" stroke-width="{{ 1.1 * k }}"/>
+    </g>
+  {% else %}
+    <g class="acl{{ ' swing' if ic.swing and on }}">
+      <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.r }}" class="acl-bg"/>
+      {% for b in ic.blades %}
+      <line x1="{{ b.x1 }}" y1="{{ b.y1 }}" x2="{{ b.x2 }}" y2="{{ b.y2 }}" stroke-width="{{ b.w }}"
+            class="acl-b{{ ' act' if b.act and on }}"/>
+      {% endfor %}
+      <path d="{{ ic.arrow }}" class="acl-a" stroke-width="{{ ic.sw }}"/>
+    </g>
+  {% endif %}
+{% endmacro %}
+
+{% macro screen_arc(t) %}
+  {% set s = t.screen %}
+  <defs>
+    <filter id="{{ uid }}acpg" filterUnits="userSpaceOnUse" x="-100" y="-100" width="{{ s.w + 200 }}" height="{{ s.h + 200 }}"><feGaussianBlur stdDeviation="{{ s.blur[0] }}"/></filter>
+    <filter id="{{ uid }}acps" filterUnits="userSpaceOnUse" x="-100" y="-100" width="{{ s.w + 200 }}" height="{{ s.h + 200 }}"><feGaussianBlur stdDeviation="{{ s.blur[1] }}"/></filter>
+    <clipPath id="{{ uid }}acp-clip"><rect width="{{ s.wl }}" height="{{ s.h }}"/></clipPath>
+  </defs>
+  <g class="acs acp acw {{ s.tone }}{{ ' off' if not t.on }}"
+     data-cx="{{ s.cx }}" data-cy="{{ s.cy }}" data-r="{{ s.r }}" data-rr="{{ s.rr }}" data-dpd="{{ s.dpd }}"
+     data-asp="{{ s.a_sp }}" data-val="{{ s.value }}" data-lo="{{ s.lo }}" data-hi="{{ s.hi }}"
+     data-cur="{{ s.cur if s.cur is not none else '' }}" data-box="{{ s.box|join(',') }}" data-labr="{{ s.lab_r }}"
+     data-w="{{ s.w }}" data-h="{{ s.h }}" data-wl="{{ s.wl }}" data-fs="{{ s.fs }}" data-on="{{ '1' if t.on else '0' }}"
+     data-notarget="{{ '1' if s.no_target else '0' }}" data-orient="{{ s.orient }}" data-arc="1"
+     data-fanstate="{{ s.fan_state }}">
+    <rect width="{{ s.w }}" height="{{ s.h }}" class="acs-bg"/>
+    {#- колесо уставки: всё, что ниже кнопок, - зона колеса -#}
+    <g data-z="wheel" clip-path="url(#{{ uid }}acp-clip)">
+      <rect x="{{ s.wheel_hit[0] }}" y="{{ s.wheel_hit[1] }}" width="{{ s.wheel_hit[2] }}" height="{{ s.wheel_hit[3] }}" fill="transparent"/>
+      <path d="{{ s.inner }}" class="acw-inner"/>
+      <path d="{{ s.rim }}" class="acw-rim"/>
+      <g class="acw-col">
+        <path d="{{ s.seg or 'M 0,0' }}" data-k="g1" class="acs-seg{{ ' acs-hid' if not s.seg }}" stroke-width="{{ s.glow[0] }}" filter="url(#{{ uid }}acpg)"/>
+        <path d="{{ s.seg or 'M 0,0' }}" data-k="g2" class="acs-seg{{ ' acs-hid' if not s.seg }}" stroke-width="{{ s.glow[1] }}" filter="url(#{{ uid }}acps)"/>
+        <path d="{{ s.seg or 'M 0,0' }}" data-k="g3" class="acs-seg{{ ' acs-hid' if not s.seg }}" stroke-width="{{ s.glow[2] }}"/>
+      </g>
+      <g class="acs-scale">
+        {% for k in s.ticks %}
+        <g class="acs-tk{{ ' acs-hid' if k.t < s.lo or k.t > s.hi }}" data-t="{{ k.t }}">
+          <line x1="{{ k.x1 }}" y1="{{ k.y1 }}" x2="{{ k.x2 }}" y2="{{ k.y2 }}" class="acw-tk{{ ' mj' if k.major }}"
+                stroke-width="{{ s.tk_w if k.major else s.tk_w2 }}"/>
+        </g>
+        {% endfor %}
+        {% for l in s.labels %}
+        <text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ s.lab }}" text-anchor="middle" data-t="{{ l.t }}"
+              class="acs-lab{{ ' sel' if l.sel }}{{ ' acs-hid' if l.hide }}" transform="rotate({{ l.rot }} {{ l.x }} {{ l.ry }})">{{ l.text }}</text>
+        {% endfor %}
+        {% if s.dot %}<circle cx="{{ s.dot.x }}" cy="{{ s.dot.y }}" r="{{ s.dot.r }}" class="acw-dot" stroke-width="{{ 1.6 * s.fs }}"/>{% endif %}
+      </g>
+      {% if not s.no_target %}
+      <line x1="{{ s.set.x1 }}" y1="{{ s.set.y1 }}" x2="{{ s.set.x2 }}" y2="{{ s.set.y2 }}" stroke-width="{{ s.set.w }}" class="acw-set"/>
+      {% endif %}
+      <text x="{{ s.num.x }}" y="{{ s.num.y }}" font-size="{{ s.num.size }}" text-anchor="middle" class="acw-num"><tspan
+            class="acs-v">{{ s.num.text }}</tspan>{% if not s.no_target and s.num.text != '--' %}<tspan font-size="{{ s.num.deg }}" dy="{{ s.num.dy }}">°</tspan>{% endif %}</text>
+    </g>
+    {#- режим: нажатие открывает выбор -#}
+    {% set m = s.mode %}
+    <g data-z="mode" class="acw-col">
+      <rect x="{{ m.hit[0] }}" y="{{ m.hit[1] }}" width="{{ m.hit[2] }}" height="{{ m.hit[3] }}" rx="{{ m.hit[3] / 2 }}" class="acp-hit"/>
+      <use href="#{{ uid }}ic-{{ m.icon }}" xlink:href="#{{ uid }}ic-{{ m.icon }}" x="{{ m.ix }}" y="{{ m.iy }}" width="{{ m.isize }}" height="{{ m.isize }}"/>
+      <text x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" class="acw-word">{{ m.word }}</text>
+    </g>
+    {#- сейчас -#}
+    {% set n = s.now %}
+    <text x="{{ n.x }}" y="{{ n.ly }}" font-size="{{ n.lsize }}" text-anchor="middle" class="acd-now">сейчас</text>
+    <text x="{{ n.x }}" y="{{ n.y }}" font-size="{{ n.size }}" text-anchor="middle" class="acd-cur">{{ n.text }}{% if n.text != '--' %}<tspan
+          class="acd-deg" font-size="{{ n.deg }}" dy="{{ n.dy }}">°</tspan>{% endif %}</text>
+    {#- кружки вентилятора и жалюзи с подписями; нажатие - шторка -#}
+    {% for d in s.discs %}
+    <g data-z="{{ d.zone }}"{% if d.zone != 'fan' %} data-sheet="{{ d.zone }}"{% endif %}>
+      <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.hit }}" fill="transparent"/>
+      {{ disc_icon(d.kind, d.ic, d.ic.r / 11.5, t.on) }}
+      <text x="{{ d.cap.x }}" y="{{ d.cap.y1 }}" font-size="{{ d.cap.s1 }}" text-anchor="{{ d.cap.anchor }}" class="acd-now">{{ d.cap.title }}</text>
+      <text x="{{ d.cap.x }}" y="{{ d.cap.y2 }}" font-size="{{ d.cap.s2 }}" text-anchor="{{ d.cap.anchor }}" class="acp-val">{{ d.cap.value }}</text>
+    </g>
+    {% endfor %}
+    {#- название, «назад» и питание -#}
+    {% set nm = s.name %}
+    <text x="{{ nm.x }}" y="{{ nm.y }}" font-size="{{ nm.size }}" font-weight="600" text-anchor="middle" class="acs-ink">{{ t.title }}</text>
+    {% set b = s.back %}
+    <g data-z="back">
+      <circle cx="{{ b.x }}" cy="{{ b.y }}" r="{{ b.r }}" class="acs-btn"/>
+      <path d="M {{ b.x + b.r * 0.18 }},{{ b.y - b.r * 0.45 }} L {{ b.x - b.r * 0.3 }},{{ b.y }} L {{ b.x + b.r * 0.18 }},{{ b.y + b.r * 0.45 }}"
+            class="acs-btn-ink" stroke-width="{{ b.r * 0.14 }}"/>
+    </g>
+    {% set p = s.power %}
+    <g data-z="power">
+      <circle cx="{{ p.x }}" cy="{{ p.y }}" r="{{ p.r }}" class="acs-pw"/>
+      <path d="M {{ p.x - p.r * 0.27 }},{{ p.y - p.r * 0.27 }} A {{ p.r * 0.38 }},{{ p.r * 0.38 }} 0 1 0 {{ p.x + p.r * 0.27 }},{{ p.y - p.r * 0.27 }} M {{ p.x }},{{ p.y - p.r * 0.52 }} L {{ p.x }},{{ p.y - p.r * 0.08 }}"
+            class="acs-pw-ink" stroke-width="{{ p.r * 0.1 }}"/>
+    </g>
+    {#- шторки выбора у верхнего края -#}
+    {% for sh in s.sheets %}
+    <g class="acs-ch" data-sheet="{{ sh.name }}">
+      <rect width="{{ s.w }}" height="{{ sh.h }}" class="acs-ch-bg" data-z="ch-bg"/>
+      <rect y="{{ sh.h - 1 }}" width="{{ s.w }}" height="1" class="acs-ch-line"/>
+      {% for c in sh['items'] %}
+      <g data-z="pick" {% if sh.name == 'mode' %}data-mode="{{ c.value }}"{% else %}data-set="{{ sh.name }}" data-value="{{ c.value }}"{% endif %}>
+        <rect x="{{ c.x }}" y="{{ sh.y }}" width="{{ c.w }}" height="{{ sh.pill }}" rx="{{ [sh.pill / 2, 18]|min }}"
+              class="acs-pill{{ ' on' if c.on }}"/>
+        {% if c.disc %}
+        <g class="{{ 'acp-pon' if c.on }}">{{ disc_icon('fan' if c.fan is defined and c.fan is not none else 'louver', c.disc, sh.sw, True) }}</g>
+        {% elif c.value == 'auto' %}
+        <text x="{{ c.tx }}" y="{{ c.iy + c.isize / 2 }}" font-size="{{ c.isize * 0.8 }}" text-anchor="middle"
+              dominant-baseline="central" class="acs-pill-t{{ ' on' if c.on }}" font-weight="750">A</text>
+        {% else %}
+        <g class="acs-pill-ic{{ ' on' if c.on }}"><use href="#{{ uid }}ic-{{ c.icon }}" xlink:href="#{{ uid }}ic-{{ c.icon }}"
+           x="{{ c.ix }}" y="{{ c.iy }}" width="{{ c.isize }}" height="{{ c.isize }}"/></g>
+        {% endif %}
+        <text x="{{ c.tx }}" y="{{ sh.ty }}" font-size="{{ sh.font }}" text-anchor="middle"
+              class="acs-pill-t{{ ' on' if c.on }}">{{ c.word }}</text>
+      </g>
+      {% endfor %}
+    </g>
+    {% endfor %}
   </g>
 {% endmacro %}

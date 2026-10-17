@@ -22,7 +22,7 @@ from .const import BAND, log
 from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
                        grid_bounds, hour_ticks, label_color, label_digits, nice_step,
                        parse_duration, smooth_path, text_width)
-from .ac_disk import build_disk, build_screen
+from .ac_disk import build_arc, build_disk, build_screen, build_screen_arc
 from .skeuo import tv_tile
 from . import palette
 from .registry import Tile, Zone, tile
@@ -677,6 +677,17 @@ def build_ac(tile, state):
         # от высоты, и цифры в узкую ширину не влезали.
         # look: classic (с 1.23) - прежние дуга на плитке и пульт со
         # шкалой, как до 1.15.
+        # Колесо по образцу Haier (с 1.37): ось над плиткой, нижняя дуга,
+        # светится отрезок «сейчас - уставка», кружки вентилятора и жалюзи.
+        # look: disk - залитое колесо в углу (1.15-1.36), classic - дуга.
+        "arc": build_arc(tile.get("inner_w") or 170, tile.get("chart_h") or 170,
+                         min(float(tile.get("fs") or 1),
+                             max(1.0, (tile.get("inner_w") or 170) / 170.0)),
+                         mode, on, tgt, cur, lo, hi, fan=fan, quiet=quiet,
+                         swing=swing if swing_snap["known"] else None,
+                         swing_h=swing_h if swing_h_snap["known"] else None,
+                         step=float(tile.get("step", 1) or 1))
+               if tile.get("look") not in ("disk", "classic") and tile.get("view") != "pad" else None,
         "disk": None if tile.get("look") == "classic" else build_disk(
                            tile.get("inner_w") or 170, tile.get("chart_h") or 170,
                            min(float(tile.get("fs") or 1),
@@ -688,7 +699,9 @@ def build_ac(tile, state):
                            pad=tile.get("view") == "pad",
                            step=float(tile.get("step", 1) or 1)),
         # Пульт на весь экран (с 1.16): своя раскладка по форме экрана.
-        "screen": build_screen(tile.get("inner_w") or 390, tile.get("chart_h") or 844,
+        # С 1.39 - тем же колесом линиями, что плитка; look: disk - прежний.
+        "screen": (build_screen if tile.get("look") == "disk" else build_screen_arc)(
+                               tile.get("inner_w") or 390, tile.get("chart_h") or 844,
                                mode, on, tgt, cur, lo, hi, fan=fan, quiet=quiet,
                                swing=swing if swing_snap["known"] else None,
                                swing_h=swing_h if swing_h_snap["known"] else None,

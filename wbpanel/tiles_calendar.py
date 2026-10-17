@@ -118,6 +118,9 @@ class Agenda(Tile):
         base["title_s"] = title[:10]
         base["date"] = "%s %d %s" % (WEEKDAYS[today.weekday()], today.day,
                                      MONTHS[today.month - 1])
+        # Листок отрывного календаря вместо значка (с 1.41)
+        base["day"] = today.day
+        base["wd"] = WEEKDAYS[today.weekday()]
         if not names:
             base["status"] = "нет календарей"
             return base

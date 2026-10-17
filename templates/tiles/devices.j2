@@ -14,6 +14,39 @@
     старые WebView такое молча игнорируют. Поэтому каркас
     склеивает куски, а не выпускает несколько блоков. -#}
 {% macro style() %}
+  /* ---- фанкойл пультом (с 1.37) ---- */
+  .fcp-col          { color: var(--active); }
+  .fcp.cool .fcp-col { color: var(--ac-seg-cool); }
+  .fcp.heat .fcp-col { color: var(--ac-seg-heat); }
+  .fcp.fan .fcp-col, .fcp.off .fcp-col, .fcp-dimc { color: var(--ink-dim); }
+  .fcp-tk           { stroke: var(--ink); opacity: .35; }
+  .fcp-tk.mj        { opacity: .65; }
+  .fcp-faint        { fill: var(--ink-faint); }
+  .fcp-dim          { fill: var(--ink-dim); }
+  .fcp-ink          { fill: var(--ink); }
+  .fcp.off .fcp-lcdg { opacity: .45; }
+  .fcp-ghost        { fill: var(--ink); opacity: .07; }
+  .fcp-num          { fill: var(--ink); font-weight: 650; letter-spacing: -1px; }
+  .fcp-well         { fill: var(--well); }
+  .fcp-fill         { fill: currentColor; }
+  .fcp-blade        { fill: currentColor; opacity: .55; }
+  .fcp.off .fcp-blade { opacity: .25; }
+  .fcp-hub          { fill: var(--tile); stroke: currentColor; stroke-width: 1.2; }
+  .fcp-slat         { fill: var(--tile); }
+  .fcp-hl           { stroke: #FFFFFF; stroke-opacity: .45; stroke-width: .8; }
+  .fcp-rib          { stroke: var(--shadow); stroke-opacity: .55; stroke-width: 1.2; }
+  .fcp-frame        { fill: none; stroke: var(--edge); stroke-width: 2; }
+  .fcp-lcd          { fill: var(--lcd); }
+  .fcp-shadow       { fill: var(--shadow); opacity: .5; }
+  .fcp-edge         { stroke: var(--edge); }
+  .fcp-side         { fill: var(--key-side); }
+  .fcp-led          { fill: var(--led-off); stroke: var(--edge); stroke-width: .6; }
+  .fcp-led.on       { fill: currentColor; stroke: none; }
+  .fcp-ledglow      { fill: currentColor; opacity: .45; }
+  .fcp-klab         { fill: var(--ink); font-weight: 650; opacity: .85; }
+  .fcp-klab.in      { opacity: .6; }
+  .fcp-word         { fill: currentColor; }
+  .fcp-col use, .fcp-dimc use { color: currentColor; }
   /* карманы под рейки и нижняя рейка рулонной шторы. Цвет literal, а не
      var(--ink): это тень на ткани, и в тёмной теме она тоже тень, а не
      светлая линия, какой стала бы, взявшись от цвета текста. */
@@ -526,7 +559,10 @@
       на плитке и так тесно, а место у краёв всё равно пустует. Долгое
       нажатие открывает пульт, короткое по центру - ничего не делает,
       чтобы случайное касание не меняло уставку. -#}
-  {{ base.plate(t) }}
+  {#- Работающий климат плитку не красит (с 1.37): ни заливки, ни рамки, ни
+      отсвета. О работе говорят цвет дуги и слово «Греет» - этого хватает,
+      а залитая плитка перетягивала взгляд с действительно включённого. -#}
+  {{ base.plate(dict(t, on=False)) }}
   {% if t.knob and not t.compact %}
     {{ knob(t) }}
   {% elif t.dial and not t.compact %}
@@ -582,8 +618,13 @@
     вентилятор со ступенями скорости и клапан. Строкой внизу это не
     передать, а на дугу не положить. -#}
 {% macro tile_fancoil(t) %}
-  {{ base.plate(t) }}
-  {% if t.dial and not t.compact %}
+  {#- Работающий климат плитку не красит (с 1.37): ни заливки, ни рамки, ни
+      отсвета. О работе говорят цвет дуги и слово «Греет» - этого хватает,
+      а залитая плитка перетягивала взгляд с действительно включённого. -#}
+  {{ base.plate(dict(t, on=False)) }}
+  {% if t.panel and not t.compact %}
+    {% if t.panel.square %}{{ fcsquare(t) }}{% else %}{{ fcpanel(t) }}{% endif %}
+  {% elif t.dial and not t.compact %}
     <g class="dial {{ 'live' if t.on }} {{ 'cool' if t.cooling }} {{ 'muted' if not t.enabled }}">
       {% if t.dial.track %}<path d="{{ t.dial.track }}" class="track"/>{% endif %}
       {% if t.dial.fill %}<path d="{{ t.dial.fill }}" class="fill"/>{% endif %}
@@ -655,4 +696,129 @@
     {% endif %}
     {{ base.caption(t, t.status) }}
   {% endif %}
+{% endmacro %}
+
+
+{#- ---- фанкойл пультом (с 1.37) ----
+    Ползунок уставки, квадратная решётка с пропеллером, табло уставки
+    сегментными цифрами, «сейчас», клавиши скорости, режим и клапан.
+    Рисуется в рамке 354×170 (квадратная плитка - 170×170) и
+    масштабируется в плитку (k, dx, dy). Части общие у обеих рамок. -#}
+{% macro fc_defs(id) %}
+  <defs>
+    <linearGradient id="{{ id }}cap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--key-hi)"/><stop offset="1" stop-color="var(--key-lo)"/></linearGradient>
+    <linearGradient id="{{ id }}in" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--key-in-a)"/><stop offset="1" stop-color="var(--key-in-b)"/></linearGradient>
+    <filter id="{{ id }}sh" filterUnits="userSpaceOnUse" x="-20" y="-20" width="400" height="220"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+{% endmacro %}
+
+{% macro fc_slider(p, id, labels=True) %}
+    {% for k in p.ticks %}
+    <line x1="{{ k.x1 }}" y1="{{ k.y }}" x2="{{ k.x2 }}" y2="{{ k.y }}" class="fcp-tk{{ ' mj' if k.major }}"/>
+    {% if labels and k.label is not none %}<text x="{{ p.sx - 25 }}" y="{{ k.y + 3.5 }}" font-size="9.5" text-anchor="end" class="fcp-faint">{{ k.label }}</text>{% endif %}
+    {% endfor %}
+    <rect x="{{ p.sx - 5 }}" y="{{ p.slot_y }}" width="10" height="{{ p.slot_h }}" rx="5" class="fcp-well"/>
+    {% if p.fill %}<rect x="{{ p.sx - 2 }}" y="{{ p.fill.y }}" width="4" height="{{ p.fill.h }}" rx="2" class="fcp-col fcp-fill"/>{% endif %}
+    {% if p.cur_y is not none %}<circle cx="{{ p.sx }}" cy="{{ p.cur_y }}" r="2.6" class="fcp-ink"/>{% endif %}
+{% endmacro %}
+
+{% macro fc_cap(p, id) %}
+    <rect x="{{ p.sx - 20 }}" y="{{ p.cap_y - 9 }}" width="40" height="24" rx="6" class="fcp-shadow" filter="url(#{{ id }}sh)"/>
+    <rect x="{{ p.sx - 20 }}" y="{{ p.cap_y - 11 }}" width="40" height="22" rx="6" fill="url(#{{ id }}cap)" class="fcp-edge"/>
+    {% for d in (-5, 0, 5) %}
+    <line x1="{{ p.sx - 13 }}" y1="{{ p.cap_y + d }}" x2="{{ p.sx + 13 }}" y2="{{ p.cap_y + d }}" class="fcp-rib"/>
+    <line x1="{{ p.sx - 13 }}" y1="{{ p.cap_y + d + 1.2 }}" x2="{{ p.sx + 13 }}" y2="{{ p.cap_y + d + 1.2 }}" class="fcp-hl"/>
+    {% endfor %}
+{% endmacro %}
+
+{% macro fc_grille(g) %}
+    {% set rx = (g.w * 0.13)|round(1) %}
+    <rect x="{{ g.x }}" y="{{ g.y }}" width="{{ g.w }}" height="{{ g.w }}" rx="{{ rx }}" class="fcp-well"/>
+    <g class="fcp-col">
+      <g>
+        {% for b in g.blades %}<path d="{{ b }}" class="fcp-blade"/>{% endfor %}
+        <circle cx="{{ g.cx }}" cy="{{ g.cy }}" r="{{ g.hub }}" class="fcp-hub"/>
+        {% if g.spin %}<animateTransform attributeName="transform" type="rotate" from="0 {{ g.cx }} {{ g.cy }}"
+            to="360 {{ g.cx }} {{ g.cy }}" dur="{{ g.dur }}s" repeatCount="indefinite"/>{% endif %}
+      </g>
+    </g>
+    {% for y in g.slats %}
+    <rect x="{{ g.x + 4 }}" y="{{ y }}" width="{{ g.w - 8 }}" height="{{ (g.w - 8) / 16 }}" rx="1.5" class="fcp-slat"/>
+    <line x1="{{ g.x + 5 }}" y1="{{ y + 0.6 }}" x2="{{ g.x + g.w - 5 }}" y2="{{ y + 0.6 }}" class="fcp-hl"/>
+    {% endfor %}
+    <rect x="{{ g.x }}" y="{{ g.y }}" width="{{ g.w }}" height="{{ g.w }}" rx="{{ rx }}" class="fcp-frame"/>
+{% endmacro %}
+
+{% macro fc_lcd(l) %}
+    <rect x="{{ l.x }}" y="{{ l.y }}" width="{{ l.w }}" height="{{ l.h }}" rx="9" class="fcp-well"/>
+    <rect x="{{ l.x + 3 }}" y="{{ l.y + 3 }}" width="{{ l.w - 6 }}" height="{{ l.h - 6 }}" rx="6.5" class="fcp-lcd"/>
+    <g class="fcp-lcdg">
+    {% for q in l.polys %}<polygon points="{{ q.p }}" class="{{ 'fcp-ink' if q.on else 'fcp-ghost' }}"/>{% endfor %}
+    {% for d in l.dots %}<circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.r }}" class="fcp-ink"/>{% endfor %}
+    {% if l.deg %}<text x="{{ l.cx }}" y="{{ l.cy }}" font-size="10" font-weight="700" class="fcp-ink">°C</text>{% endif %}
+    {% for b in l.bars %}<rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" rx="1" class="{{ 'fcp-ink' if b.on else 'fcp-ghost' }}"/>{% endfor %}
+    {% if l.auto %}<text x="{{ l.auto.x }}" y="{{ l.auto.y }}" font-size="8" font-weight="700" text-anchor="middle" class="fcp-ink">A</text>{% endif %}
+    </g>
+{% endmacro %}
+
+{% macro fcpanel(t) %}
+  {% set p = t.panel %}{% set id = uid ~ 'fc' ~ t.i %}
+  {{ fc_defs(id) }}
+  <g transform="translate({{ p.dx }} {{ p.dy }}) scale({{ p.k }})" class="fcp {{ p.tone }}{{ ' off' if not t.enabled }}">
+    {{ fc_slider(p, id) }}
+    {{ fc_grille(p.grille) }}
+    {{ fc_lcd(p.lcd) }}
+    {{ fc_cap(p, id) }}
+    {#- правая колонка -#}
+    <text x="340" y="26" text-anchor="end" font-size="11" class="tag">{{ p.title }}</text>
+    <text x="{{ p.right }}" y="26" font-size="11" class="fcp-dim">сейчас</text>
+    <text x="{{ p.right }}" y="52" font-size="24" class="fcp-num">{{ p.current }}<tspan font-size="13" dy="-10">°</tspan></text>
+    {% for k in p['keys'] %}
+    {% set dz = 4 if k.down else 0 %}{% set top = p.ky + dz %}{% set fh = p.kh - dz - (2 if k.down else 5) %}
+    <rect x="{{ k.x - 2.5 }}" y="{{ p.ky - 2.5 }}" width="{{ k.w + 5 }}" height="{{ p.kh + 5 }}" rx="8.5" class="fcp-well"/>
+    {% if not k.down %}<rect x="{{ k.x + 1 }}" y="{{ p.ky + 5 }}" width="{{ k.w - 2 }}" height="{{ p.kh - 2 }}" rx="6" class="fcp-shadow" filter="url(#{{ id }}sh)"/>{% endif %}
+    <rect x="{{ k.x }}" y="{{ top }}" width="{{ k.w }}" height="{{ p.kh - dz }}" rx="6" class="fcp-side"/>
+    <rect x="{{ k.x }}" y="{{ top }}" width="{{ k.w }}" height="{{ fh }}" rx="6"
+          fill="url(#{{ id }}{{ 'in' if k.down else 'cap' }})" class="fcp-edge"/>
+    <line x1="{{ k.x + 5 }}" y1="{{ top + 1.2 }}" x2="{{ k.x + k.w - 5 }}" y2="{{ top + 1.2 }}" class="fcp-hl"/>
+    {% if k.label != '0' %}
+    <g class="{{ 'fcp-col' if k.led }}">
+      <rect x="{{ k.cx - 7 }}" y="{{ top + 6 }}" width="14" height="3.2" rx="1.6" class="fcp-led{{ ' on' if k.led }}"/>
+      {% if k.led %}<rect x="{{ k.cx - 9 }}" y="{{ top + 4 }}" width="18" height="7" rx="3.5" class="fcp-ledglow" filter="url(#{{ id }}sh)"/>{% endif %}
+    </g>
+    {% endif %}
+    <text x="{{ k.cx }}" y="{{ top + fh / 2 + 8 }}" font-size="14" text-anchor="middle"
+          class="fcp-klab{{ ' in' if k.down }}">{{ k.label }}</text>
+    {% endfor %}
+    {#- режим и клапан: значки 16 и подписи на одной средней линии -#}
+    <g class="fcp-col">
+      <use href="#{{ uid }}ic-{{ p.mode.icon }}" xlink:href="#{{ uid }}ic-{{ p.mode.icon }}" x="{{ p.right }}" y="{{ p.ml - 8 }}" width="16" height="16"/>
+      <text x="{{ p.right + 21 }}" y="{{ p.ml + 4.2 }}" font-size="12" font-weight="600" class="fcp-word">{{ p.mode.title }}</text>
+    </g>
+    {% if p.valve is not none %}
+    <g class="{{ 'fcp-col' if p.valve and t.enabled else 'fcp-dimc' }}">
+      <use href="#{{ uid }}ic-drop" xlink:href="#{{ uid }}ic-drop" x="{{ p.vx }}" y="{{ p.ml - 8 }}" width="16" height="16"/>
+      <text x="{{ p.vx + 21 }}" y="{{ p.ml + 4.2 }}" font-size="12" font-weight="600" class="fcp-word">{{ 'клапан' if p.valve else 'закрыт' }}</text>
+    </g>
+    {% endif %}
+  </g>
+{% endmacro %}
+
+{#- Квадратная плитка фанкойла (с 1.38) - «фейдер»: ползунок, решётка,
+    табло; текущая температура слева сверху, значок режима и название справа. -#}
+{% macro fcsquare(t) %}
+  {% set p = t.panel %}{% set id = uid ~ 'fc' ~ t.i %}
+  {{ fc_defs(id) }}
+  <g transform="translate({{ p.dx }} {{ p.dy }}) scale({{ p.k }})" class="fcp {{ p.tone }}{{ ' off' if not t.enabled }}">
+    {{ fc_slider(p, id, False) }}
+    <text x="14" y="22" font-size="13" class="fcp-num">{{ p.current }}<tspan font-size="8" dy="-5">°</tspan></text>
+    <text x="156" y="22" font-size="11" text-anchor="end" class="tag">{{ p.title }}</text>
+    <g class="{{ 'fcp-col' if t.enabled else 'fcp-dimc' }}">
+      <use href="#{{ uid }}ic-{{ p.mode.icon }}" xlink:href="#{{ uid }}ic-{{ p.mode.icon }}"
+           x="{{ p.icon_x }}" y="11" width="14" height="14"/>
+    </g>
+    {{ fc_grille(p.grille) }}
+    {{ fc_lcd(p.lcd) }}
+    {{ fc_cap(p, id) }}
+  </g>
 {% endmacro %}

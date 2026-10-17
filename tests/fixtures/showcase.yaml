@@ -1,0 +1,715 @@
+mqtt:
+  host: 127.0.0.1
+panels:
+  ac_light:
+    title: ''
+    cols: 2
+    theme: light
+    interactive: true
+    tiles: &id001
+    - type: ac
+      title: Гостиная
+      device: ac_cool
+    - type: ac
+      title: Спальня
+      device: ac_heat
+    - type: ac
+      title: Детская
+      device: ac_off
+    - type: ac
+      title: Кабинет
+      device: ac_auto
+    - type: ac
+      title: Гостиная широкая
+      device: ac_cool
+      w: 2
+    - type: ac
+      title: Спальня
+      device: ac_heat
+      w: 2
+    - type: ac
+      title: Высокая
+      device: ac_dry
+      h: 2
+    - type: ac
+      title: Высокая
+      device: ac_heat
+      h: 2
+    - type: ac
+      title: Мелкая
+      device: ac_cool
+      w: 0.5
+      h: 0.5
+    - type: ac
+      title: Низкая
+      device: ac_cool
+      h: 0.5
+  ac_dark:
+    title: ''
+    cols: 2
+    theme: dark
+    interactive: true
+    tiles: *id001
+  ac_graphite:
+    title: ''
+    cols: 2
+    theme: graphite
+    interactive: true
+    tiles: *id001
+  ac_noir:
+    title: ''
+    cols: 2
+    theme: noir
+    interactive: true
+    tiles: *id001
+  ac_autumn:
+    title: ''
+    cols: 2
+    theme: autumn
+    interactive: true
+    tiles: *id001
+  ac_retro:
+    title: ''
+    cols: 2
+    theme: retro
+    interactive: true
+    tiles: *id001
+  acc:
+    title: Дом
+    cols: 2
+    theme: graphite
+    interactive: true
+    accordion: true
+    sections:
+    - from: ac_light
+    - from: ac_dark
+      title: Второй
+  misc:
+    title: Разное
+    cols: 2
+    theme: graphite
+    interactive: true
+    tiles:
+    - &id013
+      type: light
+      w: 0.5
+      h: 1
+      title: LED Диван
+      channel_switch: led/CCT1
+      channel_brightness: led/CCT1 Brightness
+      channel_temp: led/CCT1 Temperature
+      temp_unit: percent
+      temp_min: 2700
+      temp_max: 6500
+    - type: light
+      w: 1
+      h: 0.5
+      title: Подсветка
+      channel_switch: led/CCT2
+      channel_brightness: led/CCT2 Brightness
+      channel_temp: led/CCT2 Temperature
+      temp_unit: percent
+      temp_min: 2700
+      temp_max: 6500
+    - &id011
+      type: thermostat
+      title: Гостиная
+      channel_current: th/cur
+      channel_target: th/tgt
+      channel_state: th/st
+      channel_mode: th/mode
+      command_topic: th/tgt/on
+      target_min: 10
+      target_max: 38
+      step: 0.5
+      command_topic_mode: th/mode/on
+      command_mode_on: '1'
+      command_mode_off: '0'
+    - &id018
+      type: thermostat
+      title: Тёплый пол ванна
+      channel_target: fl/target_temp
+      channel_current: fl/current_temp
+      channel_state: fl/heating
+      channel_mode: fl/power
+      scale_min: 15
+      scale_max: 45
+    - type: switch
+      title: Бра
+      channel: sw/K1
+      w: 0.5
+      h: 1
+    - type: switch
+      title: Свет 1
+      channel: sw/K2
+      w: 1
+      h: 0.5
+    - &id015
+      type: switch
+      title: Вентилятор
+      channel: sw/K3
+    - &id019
+      type: tv
+      title: Телевизор
+      device: tv_living
+      h: 0.5
+      apps:
+      - control: app_kinopoisk
+        title: Кинопоиск
+      - control: app_youtube
+        title: YouTube
+    - &id016
+      type: curtain
+      title: Штора
+      channel: cu/pos
+      channel_state: cu/st
+      command_topic: cu/pos/on
+    - &id017
+      type: roller
+      title: Римская штора
+      channel: ro/pos
+      channel_state: ro/st
+      command_topic: ro/pos/on
+    - &id012
+      type: thermostat
+      title: Спальня
+      channel_current: th2/cur
+      channel_target: th2/tgt
+      channel_state: th2/st
+      channel_mode: th2/mode
+      command_topic: th2/tgt/on
+      step: 0.1
+      target_min: 10
+      target_max: 38
+    - &id014
+      type: dimmer
+      title: Споты
+      channel: dm/K1
+      channel_brightness: dm/Channel 1
+      w: 0.5
+      h: 1
+    - type: dimmer
+      title: Трек левый
+      channel: dm/K2
+      channel_brightness: dm/Channel 2
+      w: 0.5
+      h: 1
+    - type: dimmer
+      title: Споты
+      channel: dm/K3
+      channel_brightness: dm/Channel 3
+      w: 1
+      h: 0.5
+    - type: dimmer
+      title: Трек
+      channel: dm/K4
+      channel_brightness: dm/Channel 4
+      w: 0.5
+      h: 0.5
+    - type: switch
+      title: Коридор
+      channel: sw/K4
+      w: 0.5
+      h: 0.5
+    - type: switch
+      title: Свет 2
+      channel: sw/K5
+      w: 0.5
+      h: 0.5
+    - type: switch
+      title: Зеркало
+      channel: sw/K6
+      w: 0.5
+      h: 1
+    - type: switch
+      title: Гардеробная
+      channel: sw/K7
+      w: 1
+      h: 0.5
+    - type: light
+      title: LED ТВ
+      channel_switch: led/CCT3
+      channel_brightness: led/CCT3 Brightness
+      channel_temp: led/CCT3 Temperature
+      temp_unit: percent
+      w: 0.5
+      h: 1
+    - type: light
+      title: Лента большая
+      channel_switch: led/CCT1
+      channel_brightness: led/CCT1 Brightness
+      channel_temp: led/CCT1 Temperature
+      temp_unit: percent
+    - type: light
+      title: Мелкая
+      channel_switch: led/CCT2
+      channel_brightness: led/CCT2 Brightness
+      channel_temp: led/CCT2 Temperature
+      temp_unit: percent
+      w: 0.5
+      h: 0.5
+  scn:
+    title: Сцены
+    cols: 2
+    theme: graphite
+    interactive: true
+    tiles:
+    - type: scenes
+      title: Сцены
+      w: 1.5
+      h: 1.5
+      items:
+      - &id002
+        title: Выкл. всё
+        icon: power
+        channel: lightingScenes/off_all
+      - &id003
+        title: Спать
+        icon: moon
+        channel: lightingScenes/bedtime
+      - &id004
+        title: Кино
+        icon: tv
+        channel: lightingScenes/cinema
+      - &id005
+        title: Релакс
+        icon: sofa
+        channel: lightingScenes/relax
+      - &id006
+        title: Вечер
+        icon: bulb
+        channel: lightingScenes/evening
+      - &id007
+        title: Ужин
+        icon: dish
+        channel: lightingScenes/dinner
+      - &id008
+        title: Чтение
+        icon: book
+        channel: lightingScenes/reading
+      - &id009
+        title: Уборка
+        icon: vacuum
+        channel: lightingScenes/cleaning
+      - &id010
+        title: Ярко
+        icon: sun
+        channel: lightingScenes/bright
+    - type: scenes
+      title: Все сцены
+      w: 1.5
+      h: 1.5
+      items:
+      - *id002
+      - *id003
+      - *id004
+      - *id005
+      - *id006
+      - *id007
+      - *id008
+      - title: Гости
+        icon: people
+        channel: lightingScenes/guests
+      - *id009
+      - *id010
+  gal:
+    title: Плитки
+    cols: 2
+    theme: graphite
+    interactive: true
+    tiles:
+    - &id020
+      type: ac
+      title: Гостиная
+      device: ac_cool
+    - &id021
+      type: ac
+      title: Детская
+      device: ac_off
+    - *id011
+    - *id012
+    - &id022
+      type: fancoil
+      title: Фанкойл
+      w: 2
+      channel_switch: fc/power
+      channel_mode: fc/mode
+      channel_fan: fc/fan
+      channel_fan_state: fc/fans
+      channel_target: fc/tgt
+      channel_current: fc/cur
+      channel_state: fc/valve
+      scale_min: 14
+      scale_max: 30
+      temp_min: 16
+      temp_max: 30
+    - type: list
+      list: shopping
+      icon: cart
+      w: 2
+      h: 1
+    - type: leak
+      title: Протечки
+      w: 1
+    - type: leak
+      title: Кухня
+      sensors:
+      - kitchen
+    - type: valve
+      valve: cold
+    - type: valve
+      valve: hot
+    - *id013
+    - *id014
+    - *id015
+    - *id016
+    - *id017
+    - *id018
+    - type: scene
+      title: Кино
+      icon: tv
+      channel: lightingScenes/cinema
+      w: 0.5
+      h: 0.5
+    - type: value
+      title: Улица
+      channel: msw/Temperature
+      unit: °C
+      icon: thermo
+      w: 0.5
+      h: 0.5
+    - type: link
+      title: Детская
+      panel: misc
+      icon: door
+      w: 1
+      h: 0.5
+    - *id019
+  clim:
+    title: Климат
+    cols: 2
+    theme: graphite
+    interactive: true
+    tiles:
+    - *id020
+    - type: ac
+      title: Спальня
+      device: ac_heat
+    - *id021
+    - *id011
+    - *id012
+    - *id022
+  acl:
+    title: Кондиционеры
+    cols: 2
+    theme: graphite
+    interactive: true
+    tiles:
+    - type: ac
+      title: Гостиная
+      device: ac_cool
+    - type: ac
+      title: Спальня
+      device: ac_heat
+    - type: ac
+      title: Детская
+      device: ac_off
+    - type: ac
+      title: Кабинет
+      device: ac_auto
+    - type: ac
+      title: Широкая
+      device: ac_cool
+      w: 2
+    - type: ac
+      title: Высокая
+      device: ac_dry
+      h: 2
+    - type: ac
+      title: Низкая
+      device: ac_cool
+      h: 0.5
+  fcs:
+    title: Фанкойлы
+    cols: 2
+    theme: graphite
+    interactive: true
+    tiles:
+    - type: fancoil
+      title: Гостиная
+      w: 2
+      channel_switch: fc/power
+      channel_mode: fc/mode
+      channel_fan: fc/fan
+      channel_fan_state: fc/fans
+      channel_target: fc/tgt
+      channel_current: fc/cur
+      channel_state: fc/valve
+      scale_min: 14
+      scale_max: 30
+      temp_min: 16
+      temp_max: 30
+    - type: fancoil
+      title: Гостиная
+      channel_switch: fc/power
+      channel_mode: fc/mode
+      channel_fan: fc/fan
+      channel_fan_state: fc/fans
+      channel_target: fc/tgt
+      channel_current: fc/cur
+      channel_state: fc/valve
+      scale_min: 14
+      scale_max: 30
+      temp_min: 16
+      temp_max: 30
+    - type: fancoil
+      title: Кабинет на втором этаже
+      channel_switch: fc2/power
+      channel_mode: fc2/mode
+      channel_fan: fc2/fan
+      channel_fan_state: fc2/fans
+      channel_target: fc2/tgt
+      channel_current: fc2/cur
+      channel_state: fc2/valve
+      scale_min: 14
+      scale_max: 30
+      temp_min: 16
+      temp_max: 30
+    - type: fancoil
+      title: Кабинет
+      channel_switch: fc3/power
+      channel_mode: fc3/mode
+      channel_fan: fc3/fan
+      channel_fan_state: fc3/fans
+      channel_target: fc3/tgt
+      channel_current: fc3/cur
+      channel_state: fc3/valve
+      scale_min: 14
+      scale_max: 30
+      temp_min: 16
+      temp_max: 30
+    - type: fancoil
+      title: Детская
+      channel_switch: fc4/power
+      channel_mode: fc4/mode
+      channel_fan: fc4/fan
+      channel_fan_state: fc4/fans
+      channel_target: fc4/tgt
+      channel_current: fc4/cur
+      channel_state: fc4/valve
+      scale_min: 14
+      scale_max: 30
+      temp_min: 16
+      temp_max: 30
+  obj:
+    title: Предметы
+    cols: 2
+    interactive: true
+    tiles:
+    - type: list
+      list: shopping
+      icon: cart
+      w: 2
+      h: 1
+    - type: list
+      list: shopping
+      icon: cart
+    - type: agenda
+      w: 1
+    - type: agenda
+      w: 2
+    - type: leak
+      title: Протечки
+      w: 1
+    - type: leak
+      title: Ванная
+      sensors:
+      - bath
+    - type: valve
+      valve: cold
+    - type: valve
+      valve: hot
+    - type: agenda
+      w: 1
+      h: 0.5
+    - type: list
+      list: shopping
+      icon: cart
+      w: 1
+      h: 0.5
+    - type: valve
+      valve: cold
+      h: 0.5
+    - type: valve
+      valve: hot
+      w: 0.5
+      h: 0.5
+    - type: valve
+      valve: cold
+      w: 0.5
+      h: 0.5
+  day:
+    title: Сегодня
+    cols: 2
+    interactive: true
+    tiles:
+    - type: today
+      list: shopping
+      w: 2
+      h: 3
+    - type: today
+      list: shopping
+      w: 2
+      h: 2
+    - type: today
+      list: shopping
+      w: 1
+    - type: today
+      list: shopping
+      w: 1
+      h: 0.5
+    - type: today
+      list: shopping
+      calendars: none
+      title: Дела
+      w: 2
+      h: 2
+    - type: today
+      w: 2
+      h: 1.5
+  tint:
+    title: Цвета
+    cols: 2
+    interactive: true
+    tiles:
+    - type: ac
+      title: Гостиная
+      device: ac_cool
+      color: sage
+    - type: ac
+      title: Детская
+      device: ac_off
+      color: mustard
+    - type: thermostat
+      title: Гостиная
+      channel_current: th/cur
+      channel_target: th/tgt
+      channel_state: th/st
+      channel_mode: th/mode
+      command_topic: th/tgt/on
+      target_min: 10
+      target_max: 38
+      step: 0.5
+      command_topic_mode: th/mode/on
+      command_mode_on: '1'
+      command_mode_off: '0'
+      color: terracotta
+    - type: thermostat
+      title: Спальня
+      channel_current: th2/cur
+      channel_target: th2/tgt
+      channel_state: th2/st
+      channel_mode: th2/mode
+      command_topic: th2/tgt/on
+      step: 0.1
+      target_min: 10
+      target_max: 38
+      color: sky
+    - type: fancoil
+      title: Фанкойл
+      w: 2
+      channel_switch: fc/power
+      channel_mode: fc/mode
+      channel_fan: fc/fan
+      channel_fan_state: fc/fans
+      channel_target: fc/tgt
+      channel_current: fc/cur
+      channel_state: fc/valve
+      scale_min: 14
+      scale_max: 30
+      temp_min: 16
+      temp_max: 30
+      color: lilac
+    - type: list
+      list: shopping
+      icon: cart
+      w: 2
+      h: 1
+      color: sand
+    - type: leak
+      title: Протечки
+      w: 1
+      color: dark
+    - type: leak
+      title: Кухня
+      sensors:
+      - kitchen
+      color: sage
+    - type: valve
+      valve: cold
+      color: mustard
+    - type: valve
+      valve: hot
+      color: sky
+    - type: light
+      w: 0.5
+      h: 1
+      title: LED Диван
+      channel_switch: led/CCT1
+      channel_brightness: led/CCT1 Brightness
+      channel_temp: led/CCT1 Temperature
+      temp_unit: percent
+      temp_min: 2700
+      temp_max: 6500
+      color: terracotta
+    - type: dimmer
+      title: Споты
+      channel: dm/K1
+      channel_brightness: dm/Channel 1
+      w: 0.5
+      h: 1
+      color: lilac
+    - type: today
+      list: shopping
+      w: 2
+      h: 2
+      color: sand
+lists:
+  shopping:
+    title: Покупки
+water:
+  modules:
+    mwac:
+      alarm: mw/Leakage Mode
+      reset: mw/Leakage Mode Reset
+  valves:
+    cold:
+      title: Холодная
+      channel: mw/Output K1
+      water: cold
+      module: mwac
+    hot:
+      title: Горячая
+      channel: mw/Output K2
+      water: hot
+      module: mwac
+  sensors:
+    bath:
+      title: Ванная
+      channel: mw/Input F1
+      closes:
+      - cold
+      - hot
+      module: mwac
+    kitchen:
+      title: Кухня
+      channel: mw/Input F3
+      closes:
+      - cold
+      - hot
+      module: mwac
+calendars:
+  family:
+    title: Семья
+    ical: https://example.invalid/x.ics
+    color: '#3B8FD4'

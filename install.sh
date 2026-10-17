@@ -76,6 +76,15 @@ for f in light dark graphite autumn retro noir; do
         echo "    НЕТ: wbpanel/builtin_themes/$f.yaml"
     fi
 done
+# Стили и скрипты страницы с 1.45 - файлы static/: без них страница
+# панели пустая.
+for f in panel.css js/core.js js/overlay.js js/pads-light.js js/pads-climate.js \
+         js/pads-level.js js/press.js js/pads-media.js js/pads-items.js js/update.js; do
+    if [ ! -f "$SRC/static/$f" ]; then
+        MISSING="$MISSING static/$f"
+        echo "    НЕТ: static/$f"
+    fi
+done
 if [ -n "$MISSING" ]; then
     cat <<MSG
 

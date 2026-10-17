@@ -35,6 +35,8 @@
     дуга термостата и колесо кондиционера - рядом со своими плитками.
     Порядок тот же, что был до разделения: каскад меняться не должен. -#}
 {{ base.style() }}
+{{ basic.style() }}
+{{ chart.style() }}
 {{ devices.style() }}
 {{ ac.style() }}
 </style>
@@ -81,12 +83,16 @@
   {#- Отсвет стекла (1.40): свет сверху экрана. В координатах панели, а не
       плитки: страница сдвигает его на величину прокрутки (data-glare), и
       блик переезжает с плитки на плитку, пока они едут под ним. -#}
+  {#- lite (1.45, «облегчённо» на устройстве): без отсвета и линзы - их
+      страница перерисовывает на каждом кадре прокрутки. -#}
+  {% if not lite %}
   <radialGradient id="{{ uid }}glare" gradientUnits="userSpaceOnUse" data-glare="1"
                   cx="{{ (width * 0.22)|round(1) }}" cy="0" r="{{ (width * 1.25)|round(1) }}">
     <stop offset="0" stop-color="var(--glare)"/>
     <stop offset=".55" stop-color="var(--glare)" stop-opacity=".35"/>
     <stop offset="1" stop-color="var(--glare)" stop-opacity="0"/>
   </radialGradient>
+  {% endif %}
   {#- Обои одной группой (1.42): их видно и за плитками, и сквозь линзу
       стекла. Размер и место группы на странице - окно браузера в
       координатах картинки: их ставит glassScroll(), и пятна под плиткой
@@ -130,7 +136,9 @@
 
 {#- ==================== полотно ==================== -#}
 
-<g>
+{#- data-main: всё до этой группы - «голова» (стили, заготовки), она
+    меняется редко, и страница её повторно не просит (1.45). -#}
+<g data-main="1">
 {#- bare - плитка для пульта: фон страницы под ней не нужен, она лежит на оверлее. -#}
 {% if not bare %}
 <rect width="{{ width }}" height="{{ height }}" fill="url(#{{ uid }}bg)"{% if depth == 'glass' %} class="wall"{% endif %}/>
@@ -295,7 +303,7 @@
 {% if depth == 'glass' %}
 {#- Стекло (1.40): налёт и отсвет - одним слоем под всеми плитками. -#}
 {% set glassy = tiles | rejectattr('kind', 'equalto', 'header') | list %}
-{% if not bare %}
+{% if not bare and shadows %}
 {#- Тень стекла (1.43): плитка парит над обоями. Тень только снаружи -
     маска вырезает её из-под прозрачной плитки, иначе стекло темнело бы
     изнутри. Одно размытие на всю панель. -#}
@@ -318,7 +326,7 @@
   {#- Линза (1.42): под плиткой те же обои, но крупнее (преломление) и
       гуще - два слоя пятен вместо одного: цвета под стеклом ярче, чем
       вокруг, и пятна у края плитки «съезжают», как в толстом стекле. -#}
-  {% if not bare %}
+  {% if not bare and not lite %}
   <g transform="translate({{ t.x }},{{ t.y }})" clip-path="url(#{{ uid }}clip{{ t.i }})">
     <g transform="translate({{ t.w / 2 }} {{ t.h / 2 }}) scale(1.08) translate({{ -(t.x + t.w / 2) }} {{ -(t.y + t.h / 2) }})">
       <use href="#{{ uid }}wallg" xlink:href="#{{ uid }}wallg"/>
@@ -331,7 +339,7 @@
   <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="glass-tint-{{ t.tint }}"/>
   {% endif %}
   <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glass-top)"/>
-  {% if not bare %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glare)"/>{% endif %}
+  {% if not bare and not lite %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glare)"/>{% endif %}
   {% endfor %}
 </g>
 {% endif %}

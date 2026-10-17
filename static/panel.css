@@ -1,0 +1,605 @@
+/* wb-svg-panel: стили страницы панели (templates/wrapper.html), с 1.45 - отдельным файлом. */
+ /* Страница обычная и прокручиваемая. Раньше тут была раскладка «под киоск»:
+    flex по центру, height:100%, overflow:hidden. На телефоне панель влезала
+    по высоте и всё выглядело нормально, а на ноутбуке широкий и низкий экран
+    ужимал SVG до нуля - плитки просто исчезали. И прокрутки не было вовсе. */
+ html,body{margin:0;background:#0F0F11;
+           -webkit-tap-highlight-color:transparent;
+           font:15px -apple-system,'Segoe UI',Inter,system-ui,sans-serif}
+ body{padding:10px;box-sizing:border-box;min-height:100vh}
+ /* Сверху полоса под кнопки «← Панели» и колонки. Раньше они висели прямо
+    над шапкой панели и закрывали чипы справа - нажатие по чипу протечки
+    уходило в выбор колонок. */
+ #host{color:#fff;margin:0 auto;max-width:1400px;padding-top:44px}
+ /* размер задаётся ШИРИНОЙ: высота подстроится по пропорции сама */
+ #host svg{display:block;width:100%;height:auto}
+ /* стекло (1.40): обои - неподвижный фон окна, их копия в картинке не нужна */
+ #host svg .wall{display:none}
+ #pagewall{position:fixed;left:0;top:0;right:0;bottom:0;z-index:-1;pointer-events:none}
+ /* Длинное нажатие в мобильных браузерах выделяет текст и показывает
+    системное меню - на пультах это мешало. Запрещаем на всей панели. */
+ #host,#ov{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;
+           user-select:none;-webkit-touch-callout:none}
+ [data-topic],[data-expand],[data-pad],[data-href],[data-chart],[data-section]{cursor:pointer}
+ [data-topic].busy,[data-pad].busy{opacity:.45}
+ /* Раздел раскрывается, а свежей картинки ещё нет: панель притушена,
+    чтобы было видно, что нажатие принято. Без этого на медленном ответе
+    нажимали второй раз - и попадали уже в следующий раздел. */
+ #host svg{transition:opacity .15s}
+ #host.wait svg{opacity:.55}
+ /* Пока открыт оверлей и ещё мгновение после закрытия, панель касаний не
+    принимает: иначе повторное касание или запоздалые события браузера
+    уходят в плитку, оказавшуюся под пальцем. */
+ #host.shield{pointer-events:none}
+ /* Фон под оверлеем не прокручивается: жест внутри окна не должен
+    уезжать в панель под ним. */
+ html.ovlock,html.ovlock body{overflow:hidden}
+ /* выбор числа колонок: значение запоминается и переносится между панелями */
+ /* назад к списку панелей: маленькая, полупрозрачная, всегда на месте */
+ #back{position:fixed;top:8px;left:8px;z-index:15;text-decoration:none;
+       background:rgba(28,28,32,.72);border-radius:12px;color:#fff;
+       padding:7px 12px;font-size:13px;opacity:.35}
+ #back:hover,#back.touched{opacity:1}
+ #cols{position:fixed;top:8px;right:8px;z-index:15;
+       background:rgba(28,28,32,.72);border-radius:12px;padding:3px;
+       font-size:13px;line-height:1;opacity:.35}
+ #cols:hover,#cols.touched{opacity:1}
+ #cols b{display:inline-block;padding:6px 9px;border-radius:9px;color:#fff;
+         cursor:pointer;font-weight:600}
+ #cols b.on{background:#E09B2D;color:#1B1B1F}
+ /* Свёрнутый выбор - одна кнопка с текущим значением: на прокрученной
+    панели под ней скрывается меньше. Раскрывается по нажатию. */
+ #cols b.cur{background:none;color:#fff;padding:6px 10px}
+ #err{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+      background:#C4553B;color:#fff;padding:7px 14px;border-radius:9px;
+      font-size:13px;display:none;z-index:30}
+ /* Порт 8080 - вход без пароля. Пока панель открыта через него, об этом
+    должно быть видно: предупреждение в документации читают один раз, а
+    плашку - каждый день, пока не уберёшь причину. */
+ #warn8080{position:fixed;left:0;right:0;top:0;z-index:40;display:none;
+           background:#8A5A1E;color:#FFE6BF;text-align:center;
+           padding:6px 10px;font-size:13px;line-height:1.35}
+ #warn8080 b{color:#fff}
+ #warn8080 a{color:#FFE6BF;text-decoration:underline}
+ /* Полоса вкладок у края окна (tabs, 1.36): копия из картинки, своя
+    полоса в картинке невидима и держит место. Внизу - убираем поле
+    страницы, сверху - кнопки уходят под полосу. */
+ #tabdock{position:fixed;left:0;width:100%;display:block;z-index:14}
+ html.dock-bottom #tabdock{bottom:0}
+ html.dock-top #tabdock{top:0}
+ html.dock-bottom body{padding-bottom:0}
+ html.dock-top body{padding-top:0}
+ /* Кнопки страницы во вкладках спрятаны - экран небольшой, а нужны они
+    редко. Нажатие на шапку показывает их поверх неё на несколько секунд. */
+ html.dock-top #host,html.dock-bottom #host{padding-top:0}
+ html.dock-top #back,html.dock-top #cols,
+ html.dock-bottom #back,html.dock-bottom #cols{opacity:0;pointer-events:none;transition:opacity .2s}
+ html.dock-top #back,html.dock-top #cols{top:calc(var(--dock-h,52px) + 8px)}
+ html.chrome-on #back,html.chrome-on #cols{opacity:1;pointer-events:auto;
+                                            background:rgba(28,28,32,.96)}
+ [data-headtap]{cursor:pointer}
+ /* Кнопки страницы в шапке панели (1.44): круглая «назад» и шестерёнка
+    рисуются в картинке, прежние кнопки сверху и полоса под ними не нужны. */
+ html.svgnav #back,html.svgnav #cols{display:none}
+ html.svgnav #host{padding-top:0}
+ #host [data-nav]{cursor:pointer}
+ #host [data-nav].down{opacity:.6}
+ /* Меню шестерёнки: колонки, тема, вид разделов - кнопками в один экран. */
+ #navmenu{position:fixed;z-index:20;right:12px;top:64px;width:320px;max-width:calc(100vw - 24px);
+          box-sizing:border-box;padding:14px 14px 10px;border-radius:20px;display:none;
+          background:rgba(30,30,34,.94);color:#F2F2F4;box-shadow:0 12px 36px rgba(0,0,0,.45);
+          -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+          font-size:14px;line-height:1.2;max-height:calc(100vh - 80px);overflow-y:auto}
+ #navmenu.open{display:block}
+ #navmenu.lt{background:rgba(250,250,252,.95);color:#1C1C1E;box-shadow:0 12px 36px rgba(0,0,0,.18)}
+ #navmenu .mh{font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;
+              opacity:.55;margin:2px 4px 8px}
+ #navmenu .mrow{display:flex;flex-wrap:wrap;margin:0 0 12px}
+ #navmenu .mrow b{margin:0 6px 6px 0;padding:8px 12px;border-radius:12px;font-weight:600;cursor:pointer;
+                  background:rgba(255,255,255,.08)}
+ #navmenu.lt .mrow b{background:rgba(0,0,0,.06)}
+ #navmenu .mrow b.on{background:var(--macc,#E09B2D);color:var(--macc-ink,#1B1B1F)}
+ #navmenu .mrow.num b{min-width:20px;text-align:center;padding:8px 10px}
+ /* Замер для слабых устройств (?perf=1, 1.45) */
+ #perf{position:fixed;left:6px;bottom:6px;z-index:50;max-width:calc(100vw - 12px);box-sizing:border-box;
+       background:rgba(0,0,0,.82);color:#E8FFE8;font:12px/1.35 monospace;padding:8px 10px;border-radius:10px;
+       pointer-events:none;white-space:pre-wrap}
+ #navmenu .mlink{display:block;margin:2px 4px 4px;color:inherit;opacity:.7;text-decoration:underline;cursor:pointer}
+ #host [data-tabbar]{visibility:hidden}
+ body.warned{padding-top:38px}
+ body.warned #back,body.warned #cols{top:42px}
+ /* оверлей: тот же язык, что и у плиток - тёмный фон, скруглённая карточка */
+ /* inset и min() - свежий синтаксис, старые десктопные браузеры его не знают
+    и оверлей получался нулевого размера: на телефоне работало, на ноутбуке нет.
+    Пишем по-старому. */
+ /* Класс видимости зовётся open, а не on. С on оверлей становился
+    предком вставленного SVG и подхватывал правило .on .icon, написанное
+    для значка включённого прибора: значок плитки, раскрытой на весь
+    экран, окрашивался в оранжевый цвет активного устройства. */
+ #ov{position:fixed;top:0;left:0;right:0;bottom:0;
+     background:rgba(10,10,12,.86);display:none;z-index:2147483000;
+     align-items:center;justify-content:center;flex-direction:column;
+     padding:18px;box-sizing:border-box;overflow:auto;
+     overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+ /* именно auto по бокам: раньше тут было "7px 0", и это правило перебивало
+    margin:0 auto у самих пультов - они прижимались к левому краю */
+ #ov.open > *{margin:7px auto}
+ #ov.open{display:block;text-align:center}
+ #ov .card{background:#F1F1F3;border-radius:22px;padding:14px;max-width:100%;
+           display:inline-block;box-sizing:border-box;position:relative;z-index:1}
+ /* Развёрнутая плитка рисует собственную подложку со скруглением, и
+    поля карточки давали вторую рамку вокруг первой. Здесь карточка -
+    просто контейнер во всю ширину. */
+ /* Ширина по содержимому, а не 100%: иначе на широком экране карточка
+    шире графика, тот прижимается к левому краю, а нажатие рядом с ним
+    попадает в карточку и оверлей не закрывается - закрытие срабатывает
+    только по фону. Центрирование делает флексбокс самого оверлея. */
+ #ov .card.wide{background:none;border-radius:0;padding:0;
+                display:inline-block;width:auto;max-width:100%}
+ /* Место под карточкой: закрывают её нажатием мимо, и на телефоне
+    промахнуться мимо узкой полоски слишком легко. */
+ #ov .card.wide + .hint{padding:14px 0 64px}
+ #ov svg{display:block;max-width:100%;height:auto}
+ #ov .ttl{color:#fff;font-size:17px;font-weight:600}
+ /* Камера во весь экран. Ширину задаём в процентах окна, высоту отдаём
+    пропорции: кадр 16:9, и фиксированная высота его бы обрезала. */
+ #ov .cam{display:block;width:100%;height:auto;border-radius:12px;
+          background:#17171A;min-height:120px}
+ #ov .camwrap{padding:8px}
+ #ov .hint{color:rgba(255,255,255,.55);font-size:13px;text-align:center}
+ /* переключатель в пульте: без него подвинуть яркость у выключенной лампы
+    можно, а увидеть результат - нет */
+ #ov .pw{display:inline-flex;align-items:center;padding:10px 18px;
+         border-radius:14px;border:2px solid rgba(255,255,255,.3);
+         color:#fff;font-size:15px;font-weight:600;cursor:pointer;user-select:none}
+ #ov .pw.on{border-color:#E09B2D;color:#E09B2D}
+ #ov .pw .led{width:12px;height:12px;border-radius:50%;margin-right:10px;
+              background:rgba(255,255,255,.35)}
+ #ov .pw.on .led{background:#E09B2D}
+ #ov .close{position:fixed;top:12px;left:12px;z-index:5}
+ /* окно без своей шапки: место под кнопку «назад» сверху */
+ #ov:not(.hashead):not(.ownback):not(.full){padding-top:70px}
+ /* пульт ленты: поле «холодный-тёплый» по X, яркость по Y */
+ /* размер задаётся из скрипта: min() поддерживают не везде */
+ #pad{position:relative;border-radius:20px;touch-action:none;
+      overflow:hidden;margin:0 auto}
+ #pad .grad{position:absolute;top:0;left:0;right:0;bottom:0}
+ #pad .dim{position:absolute;top:0;left:0;right:0;bottom:0;
+           background:linear-gradient(to bottom,rgba(10,10,12,0),rgba(10,10,12,.86))}
+ #pad .dot{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;
+           border-radius:50%;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4)}
+ /* пульт диммера: линейный, заполнение снизу */
+ #lvl{position:relative;border-radius:20px;touch-action:none;overflow:hidden;
+      background:#2C2C31;margin:0 auto}
+ #lvl .fill{position:absolute;left:0;right:0;bottom:0;background:#E0A050;opacity:.75}
+ #lvl .val{position:absolute;left:0;right:0;bottom:14px;text-align:center;
+           color:#fff;font-size:26px;font-weight:600}
+ /* пульт диммера с 1.17: колесо в прорези, шкала рядом, число над ним */
+ #sphstage{margin:0 auto;touch-action:none}
+ #sphstage canvas{display:block;width:100%;height:100%}
+ #lvl.roll{background:transparent;border-radius:0;overflow:visible}
+ #lvl.roll svg{display:block;width:100%;height:100%}
+ /* Шаг числом. Двумя процентами на ночь пальцем по полю не попасть: один
+    процент это пара пикселей. Стрелки закрывают ровно этот случай, а
+    крупное неяркое число отвечает на вопрос «сколько сейчас», не
+    перетягивая внимание с самого поля. */
+ #ov .step{display:flex;align-items:center;justify-content:center;gap:14px;
+           margin:7px auto}
+ #ov .step .lab{color:rgba(255,255,255,.55);font-size:13px;min-width:64px;
+                text-align:right}
+ #ov .step .num{color:rgba(255,255,255,.78);font-size:24px;font-weight:600;
+                min-width:74px;text-align:center;font-variant-numeric:tabular-nums}
+ #ov .step .keys{display:flex;gap:8px}
+ #ov .step button{width:46px;height:46px;border:0;border-radius:23px;
+                  background:rgba(255,255,255,.13);color:#fff;font-size:24px;
+                  line-height:46px;padding:0;cursor:pointer;touch-action:manipulation}
+ #ov .step button:active{background:rgba(255,255,255,.26)}
+ /* пульт шторы: сверху лежит прозрачный слой для жеста, под ним - та же
+    картинка плитки, что и на панели, только крупно */
+ /* inline-block: обёртка должна быть ровно по картинке, иначе центр жеста
+    окажется в центре экрана, а не в центре окна со шторой */
+ #crtwrap{position:relative;display:inline-block;margin:0 auto}
+ /* z-index больше, чем у .card (там стоит 1): иначе картинка лежит поверх
+    прозрачного слоя и забирает касания себе - жест просто не доходит */
+ #crtview{position:absolute;left:0;right:0;top:0;bottom:0;touch-action:none;
+          cursor:ew-resize;z-index:3}
+ #crtview .mark{position:absolute;top:0;bottom:0;width:2px;display:none;
+                background:rgba(255,255,255,.9);
+                box-shadow:0 0 12px rgba(0,0,0,.7)}
+ /* рулонная: полотно ходит вверх-вниз, значит и метка лежит поперёк */
+ #crtview.vert{cursor:ns-resize}
+ #crtview.vert .mark{top:0;bottom:auto;left:0;right:0;width:auto;height:2px}
+ /* белая метка - там, где палец; оранжевая - куда привод едет сам */
+ #crtview .mark.going{background:#E09B2D;box-shadow:0 0 12px rgba(0,0,0,.5)}
+ #crtview .read{position:absolute;left:0;right:0;top:42%;display:none;
+                text-align:center;color:#fff;font-size:42px;font-weight:600;
+                text-shadow:0 2px 12px rgba(0,0,0,.8)}
+ #ov .crow{display:block;margin:10px auto 0;text-align:center}
+ #ov .cbtn{display:inline-block;margin:4px;padding:10px 18px;border-radius:12px;
+           border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.85);
+           font-size:15px;font-weight:600;cursor:pointer}
+ #ov .cbtn.stop{border-color:#C4553B;color:#FFD8CE}
+ #ov .cbtn.on{border-color:#E09B2D;color:#FFD9A0}
+ #tdial{margin:0 auto;touch-action:none;user-select:none}
+ #tdial .tbig{fill:#fff;font-size:44px;font-weight:650;letter-spacing:-1px}
+ #tdial .tsub{fill:rgba(255,255,255,.55);font-size:14px;font-weight:500}
+ #tdial .tmode{fill:rgba(255,255,255,.65);font-size:17px;font-weight:600}
+ /* пульт кондиционера */
+ #wheel{margin:0 auto;user-select:none;touch-action:none}
+ #ov .wbig{color:#fff;font-size:64px;font-weight:300;line-height:1;
+           letter-spacing:-2px;margin:4px 0 0}
+ #ov .wbig .wdeg{font-size:22px;font-weight:500;vertical-align:super;
+                 margin-left:4px;letter-spacing:0}
+ /* Ряд кнопок пульта - во всю ширину, кнопки равные: пять режимов или
+    семь положений жалюзи влезают в телефон одной строкой, а не переносом. */
+ #ov .acrow{display:flex;gap:6px;justify-content:center;margin:8px auto;
+            max-width:440px;width:100%;box-sizing:border-box}
+ /* Пульт телевизора. Кнопки круглые и крупные: пультом пользуются
+    пальцем, и промах дороже места на экране. Цвета и размеры заданы
+    здесь явно - классы оверлея рассчитаны на тёмный фон, и заголовок
+    на белой карточке получался белым по белому. */
+ /* Ширина задана жёстко: без неё карточка подстраивалась под самый
+    широкий ряд, и на полном экране пульт прыгал при каждом обновлении
+    статуса - строка «Включён · Кинопоиск» шире, чем «Выключен». */
+ #ov .tvcard{width:340px;max-width:92vw;box-sizing:border-box}
+ #ov .tvhead{display:flex;align-items:center;gap:10px;margin:2px 0 14px}
+ #ov .tvname{overflow:hidden}
+ #ov .tvttl,#ov .tvsub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .tvname{flex:1;min-width:0}
+
+ #ov .tvttl{color:#1C1C1E;font-size:20px;font-weight:600;line-height:1.2}
+ #ov .tvsub{color:#8E8E93;font-size:13px;margin-top:2px}
+ #ov .tvrow{display:flex;justify-content:center;align-items:center;gap:12px;margin:10px 0}
+ /* flex:0 0 66px и box-sizing обязательны: без них кнопка в шапке
+    растягивалась соседом и круг превращался в овал. */
+ #ov .tvc{flex:0 0 66px;width:66px;height:66px;min-width:66px;min-height:66px;
+       box-sizing:border-box;padding:0;border-radius:50%;background:#F2F2F7;
+       border:1px solid #DCDCE1;display:flex;align-items:center;justify-content:center;
+       font-size:14px;color:#1C1C1E;cursor:pointer;user-select:none;
+       touch-action:manipulation;overflow:hidden}
+ #ov .tvc.big{flex:0 0 88px;width:88px;height:88px;min-width:88px;min-height:88px}
+ #ov .tvc:active{background:#E4E4EA}
+ #ov .tvc.ok{background:#E08A2D;border-color:#E08A2D;color:#fff;
+       font-size:18px;font-weight:600}
+ #ov .tvc.pw{background:#D9433C;border-color:#D9433C}
+ #ov .tvc.hole{background:none;border:none;pointer-events:none}
+ #ov .tvc svg{width:26px;height:26px;fill:none;stroke:#1C1C1E;stroke-width:2.4;
+       stroke-linecap:round;stroke-linejoin:round}
+ #ov .tvc.pw svg{stroke:#fff}
+ #ov .tvc.fill svg{fill:#1C1C1E;stroke:none}
+ #ov .tvapps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+ #ov .tvapp{height:52px;border-radius:16px;background:#F2F2F7;border:1px solid #DCDCE1;
+       display:flex;align-items:center;justify-content:center;font-size:14px;
+       color:#1C1C1E;cursor:pointer;text-align:center;padding:0 6px;
+       user-select:none;touch-action:manipulation}
+ #ov .tvapp.now{background:#FDF3E6;border-color:#E08A2D;border-width:2px}
+ #ov .tvvol{flex:1;height:66px;border-radius:22px;background:#F2F2F7;
+       border:1px solid #DCDCE1;display:flex;align-items:center;justify-content:center;
+       font-size:17px;font-weight:600;color:#1C1C1E;cursor:pointer;
+       user-select:none;touch-action:manipulation}
+ #ov .tvdim{opacity:.45}
+ /* Пульт телевизора с 1.21: тёмный, в светлых темах - светлый (1.22).
+    Кнопки - выпуклые кружки, без размытия; колесо рисуется SVG. */
+ #ov .tvx{width:340px;max-width:94vw;box-sizing:border-box;background:#1D1E22;
+       padding:14px 16px 18px;border-radius:26px;color:#F2F2F4;touch-action:manipulation}
+ #ov .tvx .txhead{display:flex;align-items:center;gap:10px;margin:0 0 6px;text-align:left}
+ #ov .tvx .txname{flex:1;min-width:0}
+ #ov .tvx .txttl{font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .tvx .txsub{font-size:12.5px;color:#9A9AA2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .tvx .tx{flex:0 0 58px;width:58px;height:58px;border-radius:50%;box-sizing:border-box;
+       background:radial-gradient(circle at 35% 30%,#45464C,#2A2B30 70%);
+       border:1px solid rgba(255,255,255,.07);box-shadow:0 4px 8px rgba(0,0,0,.45);
+       display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none}
+ #ov .tvx .tx.sm{flex:0 0 46px;width:46px;height:46px}
+ #ov .tvx .tx.down{transform:translateY(1px);box-shadow:0 2px 4px rgba(0,0,0,.5);filter:brightness(1.2)}
+ #ov .tvx .tx svg{width:22px;height:22px;fill:none;stroke:#E8E8EC;stroke-width:2.2;
+       stroke-linecap:round;stroke-linejoin:round}
+ #ov .tvx .tx svg.fl{fill:#E8E8EC;stroke:none}
+ #ov .tvx .tx.txpw.on{background:radial-gradient(circle at 40% 35%,#FFB24D,#E08A2D 75%)}
+ #ov .tvx .tx.txpw.on svg{stroke:#2A1A08}
+ #ov .tvx .txwrap{position:relative;height:300px;margin:4px 0 0}
+ #ov .tvx .txwheel{position:absolute;left:50%;top:0;margin-left:-130px;width:260px;height:260px}
+ #ov .tvx .txwheel svg{display:block;cursor:pointer;touch-action:none}
+ #ov .tvx .txwheel .ar{fill:#ECECF0;opacity:.9}
+ #ov .tvx .txwheel .hit{opacity:.45}
+ #ov .tvx .txwheel .okt{fill:#2A1A08;font-size:24px;font-weight:700;pointer-events:none}
+ #ov .tvx .txl{position:absolute;bottom:0;display:flex;flex-direction:column;align-items:center;gap:4px}
+ #ov .tvx .txl.l{left:0} #ov .tvx .txl.r{right:0}
+ #ov .tvx .txlab{font-size:12px;color:#9A9AA2}
+ #ov .tvx .txrow{display:flex;justify-content:center;gap:30px;margin:16px 0 12px}
+ #ov .tvx .txvol{display:flex;align-items:center;justify-content:space-between;height:64px;
+       border-radius:32px;background:#2A2B30;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 4px 8px rgba(0,0,0,.4);
+       padding:0 8px;margin:8px 0 14px}
+ #ov .tvx .txv{flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+       cursor:pointer;user-select:none;border-radius:28px}
+ #ov .tvx .txv.down{background:rgba(255,255,255,.06)}
+ #ov .tvx .txv b{font-size:26px;font-weight:500;line-height:24px}
+ #ov .tvx .txv span{font-size:11px;color:#9A9AA2}
+ #ov .tvx .txapps{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+ #ov .tvx .txapp{height:44px;border-radius:22px;background:#2C2D32;display:flex;align-items:center;
+       justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer;padding:0 6px;
+       box-shadow:0 3px 6px rgba(0,0,0,.35);user-select:none}
+ #ov .tvx .txapp.now{background:#F0A33A;color:#2A1A08}
+ #ov .tvx .tvdim{opacity:.4}
+ #ov .acbtn{display:block;flex:1 1 0;min-width:0;margin:0;padding:9px 4px;border-radius:12px;
+            border:2px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);
+            font-size:14px;font-weight:600;cursor:pointer;text-align:center;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .acbtn.on{border-color:#8E6BC4;color:#fff;background:rgba(142,107,196,.22)}
+ #ov .acbtn.ic{padding:5px 0;line-height:0}
+ #ov .acbtn.ic svg{display:inline-block;max-width:none}
+ /* колесо пульта: перетаскивание крутит шкалу, а не страницу */
+ #ov .card.acpad{width:100%;max-width:440px;touch-action:none;user-select:none;cursor:grab}
+ /* пульт кондиционера на весь экран: без полей и подложки окна */
+ #ov.full{padding:0;overflow:hidden}
+ #ov.full > .acscreen{position:fixed;left:0;top:0;right:0;bottom:0;margin:0;
+            touch-action:none;color:#888;font-size:20px;line-height:100vh}
+ #ov .acscreen svg{display:block;width:100%;height:100%}
+ #ov.full > .acscreen.boxed{right:auto;bottom:auto;left:50%;top:50%;
+            transform:translate(-50%,-50%);border-radius:24px;overflow:hidden;
+            box-shadow:0 10px 40px rgba(0,0,0,.25)}
+ /* Список на весь экран. Кнопки крупные, по 44 px: окно открывают ради
+    галочек, и промах мимо строки дороже места на экране. */
+ /* Своя подложка, а не прозрачный оверлей, как у пультов: строки текста
+    поверх просвечивающей панели читались плохо. Отступ сверху - под
+    крестик закрытия, который висит в углу экрана. */
+ #ov .lst{width:520px;max-width:94vw;box-sizing:border-box;text-align:left;
+          margin:40px auto 7px;background:#1C1C20;border-radius:22px;
+          padding:16px 12px 14px}
+ /* Промежутки - отступами, а не gap: gap во флексе браузеры знают только
+    с 2020 года (Chrome 84), на старом планшете элементы слипались. */
+ #ov .lst .lhead{display:flex;align-items:baseline;margin:2px 6px 12px}
+ #ov .lst .lhead > * + *{margin-left:10px}
+ #ov .lst .lttl{color:#fff;font-size:20px;font-weight:600}
+ #ov .lst .lcnt{color:rgba(255,255,255,.5);font-size:15px}
+ #ov .lst .ladd{display:flex;margin-bottom:12px}
+ #ov .lst .ladd > * + *{margin-left:8px}
+ #ov .lst input{flex:1;min-width:0;font:16px -apple-system,'Segoe UI',Inter,system-ui,sans-serif;
+          padding:12px 14px;border-radius:14px;border:1.5px solid rgba(255,255,255,.18);
+          background:rgba(255,255,255,.07);color:#fff;outline:none;
+          -webkit-user-select:text;user-select:text}
+ #ov .lst input:focus{border-color:#E09B2D}
+ #ov .lst .lgo{flex:0 0 auto;padding:0 18px;border-radius:14px;background:#E09B2D;
+          color:#1B1B1F;font-weight:600;font-size:15px;display:flex;align-items:center;
+          cursor:pointer;touch-action:manipulation}
+ #ov .lst .lrow > * + *{margin-left:6px}
+ #ov .lst .lrow{display:flex;align-items:center;min-height:52px;
+          border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:0 4px}
+ #ov .lst .lchk{flex:0 0 44px;height:44px;display:flex;align-items:center;
+          justify-content:center;cursor:pointer;touch-action:manipulation}
+ #ov .lst .lchk i{width:22px;height:22px;border-radius:50%;box-sizing:border-box;
+          border:2px solid rgba(255,255,255,.45);display:block}
+ /* Лист в линейку (1.42), как на плитке: квадратики, строки по линейкам,
+    поле слева. */
+ #ov .lst.sheet .lrow{background:none;border-radius:0;margin:0;
+          border-bottom:1px solid rgba(255,255,255,.12)}
+ #ov .lst.sheet .lchk i{border-radius:5px}
+ #ov .lst.sheet .lrow .ltxt{border-left:1px solid rgba(224,155,45,.4);padding-left:10px;
+          align-self:stretch;display:flex;align-items:center}
+ #ov.lt .lst.sheet .lrow{background:none;border-bottom-color:rgba(0,0,0,.1)}
+ /* значки предметов в окнах (1.42): кран, шайба датчика, листок календаря */
+ #ov .lst .wpic{display:block;margin:6px auto 0;color:rgba(255,255,255,.85)}
+ #ov.lt .lst .wpic{color:#3A3B40}
+ #ov .lst .wrow .wpuck{flex:0 0 34px;color:rgba(255,255,255,.75)}
+ #ov.lt .lst .wrow .wpuck{color:#55575E}
+ #ov .lst .lhead .calp{flex:0 0 auto;margin-right:10px;align-self:center}
+ /* рисунки окон с сервера (1.46) лежат в обёртке: флекс-элемент - она */
+ #ov .lst .wrow .wpk{flex:0 0 34px;height:24px;line-height:0}
+ #ov .lst .lhead .wcal{flex:0 0 auto;margin-right:10px;align-self:center;line-height:0}
+ #ov .lst .done .lchk i{background:#E09B2D;border-color:#E09B2D}
+ #ov .lst .ltxt{flex:1;min-width:0;color:#fff;font-size:16px;line-height:1.3;
+          padding:8px 2px;word-wrap:break-word;overflow-wrap:anywhere;cursor:text}
+ #ov .lst .done .ltxt{color:rgba(255,255,255,.45);text-decoration:line-through}
+ #ov .lst .lbtn{flex:0 0 40px;height:44px;display:flex;align-items:center;
+          justify-content:center;color:rgba(255,255,255,.55);font-size:17px;
+          cursor:pointer;border-radius:10px;touch-action:manipulation}
+ #ov .lst .lbtn:active{background:rgba(255,255,255,.12)}
+ #ov .lst .lbtn.off{opacity:.2;pointer-events:none}
+ #ov .lst .lbtn.ask{flex-basis:auto;padding:0 10px;color:#FFD8CE;
+          background:rgba(196,85,59,.35);font-size:14px;font-weight:600}
+ #ov .lst .lfoot{display:flex;flex-wrap:wrap;margin-top:14px}
+ #ov .lst .lfoot span{margin:0 8px 8px 0;padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;
+          border:2px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);cursor:pointer}
+ #ov .lst .lempty{color:rgba(255,255,255,.45);text-align:center;padding:18px 0}
+ #ov .lst .lwarn{background:#C4553B;color:#fff;border-radius:12px;padding:10px 12px;
+   font-size:13.5px;line-height:1.35;margin:0 0 12px}
+ #ov .lst .lwarn:empty{display:none}
+ #ov .lst .lnote{color:rgba(255,255,255,.4);font-size:12.5px;margin:10px 4px 0}
+ /* Окна воды: та же карточка, что у списка. Строка датчика - имя, время и
+    состояние; кнопка крана одна и крупная, чтобы не промахнуться мимо. */
+ /* Окно расписания: время слева узкой колонкой, название и место
+    правее. Идущее сейчас подсвечено, прошедшее бледное. */
+ #ov .lst + .lst{margin-top:14px}
+ #ov .lst.agw .lhead{margin-top:10px}
+ #ov .lst.agw .lhead:first-child{margin-top:2px}
+ #ov .lst .agrow{display:flex;align-items:flex-start;min-height:44px;
+          border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:10px 14px;
+          box-sizing:border-box}
+ #ov .lst .agrow i{flex:0 0 10px;height:10px;border-radius:50%;margin:6px 12px 0 0}
+ #ov .lst .agrow .agtime{flex:0 0 78px;color:#fff;font-size:15px;font-weight:600;
+          line-height:1.4}
+ #ov .lst .agrow .agend{font-size:12.5px;font-weight:500;color:rgba(255,255,255,.5)}
+ #ov .lst .agrow .agtxt{flex:1;min-width:0}
+ #ov .lst .agrow .agname{color:#fff;font-size:16px;line-height:1.35;word-wrap:break-word}
+ #ov .lst .agrow .agloc{color:rgba(255,255,255,.5);font-size:13px;margin-top:2px}
+ #ov .lst .agrow.past{opacity:.45}
+ #ov .lst .agrow.now{background:rgba(224,155,45,.22)}
+ #ov .lst .agrow.now .agtime{color:#E09B2D}
+ #ov .lst .agrow.day .agtime{font-size:13px;font-weight:500;color:rgba(255,255,255,.6)}
+ #ov .lst .agempty{color:rgba(255,255,255,.45);padding:10px 6px}
+ #ov .lst .wrow > * + *{margin-left:10px}
+ #ov .lst .wrow{display:flex;align-items:center;min-height:48px;
+          border-radius:14px;background:rgba(255,255,255,.06);margin:6px 0;padding:0 14px}
+ #ov .lst .wrow .wname{flex:1;color:#fff;font-size:16px}
+ #ov .lst .wrow .wwhen{color:rgba(255,255,255,.45);font-size:13px}
+ #ov .lst .wrow .wst{font-size:14px;font-weight:600;color:rgba(255,255,255,.7);
+          min-width:74px;text-align:right}
+ #ov .lst .wrow.wet{background:rgba(196,85,59,.35)}
+ #ov .lst .wrow.wet .wst{color:#FFD8CE}
+ #ov .lst .wclose{color:rgba(255,255,255,.45);font-size:12.5px;margin:-2px 14px 8px}
+ #ov .lst .wbig{display:block;text-align:center;color:#fff;font-size:26px;
+          font-weight:600;margin:14px 0 4px}
+ #ov .lst .wsub{text-align:center;color:rgba(255,255,255,.55);font-size:14px;
+          margin-bottom:14px}
+ #ov .lst .wbtn{display:block;text-align:center;padding:16px;border-radius:16px;
+          font-size:17px;font-weight:650;cursor:pointer;margin-top:10px;
+          touch-action:manipulation}
+ #ov .lst .wbtn.shut{background:#C4553B;color:#fff}
+ #ov .lst .wbtn.open{background:#2F7DC4;color:#fff}
+ #ov .lst .wbtn.hot.open{background:#D9822B}
+ #ov .lst .wbtn.reset{background:rgba(255,255,255,.12);color:#fff}
+ #ov .lst .wbtn.off{opacity:.45;pointer-events:none}
+ #ov .lst .wwarn{color:#FFD8CE;background:rgba(196,85,59,.25);border-radius:12px;
+          padding:10px 12px;font-size:13.5px;margin-top:10px}
+ /* ---- светлые пульты (1.22) --------------------------------------------
+    Окно пульта - во весь экран, сплошным цветом поля панели: сквозь
+    прежнюю дымку просвечивала панель, и на телефоне пульт читался как
+    наложенная картинка. У светлых тем (light, autumn, retro, noir) окно
+    светлое: класс lt ставит openOv по теме панели. Правила ниже -
+    зеркало тёмных: белый текст становится тёмным, белые подложки -
+    серыми. */
+ #ov.lt .ttl{color:#1C1C1E}
+ #ov.lt .cam{background:#D9D9DE}
+ #ov.lt .hint{color:rgba(28,28,30,.55)}
+ #ov.lt .pw{border:2px solid rgba(0,0,0,.24);color:#1C1C1E}
+ #ov.lt .pw .led{background:rgba(0,0,0,.24)}
+ #ov.lt .close{color:#2A2A2E}
+ #ov.lt #lvl{background:#D9D9DE}
+ #ov.lt #lvl .val{color:#1C1C1E}
+ #ov.lt .step .lab{color:rgba(28,28,30,.55)}
+ #ov.lt .step .num{color:rgba(28,28,30,.78)}
+ #ov.lt .step button{background:rgba(0,0,0,.09);color:#1C1C1E}
+ #ov.lt .step button:active{background:rgba(0,0,0,.18)}
+ #ov.lt .cbtn{border:2px solid rgba(0,0,0,.18);color:rgba(28,28,30,.85)}
+ #ov.lt #tdial .tbig{fill:#1C1C1E}
+ #ov.lt #tdial .tsub{fill:rgba(28,28,30,.55)}
+ #ov.lt #tdial .tmode{fill:rgba(28,28,30,.65)}
+ #ov.lt .wbig{color:#1C1C1E}
+ #ov.lt .acbtn{border:2px solid rgba(0,0,0,.18);color:rgba(28,28,30,.8)}
+ #ov.lt .acbtn.on{color:#1C1C1E}
+ #ov.lt .lst{background:#FFFFFF}
+ #ov.lt .lst .lttl{color:#1C1C1E}
+ #ov.lt .lst .lcnt{color:rgba(28,28,30,.5)}
+ #ov.lt .lst input{border:1.5px solid rgba(0,0,0,.14);background:rgba(0,0,0,.05);color:#1C1C1E}
+ #ov.lt .lst .lrow{background:rgba(0,0,0,.04)}
+ #ov.lt .lst .lchk i{border:2px solid rgba(0,0,0,.36)}
+ #ov.lt .lst .ltxt{color:#1C1C1E}
+ #ov.lt .lst .done .ltxt{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .lbtn{color:rgba(28,28,30,.55)}
+ #ov.lt .lst .lbtn:active{background:rgba(0,0,0,.08)}
+ #ov.lt .lst .lfoot span{border:2px solid rgba(0,0,0,.14);color:rgba(28,28,30,.75)}
+ #ov.lt .lst .lempty{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .lnote{color:rgba(28,28,30,.4)}
+ #ov.lt .lst .agrow{background:rgba(0,0,0,.04)}
+ #ov.lt .lst .agrow .agtime{color:#1C1C1E}
+ #ov.lt .lst .agrow .agend{color:rgba(28,28,30,.5)}
+ #ov.lt .lst .agrow .agname{color:#1C1C1E}
+ #ov.lt .lst .agrow .agloc{color:rgba(28,28,30,.5)}
+ #ov.lt .lst .agrow.day .agtime{color:rgba(28,28,30,.6)}
+ #ov.lt .lst .agempty{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .wrow{background:rgba(0,0,0,.04)}
+ #ov.lt .lst .wrow .wname{color:#1C1C1E}
+ #ov.lt .lst .wrow .wwhen{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .wrow .wst{color:rgba(28,28,30,.7)}
+ #ov.lt .lst .wclose{color:rgba(28,28,30,.45)}
+ #ov.lt .lst .wbig{color:#1C1C1E}
+ #ov.lt .lst .wsub{color:rgba(28,28,30,.55)}
+ #ov.lt .lst .wbtn.reset{background:rgba(0,0,0,.08);color:#1C1C1E}
+ #ov.lt .cbtn.stop{color:#A2381F}
+ #ov.lt .cbtn.on{color:#A96A0F}
+ #ov.lt .lst .wrow.wet .wst,#ov.lt .lst .wwarn,#ov.lt .lst .lbtn.ask{color:#A2381F}
+ /* пульт телевизора в светлой теме */
+ #ov.lt .tvx{background:#F6F6F8;color:#1C1C1E;box-shadow:0 6px 24px rgba(0,0,0,.10)}
+ #ov.lt .tvx .txsub,#ov.lt .tvx .txlab,#ov.lt .tvx .txv span{color:#7A7A82}
+ #ov.lt .tvx .tx{background:radial-gradient(circle at 35% 30%,#FFFFFF,#E3E3E8 70%);
+       border:1px solid rgba(0,0,0,.06);box-shadow:0 3px 6px rgba(0,0,0,.16)}
+ #ov.lt .tvx .tx.down{box-shadow:0 1px 3px rgba(0,0,0,.2);filter:brightness(.96)}
+ #ov.lt .tvx .tx svg{stroke:#2A2A2E}
+ #ov.lt .tvx .tx svg.fl{fill:#2A2A2E;stroke:none}
+ #ov.lt .tvx .tx.txpw.on svg{stroke:#2A1A08}
+ #ov.lt .tvx .txwheel .ar{fill:#3A3A40}
+ #ov.lt .tvx .txvol{background:#E8E8ED;box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 3px 6px rgba(0,0,0,.10)}
+ #ov.lt .tvx .txv.down{background:rgba(0,0,0,.05)}
+ #ov.lt .tvx .txapp{background:#E8E8ED;color:#1C1C1E;box-shadow:0 2px 4px rgba(0,0,0,.10)}
+ #ov.lt .tvx .txapp.now{background:#F0A33A;color:#2A1A08}
+ /* ---- шапка пульта и круглые кнопки (1.23) ---- */
+ #ov.hashead .close,#ov.ownback .close,#ov.full .close{display:none}
+ #ov .phead{display:flex;align-items:center;width:440px;max-width:100%;box-sizing:border-box;
+            margin:0 auto 4px;padding:0 2px}
+ #ov .phead > * + *{margin-left:12px}
+ #ov .phname{flex:1;min-width:0;text-align:center}
+ #ov .phttl{color:#fff;font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .phsub{color:rgba(255,255,255,.55);font-size:13px;margin-top:2px;min-height:16px;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #ov .hbtn{flex:0 0 46px;width:46px;height:46px;border-radius:50%;box-sizing:border-box;
+           background:radial-gradient(circle at 35% 30%,#45464C,#2A2B30 70%);
+           border:1px solid rgba(255,255,255,.07);box-shadow:0 4px 8px rgba(0,0,0,.45);
+           display:flex;align-items:center;justify-content:center;cursor:pointer;
+           user-select:none;-webkit-user-select:none;touch-action:manipulation;
+           color:#E8E8EC;font-size:28px;font-weight:400;line-height:1}
+ #ov .hbtn svg{color:inherit;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;
+               stroke-linecap:round;stroke-linejoin:round}
+ #ov .hbtn.down{transform:translateY(1px);box-shadow:0 2px 4px rgba(0,0,0,.5)}
+ #ov .hbtn.on{background:radial-gradient(circle at 40% 35%,#FFB24D,#E08A2D 75%);color:#2A1A08}
+ #ov .hbtn.ghost{visibility:hidden}
+ #ov .hbtn.at{position:absolute;margin:-22px 0 0 -22px;width:44px;height:44px;z-index:2}
+ #ov .hbtn.cold{color:#5AA8F0} #ov .hbtn.warm{color:#F2A23A}
+ #ov .stagebox{position:relative;margin:0 auto}
+ #ov .vals{display:flex;justify-content:center;margin:2px auto 6px;color:rgba(255,255,255,.78);
+           font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+ #ov .vals > * + *{margin-left:26px}
+ #ov .vals{align-items:center}
+ #ov .vals > div:not(.hbtn){min-width:84px;text-align:center}
+ #ov .vals small{display:block;font-size:12px;font-weight:500;color:rgba(255,255,255,.5);margin-bottom:1px}
+ #ov.lt .phttl{color:#1C1C1E}
+ #ov.lt .phsub{color:rgba(28,28,30,.55)}
+ #ov.lt .hbtn{background:radial-gradient(circle at 35% 30%,#FFFFFF,#E3E3E8 70%);
+              border:1px solid rgba(0,0,0,.06);box-shadow:0 3px 6px rgba(0,0,0,.16);color:#2A2A2E}
+ #ov.lt .hbtn.down{box-shadow:0 1px 3px rgba(0,0,0,.2)}
+ #ov.lt .hbtn.on{background:radial-gradient(circle at 40% 35%,#FFB24D,#E08A2D 75%);color:#2A1A08}
+ #ov.lt .hbtn.cold{color:#2F7DC4} #ov.lt .hbtn.warm{color:#D9822B}
+ #ov.lt .vals{color:rgba(28,28,30,.85)}
+ #ov.lt .vals small{color:rgba(28,28,30,.5)}
+ /* ---- пульты в цвет темы (1.27) ---------------------------------------
+    Акцент, нагрев и холод - переменные на окне (openOv), из темы. Старый
+    браузер без var() отбросит эти правила и останется при прежних. */
+ #ov .pw.on{border-color:var(--acc);color:var(--acc)}
+ #ov .pw.on .led{background:var(--acc)}
+ #crtview .mark.going{background:var(--acc)}
+ #ov .cbtn.on{border-color:var(--acc)}
+ #ov .tvc.ok{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+ #ov .tvapp.now{border-color:var(--acc)}
+ #ov .tvx .tx.txpw.on,#ov.lt .tvx .tx.txpw.on,#ov .hbtn.on,#ov.lt .hbtn.on{
+       background:radial-gradient(circle at 40% 35%,var(--acc2),var(--acc) 75%);color:var(--acc-ink)}
+ #ov .tvx .tx.txpw.on svg,#ov.lt .tvx .tx.txpw.on svg{stroke:var(--acc-ink)}
+ #ov .tvx .txapp.now,#ov.lt .tvx .txapp.now{background:var(--acc);color:var(--acc-ink)}
+ #ov .tvx .txwheel .okt{fill:var(--acc-ink)}
+ #ov .lst input:focus{border-color:var(--acc)}
+ #ov .lst .lgo{background:var(--acc);color:var(--acc-ink)}
+ #ov .lst .done .lchk i{background:var(--acc);border-color:var(--acc)}
+ #ov .lst .agrow.now .agtime{color:var(--acc)}
+ #ov .hbtn.cold,#ov.lt .hbtn.cold{color:var(--cool)}
+ #ov .hbtn.warm,#ov.lt .hbtn.warm{color:var(--heat)}
+ /* ---- пульты в форме темы (1.35) ------------------------------------
+    Классы на окне ставит openOv по форме темы: neu - неоморфизм (кнопки
+    из материала фона, две тени, нажатая - утоплена), flat - без теней,
+    bev-none / bev-sharp - плоское лицо / острый скос по краю. */
+ #ov.flat .hbtn,#ov.flat .tvx .tx,#ov.flat .tvx .txapp,#ov.flat .tvx .txvol,
+ #ov.flat .tvx,#ov.flat .acbtn{box-shadow:none}
+ #ov.bev-none .hbtn,#ov.bev-none .tvx .tx{background:#3A3B40}
+ #ov.lt.bev-none .hbtn,#ov.lt.bev-none .tvx .tx{background:#EDEDF0}
+ #ov.bev-sharp .hbtn,#ov.bev-sharp .tvx .tx{box-shadow:inset 2px 2px 0 rgba(255,255,255,.28),
+       inset -2px -2px 0 rgba(0,0,0,.3),0 4px 8px rgba(0,0,0,.35)}
+ #ov.lt.bev-sharp .hbtn,#ov.lt.bev-sharp .tvx .tx{box-shadow:inset 2px 2px 0 rgba(255,255,255,.9),
+       inset -2px -2px 0 rgba(0,0,0,.14),0 3px 6px rgba(0,0,0,.14)}
+ #ov.neu .tvx{background:var(--ovbg);box-shadow:-8px -8px 18px var(--neu-l),9px 10px 20px var(--neu-d)}
+ #ov.neu .hbtn,#ov.neu .tvx .tx,#ov.neu .tvx .txapp,#ov.neu .acbtn,
+ #ov.lt.neu .hbtn,#ov.lt.neu .tvx .tx,#ov.lt.neu .tvx .txapp{background:var(--ovbg);border-color:transparent;
+       box-shadow:-4px -4px 9px var(--neu-l),4px 5px 10px var(--neu-d)}
+ #ov.neu .tvx .txvol,#ov.lt.neu .tvx .txvol{background:var(--ovbg);
+       box-shadow:inset 3px 3px 7px var(--neu-d),inset -3px -3px 7px var(--neu-l)}
+ #ov.neu .hbtn.down,#ov.neu .tvx .tx.down,#ov.neu .hbtn.on,#ov.lt.neu .hbtn.on,
+ #ov.neu .tvx .tx.txpw.on,#ov.lt.neu .tvx .tx.txpw.on,#ov.neu .tvx .txapp.now,#ov.lt.neu .tvx .txapp.now{
+       background:var(--ovbg);color:var(--acc);filter:none;transform:none;
+       box-shadow:inset 3px 3px 7px var(--neu-d),inset -3px -3px 7px var(--neu-l)}
+ #ov.neu .tvx .tx.txpw.on svg,#ov.lt.neu .tvx .tx.txpw.on svg{stroke:var(--acc)}

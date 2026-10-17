@@ -34,3 +34,7 @@ venv/
 .idea/
 *.swp
 .DS_Store
+
+# проверки скриптов страницы (tests/js_check.js)
+node_modules/
+package-lock.json

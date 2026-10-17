@@ -1,0 +1,26 @@
+{#-
+  Рисунки для окон на весь экран (с 1.46): большой кран, шайба датчика
+  протечки, листок календаря - те же макросы, что на плитках, а не копии
+  в скриптах страницы. Окно вставляет картинку в документ рядом с
+  панелью: классы (.fct, .puck-*, .calp-*) красит её <style>, градиенты
+  берутся из её <defs> (uid "p-"). Своего здесь - только то, чем окно
+  отличается от плитки: кран цветом текста окна, лужа под мокрым датчиком.
+-#}
+{% import "tiles/_base.j2" as base with context %}
+{% import "tiles/basic.j2" as basic with context %}
+{% if name == 'faucet' %}
+<svg xmlns="http://www.w3.org/2000/svg" class="glyph wpic" width="{{ (size * 0.92)|round|int }}" height="{{ size }}"
+     viewBox="-4 -2 92 102"{% if not opened %} opacity=".55"{% endif %}>
+  <style>.glyph .fct, .glyph .fct.shut { stroke: currentColor; }</style>
+  {{ basic.faucet(0, 0, 1, opened, color, opened) }}
+</svg>
+{% elif name == 'puck' %}
+<svg xmlns="http://www.w3.org/2000/svg" class="glyph wpuck" width="34" height="24" viewBox="0 0 34 24">
+  {% if wet %}<ellipse cx="17" cy="17" rx="16" ry="5" fill="#3B8FD4" opacity=".45"/>{% endif %}
+  {{ basic.puck(17, 11, 11, wet) }}
+</svg>
+{% elif name == 'calpage' %}
+<svg xmlns="http://www.w3.org/2000/svg" class="glyph calp" width="{{ size }}" height="{{ (size * 1.14)|round|int }}" viewBox="-1 -4 32 36">
+  {{ basic.calpage(0, 0, 30, day, wd) }}
+</svg>
+{% endif %}

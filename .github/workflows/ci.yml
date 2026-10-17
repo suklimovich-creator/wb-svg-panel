@@ -68,6 +68,24 @@ jobs:
           print('панелей: %d' % len(panels))
           PY
 
+      - name: Рендер всех панелей во всех темах
+        # tests/render_check.py: каждая панель tests/fixtures/showcase.yaml в
+        # каждой встроенной теме собирается, разбирается как XML, плоская
+        # подстановка не оставляет var(). Отпечатки вида (golden.json) здесь
+        # только для сведения: другая версия Jinja2 может расставить пробелы
+        # иначе.
+        run: |
+          pip install flask paho-mqtt
+          python tests/render_check.py --soft
+
+      - name: Каждый адрес демона отвечает
+        run: python tests/routes_check.py
+
+      - name: Скрипты страницы - ES5 и порядок файлов
+        run: |
+          npm install --no-save --silent acorn@8
+          node tests/js_check.js
+
       - name: Шелл-скрипты
         # -S warning: ошибки и предупреждения роняют сборку, придирки уровня
         # info и style - нет. Иначе CI краснеет из-за «используйте find вместо
@@ -82,3 +100,20 @@ jobs:
 
       - name: Личные данные не уехали в репозиторий
         run: sh check-secrets.sh
+
+  browser:
+    # Страница в настоящем браузере: окна, пульты, шестерёнка, обновление
+    # (tests/browser_check.js сам поднимает тестовый сервер).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Зависимости
+        run: |
+          pip install flask paho-mqtt pyyaml jinja2
+          npm install --no-save --silent playwright
+          npx playwright install --with-deps chromium
+      - name: Браузерные проверки
+        run: node tests/browser_check.js

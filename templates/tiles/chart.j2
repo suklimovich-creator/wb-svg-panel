@@ -8,6 +8,16 @@
 
 {% import "tiles/_base.j2" as base with context %}
 
+{#- Стили графика (с 1.46 - здесь): зоны качества воздуха, легенда,
+    пояснение к зонам. Общие с прогнозом (оси, сетка) - в _base.j2. -#}
+{% macro style() %}
+  .zone      { opacity: .11; }
+  .zword     { font-size: calc(12.5px * var(--fs)); font-weight: 600; }
+  .legend    { font-size: calc(9px * var(--fs)); font-weight: 500; fill: var(--ink); }
+  .legend .lname { font-weight: 650; }
+  .lnote     { font-size: calc(7.5px * var(--fs)); fill: var(--ink-dim); }
+{% endmacro %}
+
 {#- ---- график: от рамки до рамки, заливка до пола ---- -#}
 {% macro tile_chart(t) %}
   {{ base.plate(t) }}

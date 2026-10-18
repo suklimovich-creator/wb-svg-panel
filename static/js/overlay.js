@@ -179,7 +179,7 @@ function openOv(nodes){
     ov.style.setProperty('--ovbg', PAGE_BG[rootTheme()] || '#101012');
   }
   // у стекла (1.40) под окном - те же обои, что под панелью
-  ov.style.background = PAGE_WALL[rootTheme()] || PAGE_BG[rootTheme()] || '#101012';
+  ov.style.background = (PAGE_WALL[rootTheme()] && pageWallNow) || PAGE_BG[rootTheme()] || '#101012';
   // Прежний заголовок-строка (.ttl) - та же шапка, что у пультов: «назад»
   // слева, название рядом. Так выход во всех окнах один и тот же (1.35).
   nodes = nodes.map(function(n){

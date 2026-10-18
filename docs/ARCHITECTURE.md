@@ -500,6 +500,31 @@ Python (`ac_disk.build_arc`, `tiles_fancoil.build_panel`), шаблоны тол
 false` и XML. `bind(node, true)` вешает обработчики только в части,
 общий `bindPanel()` — один раз после `sync`.
 
+**Обои своей картинкой (с 1.50).** `wallpaper.py`: путь из `wallpaper:`
+(панель или конфиг) → ключ (sha1 пути, времени, размера, `RECIPE`) →
+`/wall/<ключ>.jpg` (web_tiles), размытый Pillow JPEG в памяти. `web.wall_of`
+даёт шаблону `wall_img` и вуаль `wall_dim` только для `depth: glass`;
+`wallg` рисует `<image>` и вуаль вместо пятен, корень несёт
+`data-wall-img`/`data-wall-dim` — по ним страница строит фон `#pagewall`
+(`wallCss` в core.js), `glassScroll` двигает и `image`.
+
+**Кнопки страницы в ряду вкладок (с 1.50).** При полосе сверху и `nav=`
+`tab_bar(nav=True)` оставляет по краям место под два круга
+(`tab_plate.nav`), шапка рисуется без кнопок (`nav_w = 0`, `tab_nav`).
+`dockBar` прижимает копии кнопок к краям окна (свой `scale(1/scaleX)`
+вокруг 0 и W) и вешает `navTap`.
+
+**Ручки (с 1.51).** `CONTROLS` (wrapper.html, из `live_controls` и
+`tile_gestures`) и выбор устройства (`LIVE_MODE`, `DRAG_MODE` в
+localStorage) → `liveOn()`, `dragOn()` (core.js). `liveSender(send, ms)`:
+`tick()` — не чаще `ms` и не при отправке в пути, `end(fn)` — последнее
+значение цепочкой после всех. Пульты: `padLevel`, `padSphere`,
+`padCurtain`. Жесты — `static/js/gestures.js`: `tdMove`/`tdEnd` зовутся
+из обработчиков плиток (press.js); ось по `data-kind` (`TD_AXIS`),
+вертикальные — только если страница не листается (`tdMarks` → классы
+`tdrag`, `tdrag-v` → `touch-action` в panel.css); `tdModel` — что и как
+слать (те же `data-*`, что у пультов); плашка `#tdrag`.
+
 Скрипты страницы — обычные файлы с общими глобальными именами, без модулей:
 код, выполняемый при загрузке, зовёт только функции из своего и предыдущих
 файлов (проверяет `tests/js_check.js`).

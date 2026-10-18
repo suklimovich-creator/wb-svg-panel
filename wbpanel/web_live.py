@@ -113,8 +113,10 @@ def cached_panel(name, cols):
     # В ключе - тема, которая получится на самом деле: у theme: auto она
     # меняется на закате, и кэш не должен отдать дневную картинку ночью.
     theme = panel_theme(web.config.panels.get(name) or {})
+    # nav и lite - выбор устройства (1.44, 1.45): без них в ключе планшет
+    # «облегчённо» и телефон получали картинки друг друга (до 1.50).
     base = (name, cols, closed, opened, mode, flat, theme, getattr(web.config, "_mtime", 0),
-            palette.version())
+            palette.version(), request.args.get("nav") or "", request.args.get("lite") == "1")
     bucket = int(time.time() // _refresh_every())
     with _RENDER_LOCK:
         now = time.time()

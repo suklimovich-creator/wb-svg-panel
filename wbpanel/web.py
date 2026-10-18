@@ -16,7 +16,7 @@ import threading
 from flask import Flask, Response, abort, request
 from jinja2 import Environment, FileSystemLoader
 
-from . import assemble, cameras, palette, showcase, stats, themes
+from . import assemble, cameras, palette, showcase, stats, themes, wallpaper
 from .assemble import prepare
 from .calendars import calendars
 from .config import Config
@@ -154,7 +154,11 @@ def render_panel(name, cols=None):
         panel_conf, st, hist, cols=cols, all_panels=all_panels,
         name=name, closed=closed, opened=opened, mode=mode, nav=nav)
     template = _template(panel_conf.get("template", "panel.svg.j2"))
+    wall_img, wall_dim = wall_of(panel_conf, theme)
     return template.render(
+        wall_img=wall_img,
+        wall_dim=wall_dim,
+        tab_nav=sect.get("tab_nav", False),
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
         # документе, и без него их clipPath и градиенты перекрывают друг друга
         uid="p-",
@@ -184,6 +188,28 @@ def render_panel(name, cols=None):
         today=clock_now()[1],
         connected=st.connected,
     )
+
+
+def wall_of(panel_conf, theme):
+    """
+    Своя картинка обоев стекла (1.50): (адрес, вуаль) или (None, None).
+    Вуаль - полупрозрачный слой поверх: на тёмном стекле картинка темнее,
+    на дневном светлее, иначе подписи на плитках теряются в фотографии.
+    wallpaper_dim - её плотность, 0…1 (по умолчанию 0.3).
+    """
+    if palette.info(theme)["depth"] != "glass":
+        return None, None
+    raw = panel_conf.get("wallpaper", config.get("wallpaper"))
+    url = wallpaper.url_for(wallpaper.resolve(raw, BASE_DIR))
+    if not url:
+        return None, None
+    try:
+        dim = float(panel_conf.get("wallpaper_dim", config.get("wallpaper_dim", 0.3)))
+    except (TypeError, ValueError):
+        dim = 0.3
+    dim = max(0.0, min(dim, 0.9))
+    rgb = "0,0,0" if palette.page_dark(theme) else "255,255,255"
+    return url, "rgba(%s,%.2f)" % (rgb, dim)
 
 
 def _json(body, status=200):

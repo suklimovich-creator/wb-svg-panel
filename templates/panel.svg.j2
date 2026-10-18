@@ -17,7 +17,7 @@
   лежит рядом с panel.py, после разделения больше не работает.
 -#}
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     class="{{ PAL.classes(theme) }}" style="--fs:{{ fs | default(1) }}" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}"
+     class="{{ PAL.classes(theme) }}" style="--fs:{{ fs | default(1) }}" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}"{{ (' data-wall-img="%s" data-wall-dim="%s"' % (wall_img, wall_dim)) | safe if wall_img else '' }}
      font-family="-apple-system, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif">
 
 {#- Плитки живут в templates/tiles/. Импорт с контекстом: макросам нужны
@@ -132,9 +132,17 @@
 {% if depth == 'glass' %}
   {% set wall_h = [height, width * 2.2]|min %}
   <g id="{{ uid }}wallg" data-wall="1">
+    {% if wall_img %}
+    {#- Своя картинка (1.50), размытая на сервере (wallpaper.py), и вуаль
+        поверх - в цвет стекла. Размер и место ставит страница, как и пятнам. -#}
+    <image href="{{ wall_img }}" xlink:href="{{ wall_img }}" width="{{ width }}" height="{{ wall_h|round(1) }}"
+           preserveAspectRatio="xMidYMid slice"/>
+    <rect width="{{ width }}" height="{{ wall_h|round(1) }}" fill="{{ wall_dim }}"/>
+    {% else %}
     {% for i in range(1, 5) %}
     <rect width="{{ width }}" height="{{ wall_h|round(1) }}" fill="url(#{{ uid }}wall{{ i }})"/>
     {% endfor %}
+    {% endif %}
   </g>
 {% endif %}
 {% for t in tiles %}
@@ -162,7 +170,7 @@
     высоту. И вместо названия панели - значок и название открытой комнаты. -#}
 {% if head_dy %}<g transform="translate(0,{{ head_dy }})">{% endif %}
 {% set nw = nav_w | default(0) %}
-{% if head_icon and not nw %}
+{% if head_icon and not nw and not tab_nav %}
 {#- Нажатие на шапку показывает кнопки страницы (панели, колонки, тема,
     вид): во вкладках их полоса спрятана, на небольшом экране она лишняя.
     С кнопками в шапке (1.44) это не нужно. -#}
@@ -263,6 +271,25 @@
   {% endif %}
 </g>
 {% endfor %}
+{% if tab_nav and tp.nav %}
+{#- Кнопки страницы в ряду вкладок (1.50): полоса сверху приколота к
+    экрану, и «назад» с шестерёнкой всегда под рукой, а не уезжают вместе
+    с шапкой. Страница держит их у краёв окна (dockBar). -#}
+{% set tn = tp.nav %}
+<g data-nav="back" class="nav tab-nav">
+  <circle cx="{{ tn.back_x }}" cy="{{ tn.cy }}" r="{{ tn.r + 4 }}" fill="transparent"/>
+  <circle cx="{{ tn.back_x }}" cy="{{ tn.cy }}" r="{{ tn.r }}" class="tab-pill"/>
+  <path transform="translate({{ tn.back_x }},{{ tn.cy }}) scale({{ tn.k }})" d="M3.5,-7.5l-7.5,7.5l7.5,7.5" class="nav-ic"/>
+</g>
+<g data-nav="menu" class="nav tab-nav">
+  <circle cx="{{ tn.menu_x }}" cy="{{ tn.cy }}" r="{{ tn.r + 4 }}" fill="transparent"/>
+  <circle cx="{{ tn.menu_x }}" cy="{{ tn.cy }}" r="{{ tn.r }}" class="tab-pill"/>
+  <g transform="translate({{ tn.menu_x }},{{ tn.cy }}) scale({{ tn.k }})">
+    <path d="M6.9,-2.1L9.5,-1.6L9.5,1.6L6.9,2.1L6.4,3.4L7.8,5.5L5.5,7.8L3.4,6.4L2.1,6.9L1.6,9.5L-1.6,9.5L-2.1,6.9L-3.4,6.4L-5.5,7.8L-7.8,5.5L-6.4,3.4L-6.9,2.1L-9.5,1.6L-9.5,-1.6L-6.9,-2.1L-6.4,-3.4L-7.8,-5.5L-5.5,-7.8L-3.4,-6.4L-2.1,-6.9L-1.6,-9.5L1.6,-9.5L2.1,-6.9L3.4,-6.4L5.5,-7.8L7.8,-5.5L6.4,-3.4Z" class="nav-ic thin"/>
+    <circle r="3.2" class="nav-ic thin"/>
+  </g>
+</g>
+{% endif %}
 </g>
 {% endif %}
 

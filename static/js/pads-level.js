@@ -89,8 +89,11 @@ function padLevel(node){
     lvl = Math.max(0, Math.min(1, l0 - dy / (KH * 1.5)));
     turn = t0 - dy / 15 * (H / KH);
     place(); step.repaint();
+    live.tick();
   }
-  drag(box, at, send, begin);
+  // Отклик сразу (1.51, «Ручки шлют: сразу»): яркость уходит и по дороге.
+  var live = liveSender(send);
+  drag(box, at, function(){ live.end(); }, begin);
 }
 
 /* Прежний пульт диммера (look: classic): полоса, заполнение снизу. */
@@ -311,13 +314,16 @@ function padCurtain(node, axis){
     paint();
   }
   function begin(ev){ dragging = true; at(ev); }
+  // Промежуточные значения по умолчанию не шлём: для привода каждое - новая
+  // цель, и он дёргался бы за пальцем. С «Ручки шлют: сразу» (1.51) - не
+  // чаще раза в 0,7 с, только положение, без слежки за приводом.
+  var live = liveSender(function(){ return pub(node.getAttribute('data-topic'), Math.round(shown * 100)); }, 700);
   function done(){
     dragging = false;
-    // Промежуточные значения не шлём: для привода каждое - новая цель,
-    // и он дёргался бы за пальцем.
-    send(Math.round(shown*100));
+    var v = Math.round(shown*100);
+    live.end(function(){ send(v); });
   }
-  drag(view, at, done, begin);
+  drag(view, function(ev){ at(ev); if(dragging) live.tick(); }, done, begin);
 }
 
 /* Перетаскивание: pointer-события есть не везде, поэтому с запасным

@@ -144,7 +144,7 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       await p.click('#navmenu [data-v="3"]');
       await p.waitForTimeout(1200);
       const cols = await p.evaluate(() => COLS);
-      await p.mouse.click(200, 700);
+      await p.mouse.click(200, 830);   // ниже меню: с 1.51 оно выше
       await p.waitForTimeout(300);
       const closed = await p.evaluate(() => !document.getElementById('navmenu').classList.contains('open'));
       ok('шестерёнка', opened && cols === '3' && closed, 'cols=' + cols);
@@ -208,6 +208,83 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       ok('свёртка раздела без полной замены', st.merged > before.merged && st.same && st.lean && st.text && st.n !== before.n,
          JSON.stringify([before, st]));
       await p.evaluate(() => { MODE = ''; FOLDED = []; saveFold(); });
+      await p.context().close();
+    }
+
+    // 11. вкладки сверху: «назад» и шестерёнка в приколотой полосе (1.50)
+    {
+      const p = await page('tabs.html');
+      const st = await p.evaluate(() => ({
+        back: !!document.querySelector('#tabdock [data-nav="back"]'),
+        head: document.querySelectorAll('#host [data-nav]').length,
+        hidden: !!document.querySelector('#host [data-tabbar] [data-nav="menu"]')}));
+      await tap(p, '#tabdock [data-nav="menu"]');
+      await p.waitForTimeout(400);
+      st.menu = await p.evaluate(() => document.getElementById('navmenu').classList.contains('open'));
+      ok('кнопки в ряду вкладок', st.back && st.menu && st.head === 2 && st.hidden, JSON.stringify(st));
+      await p.context().close();
+    }
+
+    // 12. своя картинка обоев стекла (1.50): фон страницы и линза
+    {
+      const p = await page('gal.html?theme=glass');
+      const st = await p.evaluate(() => {
+        const pw = document.getElementById('pagewall'), img = document.querySelector('#host [data-wall] image');
+        return {page: pw ? /url\(.*wall\//.test(pw.style.background) : false,
+                lens: !!img, size: img ? +img.getAttribute('height') : 0};
+      });
+      const r = await p.evaluate(() => fetch(document.querySelector('#host svg').getAttribute('data-wall-img'))
+        .then(r => r.status + ' ' + r.headers.get('content-type')));
+      ok('обои своей картинкой', st.page && st.lens && st.size > 100 && r === '200 image/jpeg', JSON.stringify(st) + ' ' + r);
+      await p.context().close();
+    }
+
+    // 13. жесты на плитках (1.51): диммер пальцем вбок (страница листается -
+    //     вертикальные жесты становятся боковыми), уставка термостата
+    {
+      const p = await page('gal.html', () => { try { localStorage.setItem('wb-panel-drag', '1'); } catch (e) {} });
+      async function swipe(sel, dx, dy) {
+        const el = await p.$(sel);
+        await el.scrollIntoViewIfNeeded();
+        const b = await el.boundingBox();
+        const x = b.x + b.width / 2, y = b.y + b.height / 2;
+        await p.mouse.move(x, y); await p.mouse.down();
+        for (let k = 1; k <= 8; k++) { await p.mouse.move(x + dx * k / 8, y + dy * k / 8); await p.waitForTimeout(40); }
+        await p.mouse.up(); await p.waitForTimeout(900);
+      }
+      const n0 = (await log()).length;
+      const st = await p.evaluate(() => ({cls: document.documentElement.className,
+        lvl: +document.querySelector('[data-kind="dimmer"]').getAttribute('data-level'),
+        tgt: +document.querySelector('[data-kind="thermostat"]').getAttribute('data-target'),
+        step: +document.querySelector('[data-kind="thermostat"]').getAttribute('data-step')}));
+      await swipe('[data-kind="dimmer"]', 70, 0);
+      await swipe('[data-kind="thermostat"]', 50, 0);
+      const sent = (await log()).slice(n0);
+      const bright = sent.filter(s => /Channel 1\/on$/.test(s[0])).map(s => +s[1]);
+      const tgt = sent.filter(s => s[0] === 'th/tgt/on').map(s => +s[1]);
+      const toggled = sent.some(s => s[0] === '/devices/dm/controls/K1/on' && s[1] === '0');
+      st.bright = bright; st.tgt2 = tgt; st.toggled = toggled;
+      ok('жесты на плитках', /tdrag/.test(st.cls) && bright.length && bright[bright.length - 1] > st.lvl * 100
+         && tgt.length === 1 && Math.abs(tgt[0] - (st.tgt + 2 * st.step)) < 1e-6 && !toggled, JSON.stringify(st));
+      await p.context().close();
+    }
+
+    // 14. ручки шлют сразу (1.51): пульт диммера - значения и по дороге
+    {
+      const p = await page('gal.html', () => { try { localStorage.setItem('wb-panel-live', '1'); } catch (e) {} });
+      await p.evaluate(() => openPad(document.querySelector('[data-kind="dimmer"]')));
+      await p.waitForTimeout(800);
+      const n0 = (await log()).length;
+      const b = await (await p.$('#lvl')).boundingBox();
+      const x = b.x + b.width / 2, y = b.y + b.height * 0.2;
+      await p.mouse.move(x, y); await p.mouse.down();
+      // вниз - темнее: по дороге уходят убывающие значения
+      for (let k = 1; k <= 12; k++) { await p.mouse.move(x, y + k * 14); await p.waitForTimeout(120); }
+      const during = (await log()).slice(n0).filter(s => /Channel 1\/on$/.test(s[0])).length;
+      await p.mouse.up(); await p.waitForTimeout(800);
+      const all = (await log()).slice(n0).filter(s => /Channel 1\/on$/.test(s[0])).map(s => +s[1]);
+      ok('ручки шлют сразу', during >= 2 && all[0] > all[all.length - 1]
+         && all[all.length - 1] === Math.min.apply(null, all), JSON.stringify({during, all}));
       await p.context().close();
     }
 

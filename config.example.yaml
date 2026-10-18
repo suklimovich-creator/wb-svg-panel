@@ -10,6 +10,11 @@
 theme: light           # light | autumn | retro | noir | neumo | glass-day | dark | graphite | noir-dark | glass | auto
 # Свои темы (с 1.25) - файлы в папке themes/ рядом с этим файлом, см.
 # themes/_example.yaml. Другая папка: themes_dir: my-themes
+# Стеклянные темы (glass, glass-day): своя картинка вместо цветных пятен
+# (с 1.50). Сервер размоет её сам; нужен python3-pil. У панели - свой
+# wallpaper: или wallpaper: none.
+# wallpaper: data/wallpaper.jpg
+# wallpaper_dim: 0.3      # вуаль поверх картинки, 0…0.9
 # theme: auto - днём одна тема, ночью другая:
 # theme_auto:
 #   day: autumn
@@ -31,6 +36,13 @@ theme: light           # light | autumn | retro | noir | neumo | glass-day | dar
 # /devices/<устройство>/controls/<канал>/on. Демону разрешено писать ТОЛЬКО
 # в каналы нарисованных плиток.
 interactive: false
+
+# Ручки (с 1.51): live_controls - яркость и шторы шлются по дороге, пока
+# ведут палец; tile_gestures - яркость, шторы и уставка жестом прямо по
+# плитке (для стены: вкладки, панель в один экран). Можно у панели.
+# Устройство выбирает своё в меню шестерёнки.
+# live_controls: true
+# tile_gestures: true
 
 # Строка «Включено / Выключено» под названием плитки. По умолчанию скрыта:
 # состояние видно по оранжевой рамке и по тумблеру.

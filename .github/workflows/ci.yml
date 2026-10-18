@@ -75,7 +75,7 @@ jobs:
         # только для сведения: другая версия Jinja2 может расставить пробелы
         # иначе.
         run: |
-          pip install flask paho-mqtt
+          pip install flask paho-mqtt pillow
           python tests/render_check.py --soft
 
       - name: Каждый адрес демона отвечает
@@ -112,7 +112,7 @@ jobs:
           python-version: "3.11"
       - name: Зависимости
         run: |
-          pip install flask paho-mqtt pyyaml jinja2
+          pip install flask paho-mqtt pyyaml jinja2 pillow
           npm install --no-save --silent playwright
           npx playwright install --with-deps chromium
       - name: Браузерные проверки

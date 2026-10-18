@@ -394,7 +394,7 @@ TAB_H_ICON = 40      # только значок
 TAB_MAX_W = 120      # шире пилюля не растёт: три вкладки - не три полосы
 
 
-def tab_bar(sections, hidden, state, width, y, icons=None, labels=False):
+def tab_bar(sections, hidden, state, width, y, icons=None, labels=False, nav=False):
     """
     Полоса вкладок (режим tabs): -> (вкладки, полоса, открытая, высота).
 
@@ -414,6 +414,11 @@ def tab_bar(sections, hidden, state, width, y, icons=None, labels=False):
         return [], None, None, 0
     n = len(items)
     inner = width - 2 * (PAD - TAB_PAD) - 2 * TAB_PAD
+    # Кнопки страницы в ряду (1.50, полоса сверху): «назад» слева и
+    # шестерёнка справа - кружками того же размера, что вкладки без
+    # подписей. Ряд вкладок ужимается на их место с обеих сторон.
+    if nav:
+        inner -= 2 * (TAB_H_ICON + TAB_GAP * 2)
     w = min(TAB_MAX_W, (inner - TAB_GAP * (n - 1)) / float(n))
     # Круглые кнопки (без подписей): диаметр - по высоте ряда, но не шире
     # своей доли - девять комнат на экране 320 px тоже должны встать.
@@ -468,6 +473,12 @@ def tab_bar(sections, hidden, state, width, y, icons=None, labels=False):
             "dot_y": round(top + h * 0.14 if round_ else top + 9, 1),
         })
         x += w + TAB_GAP
+    if nav:
+        d = min(TAB_H_ICON, h)
+        cy = round(y + TAB_PAD + h / 2.0, 1)
+        edge = PAD - TAB_PAD + d / 2.0
+        plate["nav"] = {"r": d / 2.0, "cy": cy, "k": round(d / 2.0 / 18, 3),
+                        "back_x": round(edge, 1), "menu_x": round(width - edge, 1)}
     current = [it for it in items if it["active"]]
     return tabs, plate, (current[0] if current else None), bar_h
 
@@ -501,6 +512,7 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
 
     tabs, tab_plate, tab_open, tab_h = [], None, None, 0
     dock = "top"
+    tab_nav = False
     head_dy = 0
     if mode == "tabs":
         # tabs: bottom - полоса у нижнего края, как в приложениях на
@@ -512,9 +524,10 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             if isinstance(sec, dict) and sec.get("icon"):
                 icons[sec.get("key") or sec.get("from") or sec.get("title") or ""] = sec["icon"]
         width_full = PAD * 2 + cols * CELL + (cols - 1) * GAP
+        tab_nav = bool(nav) and dock == "top"
         tabs, tab_plate, tab_open, tab_h = tab_bar(
             sections, hidden, state, width_full, 0, icons,
-            bool(panel_conf.get("tab_labels")))
+            bool(panel_conf.get("tab_labels")), nav=tab_nav)
         if dock == "top":
             # Полоса сверху, впритык к краю; шапка и плитки - под ней.
             head_dy = tab_h
@@ -636,6 +649,9 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
     # название и часы отходят на их ширину.
     nav_r = round(NAV_D / 2.0 * float(nav), 1) if nav else 0
     nav_w = (nav_r * 2 + NAV_GAP) if nav else 0
+    # Полоса вкладок сверху держит кнопки сама (1.50): шапке их не надо.
+    if tab_nav:
+        nav_r = nav_w = 0
     # Во вкладках чипы открытого раздела - в шапке, рядом с чипами панели:
     # своего заголовка у раздела нет.
     top_chips = place_chips(build_status(panel_conf, state)
@@ -646,4 +662,4 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
     return out, width, height, headers, top_chips, {
         "mode": mode, "tabs": tabs, "tab_plate": tab_plate, "dock": dock,
         "title": title, "head_icon": head_icon, "head_dy": head_dy,
-        "nav_w": nav_w, "nav_r": nav_r}
+        "nav_w": nav_w, "nav_r": nav_r, "tab_nav": tab_nav}

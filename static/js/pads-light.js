@@ -308,32 +308,29 @@ function padSphere(node){
     x = nx; lvl = nl;
     draw(); paintVals();
   }
-  var anim = null, vel = { x: 0, y: 0 }, last = null, touched = false;
+  var last = null, touched = false, moved = false;
   // крутят выключенную - на шаре сразу видно, каким будет свет
   function begin(ev){
-    touched = true;
-    cancelAnimationFrame(anim); clearTimeout(timer);
-    var p = evPoint(ev); last = { x: p.clientX, y: p.clientY, t: Date.now() }; vel = { x: 0, y: 0 };
+    touched = true; moved = false;
+    clearTimeout(timer);
+    var p = evPoint(ev); last = { x: p.clientX, y: p.clientY };
   }
   function at(ev){
     var p = evPoint(ev);
     if (!last || p.clientX === undefined) return;
-    var dx = p.clientX - last.x, dy = p.clientY - last.y, dt = Math.max(8, Date.now() - last.t), r = side * .27;
-    last = { x: p.clientX, y: p.clientY, t: Date.now() };
+    var dx = p.clientX - last.x, dy = p.clientY - last.y, r = side * .27;
+    last = { x: p.clientX, y: p.clientY };
     if (!dx && !dy) return;
+    moved = true;
     move(dx / r, dy / r);
-    vel = { x: dx / r / dt * 16, y: dy / r / dt * 16 };
+    live.tick();
   }
-  function done(){
-    var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce){ later(); return; }
-    (function step(){
-      vel.x *= .92; vel.y *= .92;
-      if (Math.abs(vel.x) + Math.abs(vel.y) > .0008){ move(vel.x, vel.y); anim = requestAnimationFrame(step); }
-      else { anim = null; later(); }
-    })();
-  }
-  ovCleanup = function(){ cancelAnimationFrame(anim); };
+  // Без инерции (1.50): шар останавливается вместе с пальцем. Раньше он
+  // докручивался после отпускания, и свет уходил дальше, чем ставили.
+  // С «Ручки шлют: сразу» (1.51) свет идёт за шаром и по дороге.
+  var live = liveSender(send);
+  function done(){ if (moved) { clearTimeout(timer); live.end(); } }
+  ovCleanup = function(){ clearTimeout(timer); };
   power.el.addEventListener('click', function(){ touched = false; setTimeout(draw, 500); });
   draw();
   drag(stage, at, done, begin);

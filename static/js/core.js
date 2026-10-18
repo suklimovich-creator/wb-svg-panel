@@ -71,11 +71,21 @@ function saveTheme(v){
 function themeQ(){ return THEME ? '&theme=' + THEME : ''; }
 /* Поля страницы вокруг панели - в цвет низа её фона: у светлых тем
    чёрная рамка вокруг выглядела чужой. Тему узнаём по классу корня. */
-var pageBgNow = '';
+var pageBgNow = '', pageWallNow = '';
+/* Обои страницы: пятна темы или своя картинка (1.50) - её адрес и вуаль
+   сервер кладёт в корень картинки (data-wall-img, data-wall-dim). */
+function wallCss(root, name){
+  var wall = PAGE_WALL[name] || '';
+  var img = wall && root && root.getAttribute ? root.getAttribute('data-wall-img') : null;
+  if (!img) return wall;
+  var dim = root.getAttribute('data-wall-dim') || 'rgba(0,0,0,.3)';
+  return 'linear-gradient(' + dim + ',' + dim + '), url(' + img + ') center / cover no-repeat, ' + (PAGE_BG[name] || '#101012');
+}
 function pageBg(root){
   root = root || host.querySelector('svg');
   var name = rootTheme(root);
-  var bg = PAGE_BG[name], wall = PAGE_WALL[name] || '';
+  var bg = PAGE_BG[name], wall = wallCss(root, name);
+  pageWallNow = wall;
   if (!bg || bg + wall === pageBgNow) return;
   pageBgNow = bg + wall;
   document.documentElement.style.background = bg;
@@ -108,7 +118,7 @@ function glassScroll(){
   if (wall) {
     var vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight;
     var x = (-r.left / k).toFixed(1), y = (-r.top / k).toFixed(1);
-    var w = (vw / k).toFixed(1), h = (vh / k).toFixed(1), rs = wall.querySelectorAll('rect');
+    var w = (vw / k).toFixed(1), h = (vh / k).toFixed(1), rs = wall.querySelectorAll('rect,image');
     for (var i = 0; i < rs.length; i++) {
       rs[i].setAttribute('x', x); rs[i].setAttribute('y', y);
       rs[i].setAttribute('width', w); rs[i].setAttribute('height', h);
@@ -202,6 +212,17 @@ function dockBar(){
   var tabs = copy.querySelectorAll('[data-tab]');
   for (var t = 0; t < tabs.length; t++) g.appendChild(tabs[t]);
   copy.appendChild(g);
+  // Кнопки страницы в ряду (1.50) - у краёв окна, круглые: «назад» сжимаем
+  // к левому краю, шестерёнку - к правому.
+  var navs = copy.querySelectorAll('[data-nav]');
+  for (var v = 0; v < navs.length; v++) {
+    var ax = navs[v].getAttribute('data-nav') === 'back' ? 0 : W;
+    var ng = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    ng.setAttribute('transform', 'translate(' + ax + ' 0) scale(' + (1 / scaleX) + ' 1) translate(' + (-ax) + ' 0)');
+    navs[v].parentNode.replaceChild(ng, navs[v]);
+    ng.appendChild(navs[v]);
+    navs[v].onclick = navTap;
+  }
   while (dock.firstChild) dock.removeChild(dock.firstChild);
   dock.appendChild(copy);
   var btns = dock.querySelectorAll('[data-tab]');
@@ -398,6 +419,36 @@ function saveLite(mode){
   LITE = mode === '1' || (mode === 'auto' && weakDevice());
   try { mode === 'auto' ? localStorage.removeItem('wb-panel-lite') : localStorage.setItem('wb-panel-lite', mode); } catch(e) {}
 }
+/* Ручки (1.51): отклик сразу и жесты на плитках. В конфиге - live_controls
+   и tile_gestures (у панели или общие, CONTROLS из wrapper.html); в меню -
+   выбор этого устройства поверх конфига: '' как в конфиге, '0' нет, '1' да. */
+function readOpt(key){ try { return localStorage.getItem(key) || ''; } catch(e) { return ''; } }
+function saveOpt(key, v){ try { v ? localStorage.setItem(key, v) : localStorage.removeItem(key); } catch(e) {} }
+var LIVE_MODE = readOpt('wb-panel-live'), DRAG_MODE = readOpt('wb-panel-drag');
+function liveOn(){ return LIVE_MODE === '1' || (LIVE_MODE === '' && !!CONTROLS.live); }
+function dragOn(){ return !!INTERACTIVE && (DRAG_MODE === '1' || (DRAG_MODE === '' && !!CONTROLS.drag)); }
+/* Отклик сразу: пока ведут ручку, значение уходит не чаще раза в LIVE_MS и
+   не раньше, чем дошло предыдущее, - иначе очередь опроса у диммеров
+   (wb-mqtt-serial) копит команды, и свет догоняет палец рывками. Последнее
+   значение - по отпускании (end), строго после всех уже ушедших: ответы
+   могли бы прийти не по порядку, и прибор остался бы на промежуточном. */
+var LIVE_MS = 300;
+function liveSender(send, ms){
+  var chain = Promise.resolve(), busy = false, last = 0;
+  function run(fn){
+    busy = true; last = Date.now();
+    var p = chain.then(function(){ return (fn || send)(); });
+    chain = p.then(null, function(){}).then(function(){ busy = false; });
+    return p;
+  }
+  return {
+    tick: function(){
+      if (liveOn() && !busy && Date.now() - last >= (ms || LIVE_MS)) run().then(null, function(){});
+    },
+    // fn - своя последняя отправка вместо send (пульт шторы следит за приводом)
+    end: function(fn){ return run(fn); }
+  };
+}
 var NAV_S = (function(){ try { return localStorage.getItem('wb-panel-navs') || '1.0'; } catch(e) { return '1.0'; } })();
 var navScaleAt = 0;
 function navScale(){
@@ -460,15 +511,25 @@ function drawMenu(){
   html += '<div class="mh">Это устройство</div>'
         + row('', [['auto', 'авто' + (weakDevice() ? ' (облегчённо)' : '')],
                    ['0', 'как есть'], ['1', 'облегчённо']], LITE_MODE, 'data-lite');
+  if (INTERACTIVE) {
+    html += '<div class="mh">Ручки шлют</div>'
+          + row('', [['', 'как в конфиге (' + (CONTROLS.live ? 'сразу' : 'по отпускании') + ')'],
+                     ['0', 'по отпускании'], ['1', 'сразу']], LIVE_MODE, 'data-live')
+          + '<div class="mh">Жесты на плитках</div>'
+          + row('', [['', 'как в конфиге (' + (CONTROLS.drag ? 'есть' : 'нет') + ')'],
+                     ['0', 'нет'], ['1', 'есть']], DRAG_MODE, 'data-drag');
+  }
   html += '<a class="mlink" data-go="themes">все темы на витрине…</a>';
   m.innerHTML = html;
-  var btns = m.querySelectorAll('[data-v],[data-t],[data-m],[data-go],[data-lite]');
+  var btns = m.querySelectorAll('[data-v],[data-t],[data-m],[data-go],[data-lite],[data-live],[data-drag]');
   for (var i = 0; i < btns.length; i++) btns[i].onclick = function(e){
     e.stopPropagation();
     if (this.hasAttribute('data-go')) { location.href = 'themes' + (THEME ? '?theme=' + THEME : ''); return; }
     if (this.hasAttribute('data-t')) saveTheme(this.getAttribute('data-t'));
     else if (this.hasAttribute('data-m')) { MODE = this.getAttribute('data-m'); saveFold(); }
     else if (this.hasAttribute('data-lite')) saveLite(this.getAttribute('data-lite'));
+    else if (this.hasAttribute('data-live')) { LIVE_MODE = this.getAttribute('data-live'); saveOpt('wb-panel-live', LIVE_MODE); drawMenu(); return; }
+    else if (this.hasAttribute('data-drag')) { DRAG_MODE = this.getAttribute('data-drag'); saveOpt('wb-panel-drag', DRAG_MODE); tdMarks(); drawMenu(); return; }
     else saveCols(this.getAttribute('data-v'));
     drawCols();
     drawMenu();

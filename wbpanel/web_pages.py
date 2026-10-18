@@ -297,6 +297,11 @@ def panel_html(name):
             ("__NAME_JS__", json.dumps(name)),
             ("__EVERY__", str(every)),
             ("__INTERACTIVE__", "true" if interactive else "false"),
+            # Ручки (1.51): отклик сразу и жесты на плитках - у панели или
+            # общие; устройство может выбрать своё в меню шестерёнки.
+            ("__CONTROLS__", json.dumps({
+                "live": bool(panel_conf.get("live_controls", web.config.get("live_controls", False))),
+                "drag": bool(panel_conf.get("tile_gestures", web.config.get("tile_gestures", False)))})),
             ("__APP_JS__", json.dumps(__version__)),
             ("__APP__", html.escape(__version__)),
             # Список тем для меню и цвета полей страницы - из данных тем,

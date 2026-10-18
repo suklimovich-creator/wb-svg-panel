@@ -84,6 +84,19 @@ panels:
     - from: ac_light
     - from: ac_dark
       title: Второй
+  tabs:
+    title: Вкладки
+    cols: 2
+    theme: graphite
+    interactive: true
+    tabs: top
+    sections:
+    - from: ac_light
+      title: Гостиная
+    - from: ac_dark
+      title: Спальня
+    - from: scn
+      title: Сцены
   misc:
     title: Разное
     cols: 2
@@ -316,6 +329,7 @@ panels:
     title: Плитки
     cols: 2
     theme: graphite
+    wallpaper: tests/fixtures/wall.jpg
     interactive: true
     tiles:
     - &id020

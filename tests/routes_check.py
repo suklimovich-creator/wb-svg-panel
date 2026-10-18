@@ -23,8 +23,14 @@ import env  # noqa: E402  (fixtures/env.py)
 web, palette, cfg, sent = env.setup(freeze_time=True)
 client = web.app.test_client()
 
+# Обои стекла своей картинкой (1.50): адрес с ключом - из картинки панели.
+_wall = client.get("/gal.svg?theme=glass").get_data(as_text=True)
+_wall = _wall.split('data-wall-img="', 1)[1].split('"', 1)[0] if 'data-wall-img="' in _wall else "wall/none.jpg"
+
 # (метод, адрес, тело, допустимые ответы, что должно быть в ответе)
 CASES = [
+    ("GET", "/" + _wall, None, (200,), ""),
+    ("GET", "/wall/0123456789ab.jpg", None, (404,), ""),
     ("GET", "/", None, (200,), "gal"),
     ("GET", "/healthz", None, (200,), ""),
     ("GET", "/manifest.webmanifest", None, (200,), "name"),
@@ -72,7 +78,7 @@ COVERED = {"/", "/healthz", "/manifest.webmanifest", "/icon.svg", "/docs",
            "/<name>.html", "/<name>.svg", "/tile/<name>/<int:index>.svg", "/chart.svg",
            "/themes", "/api/theme/draft", "/channels", "/check", "/stats",
            "/api/list/<name>", "/api/publish", "/cam/<name>.jpg", "/cam/<name>.mjpeg",
-           "/glyph/<name>.svg", "/static/<path:filename>"}
+           "/glyph/<name>.svg", "/static/<path:filename>", "/wall/<key>.jpg"}
 
 
 def main():
@@ -84,7 +90,7 @@ def main():
             kw["content_type"] = "application/json"
         try:
             r = client.open(url, method=method, **kw)
-            text = r.get_data(as_text=True)
+            text = r.get_data().decode("utf-8", "replace")
             good = r.status_code in statuses and (not needle or needle in text)
             note = "%d" % r.status_code
         except Exception as exc:  # noqa: BLE001

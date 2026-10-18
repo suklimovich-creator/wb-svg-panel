@@ -64,6 +64,7 @@ function bindPanel(){
   var had = HAS_SECTIONS;
   HAS_SECTIONS = host.querySelector('[data-section]') !== null || MODE !== '';
   if (had !== HAS_SECTIONS && !colsOpen) drawCols();
+  tdMarks();
 }
 /* partOnly - только обработчики внутри root, без bindPanel(). */
 function bind(root, partOnly){
@@ -118,6 +119,12 @@ function bind(root, partOnly){
     };
     var moved = function(e){
       if(!press) return;
+      // Жест на плитке (1.51): яркость, штора, уставка - пальцем по ней.
+      if(press.node === this && tdMove(press, this, e)){
+        if(e.type === 'touchmove' && e.cancelable) e.preventDefault();
+        return;
+      }
+      if(press.claim && e.type === 'touchmove' && e.cancelable) e.preventDefault();
       var p = evPoint(e);
       if(Math.abs(p.clientX - press.x) > 12 || Math.abs(p.clientY - press.y) > 12){
         press.moved = true;
@@ -127,6 +134,7 @@ function bind(root, partOnly){
     var up = function(){
       if(!press) return;
       clearTimeout(press.timer);
+      if(tdEnd(press, this)){ press = null; return; }
       var href = this.getAttribute('data-href');
       // Пока палец лежал, страницу прокрутили - листали, а не нажимали.
       if(!tapOk(press.t0)) press.moved = true;
@@ -165,10 +173,13 @@ function bind(root, partOnly){
       }
       press = null;
     };
-    var cancel = function(){ if(press){ clearTimeout(press.timer); press=null; } };
+    var cancel = function(){ if(press){ clearTimeout(press.timer); tdEnd(press, this); press=null; } };
     if(window.PointerEvent){
       n.onpointerdown = down; n.onpointermove = moved;
       n.onpointerup = up; n.onpointercancel = cancel;
+      // Safari и Chrome листают по касаниям, а не по pointer-событиям:
+      // жест на плитке держит касание за собой здесь.
+      n.ontouchmove = tdTouchMove;
     } else {
       n.onmousedown = down; n.onmousemove = moved;
       n.onmouseup = up; n.onmouseleave = cancel;

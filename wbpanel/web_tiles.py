@@ -14,7 +14,7 @@ import time
 from flask import Response, abort, request
 
 from . import web
-from . import palette, showcase
+from . import palette, showcase, wallpaper
 from .assemble import build_tile, resolve_sections
 from .const import PAD, font_scale
 from .geometry import parse_duration
@@ -172,3 +172,16 @@ def glyph_svg(name):
         day=str(args.get("day") or "")[:2], wd=str(args.get("wd") or "")[:3])
     return Response(svg.strip(), mimetype="image/svg+xml",
                     headers={"Cache-Control": "max-age=3600"})
+
+
+@app.route("/wall/<key>.jpg")
+def wall_jpg(key):
+    """
+    Обои стекла своей картинкой (1.50), размытые на сервере. Ключ меняется
+    вместе с файлом - браузер держит картинку у себя без срока.
+    """
+    data = wallpaper.image(key) if re.match(r"^[0-9a-f]{12}$", key) else None
+    if data is None:
+        abort(404)
+    return Response(data, mimetype="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})

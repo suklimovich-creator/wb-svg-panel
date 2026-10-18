@@ -603,3 +603,23 @@
        background:var(--ovbg);color:var(--acc);filter:none;transform:none;
        box-shadow:inset 3px 3px 7px var(--neu-d),inset -3px -3px 7px var(--neu-l)}
  #ov.neu .tvx .tx.txpw.on svg,#ov.lt.neu .tvx .tx.txpw.on svg{stroke:var(--acc)}
+/* Жесты на плитках (1.51): где палец ведёт ручку, браузер не листает.
+   Боковые жесты - всегда (страница листается вертикально), вертикальные -
+   только когда листать нечего (tdrag-v). */
+html.tdrag #host [data-kind=curtain],html.tdrag #host [data-kind=thermostat],
+html.tdrag #host [data-kind=ac],html.tdrag #host [data-kind=fancoil],
+html.tdrag #host [data-kind=dimmer],html.tdrag #host [data-kind=light],
+html.tdrag #host [data-kind=roller]{touch-action:pan-y}
+html.tdrag-v #host [data-kind=dimmer],html.tdrag-v #host [data-kind=light],
+html.tdrag-v #host [data-kind=roller]{touch-action:none}
+#tdrag{position:fixed;z-index:12;pointer-events:none;border-radius:18px;overflow:hidden;
+       background:rgba(20,20,24,.62);color:#fff;display:none;
+       font:600 15px -apple-system,'Segoe UI',Inter,system-ui,sans-serif}
+#tdrag.on{display:block}
+#tdrag i{position:absolute;left:0;bottom:0;background:var(--tacc,#E09B2D);opacity:.55}
+#tdrag.y i{width:100%}
+#tdrag.x i{height:100%;top:0}
+#tdrag b{position:absolute;left:0;right:0;top:50%;margin-top:-22px;text-align:center;
+         font-size:30px;line-height:34px;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+#tdrag small{position:absolute;left:0;right:0;top:50%;margin-top:14px;text-align:center;
+             font-size:12px;opacity:.85;white-space:nowrap}

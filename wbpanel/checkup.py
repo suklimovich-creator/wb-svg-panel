@@ -96,6 +96,19 @@ def _check_themes(config):
     for where, text in palette.problems():
         out.append(dict(row, tile="themes/" + os.path.basename(str(where)), text=text,
                         hint="тема из папки themes/"))
+    # Обои стекла своей картинкой (1.50): файл, Pillow.
+    from . import wallpaper
+    from .const import BASE_DIR
+    walls = [("wallpaper", config.get("wallpaper"))] + [
+        ("панель %s: wallpaper" % n, (p or {}).get("wallpaper"))
+        for n, p in (config.panels or {}).items()]
+    for where, raw in walls:
+        path = wallpaper.resolve(raw, BASE_DIR)
+        for _p, text in wallpaper.problems([path]):
+            out.append(dict(row, tile=where, text="%s: %s" % (raw, text),
+                            hint="apt-get install python3-pil (или sh install.sh)"
+                            if not wallpaper.available() else
+                            "положите картинку в data/ и укажите путь от каталога панели"))
     uses_auto = any(name == "auto" for _w, name in places)
     if uses_auto or config.get("theme_auto"):
         for text in themes.problems(config):

@@ -603,15 +603,9 @@
        background:var(--ovbg);color:var(--acc);filter:none;transform:none;
        box-shadow:inset 3px 3px 7px var(--neu-d),inset -3px -3px 7px var(--neu-l)}
  #ov.neu .tvx .tx.txpw.on svg,#ov.lt.neu .tvx .tx.txpw.on svg{stroke:var(--acc)}
-/* Жесты на плитках (1.51): где палец ведёт ручку, браузер не листает.
-   Боковые жесты - всегда (страница листается вертикально), вертикальные -
-   только когда листать нечего (tdrag-v). */
-html.tdrag #host [data-kind=curtain],html.tdrag #host [data-kind=thermostat],
-html.tdrag #host [data-kind=ac],html.tdrag #host [data-kind=fancoil],
-html.tdrag #host [data-kind=dimmer],html.tdrag #host [data-kind=light],
-html.tdrag #host [data-kind=roller]{touch-action:pan-y}
-html.tdrag-v #host [data-kind=dimmer],html.tdrag-v #host [data-kind=light],
-html.tdrag-v #host [data-kind=roller]{touch-action:none}
+/* Жесты на плитках (1.51, с 1.53 - как в пульте): одним пальцем страницу
+   не листают - касания принадлежат плиткам; листают двумя (gestures.js). */
+html.tdrag #host{touch-action:none}
 #tdrag{position:fixed;z-index:12;pointer-events:none;border-radius:18px;overflow:hidden;
        background:rgba(20,20,24,.62);color:#fff;display:none;
        font:600 15px -apple-system,'Segoe UI',Inter,system-ui,sans-serif}

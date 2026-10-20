@@ -239,36 +239,55 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       await p.context().close();
     }
 
-    // 13. жесты на плитках (1.51): диммер пальцем вбок (страница листается -
-    //     вертикальные жесты становятся боковыми), уставка термостата
+    // 13. жесты на плитках (с 1.53 - как в пульте, от точки касания):
+    //     диммер вверх - ярче, термостат - поворот ручки по кругу,
+    //     кондиционер - шкала за пальцем (влево - теплее), шар вбок - теплота
     {
       const p = await page('gal.html', () => { try { localStorage.setItem('wb-panel-drag', '1'); } catch (e) {} });
-      async function swipe(sel, dx, dy) {
+      // path(k, b) - точка пальца на шаге k из 8 по рамке плитки b
+      async function swipe(sel, path) {
         const el = await p.$(sel);
         await el.scrollIntoViewIfNeeded();
         const b = await el.boundingBox();
-        const x = b.x + b.width / 2, y = b.y + b.height / 2;
-        await p.mouse.move(x, y); await p.mouse.down();
-        for (let k = 1; k <= 8; k++) { await p.mouse.move(x + dx * k / 8, y + dy * k / 8); await p.waitForTimeout(40); }
+        const s0 = path(0, b);
+        await p.mouse.move(s0[0], s0[1]); await p.mouse.down();
+        for (let k = 1; k <= 8; k++) { const q = path(k, b); await p.mouse.move(q[0], q[1]); await p.waitForTimeout(40); }
         // живая плитка (1.52): рисунок самой плитки идёт за пальцем, без плашки
         const lt = await p.evaluate(() => !!(press && press.drag && press.drag.lt));
         await p.mouse.up(); await p.waitForTimeout(900);
         return lt;
       }
+      const line = (dx, dy) => (k, b) => [b.x + b.width / 2 + dx * k / 8, b.y + b.height / 2 + dy * k / 8];
+      // по кругу ручки термостата по часовой: от верха на 40°
+      const knob = (k, b) => {
+        const cx = b.x + b.width / 2, cy = b.y + b.height * 0.585, r = 0.33 * b.width;
+        const a = (-90 + 40 * k / 8) * Math.PI / 180;
+        return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+      };
       const n0 = (await log()).length;
-      const st = await p.evaluate(() => ({cls: document.documentElement.className,
-        lvl: +document.querySelector('[data-kind="dimmer"]').getAttribute('data-level'),
-        tgt: +document.querySelector('[data-kind="thermostat"]').getAttribute('data-target'),
-        step: +document.querySelector('[data-kind="thermostat"]').getAttribute('data-step')}));
-      st.live = [await swipe('[data-kind="dimmer"]', 70, 0), await swipe('[data-kind="thermostat"]', 50, 0)];
+      const st = await p.evaluate(() => {
+        const q = s => document.querySelector(s);
+        return {cls: document.documentElement.className, ta: getComputedStyle(q('#host')).touchAction,
+          lvl: +q('[data-kind="dimmer"]').getAttribute('data-level'),
+          tgt: +q('[data-kind="thermostat"]').getAttribute('data-target'),
+          ac: +q('[data-kind="ac"]').getAttribute('data-ac-now'),
+          acTopic: q('[data-kind="ac"]').getAttribute('data-ac-target'),
+          tempTopic: q('[data-kind="light"]').getAttribute('data-temp')};
+      });
+      st.live = [await swipe('[data-kind="dimmer"]', line(0, -70)),
+                 await swipe('[data-kind="thermostat"]', knob),
+                 await swipe('[data-kind="ac"]', line(-70, 0)),
+                 await swipe('[data-kind="light"]', line(60, 0))];
       const sent = (await log()).slice(n0);
+      const val = topic => sent.filter(s => s[0] === topic).map(s => +s[1]);
       const bright = sent.filter(s => /Channel 1\/on$/.test(s[0])).map(s => +s[1]);
-      const tgt = sent.filter(s => s[0] === 'th/tgt/on').map(s => +s[1]);
-      const toggled = sent.some(s => s[0] === '/devices/dm/controls/K1/on' && s[1] === '0');
-      st.bright = bright; st.tgt2 = tgt; st.toggled = toggled;
-      ok('жесты на плитках', /tdrag/.test(st.cls) && bright.length && bright[bright.length - 1] > st.lvl * 100
-         && tgt.length === 1 && Math.abs(tgt[0] - (st.tgt + 2 * st.step)) < 1e-6 && !toggled
-         && st.live[0] && st.live[1], JSON.stringify(st));
+      st.bright = bright; st.tgt2 = val('th/tgt/on'); st.ac2 = val(st.acTopic); st.temp2 = val(st.tempTopic);
+      st.toggled = sent.some(s => s[0] === '/devices/dm/controls/K1/on' && s[1] === '0');
+      ok('жесты на плитках', /tdrag/.test(st.cls) && st.ta === 'none'
+         && bright.length && bright[bright.length - 1] > st.lvl * 100
+         && st.tgt2.length === 1 && st.tgt2[0] > st.tgt
+         && st.ac2.length === 1 && st.ac2[0] > st.ac
+         && st.temp2.length === 1 && !st.toggled && st.live.every(Boolean), JSON.stringify(st));
       await p.context().close();
     }
 

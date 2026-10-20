@@ -112,12 +112,17 @@ LIVE_TILE.light = function(node){
   var id = (body.getAttribute('fill').match(/#([^)]+)\)/) || [])[1];
   var grad = id ? document.getElementById(id) : null, stops = grad ? grad.querySelectorAll('stop') : [];
   var halo = s.querySelector('circle[fill*="sh"]:not([fill*="sphsh"])');
+  var hid = halo ? (halo.getAttribute('fill').match(/#([^)]+)\)/) || [])[1] : null;
+  var hstops = hid && document.getElementById(hid) ? document.getElementById(hid).querySelectorAll('stop') : [];
   var lt = !DARK_THEME[rootTheme()];
   var DARK = lt ? [92, 94, 102] : [0x14, 0x15, 0x18], BASE = [206, 207, 212], MID = [0xEC, 0xE6, 0xDC];
   var COLD = ltHex(node.getAttribute('data-cold') || '#56AAFF'), WARM = ltHex(node.getAttribute('data-warm') || '#FFA854');
-  var hue = temp < 0.5 ? ltMix(COLD, MID, temp * 2) : ltMix(MID, WARM, (temp - 0.5) * 2);
-  return {set: function(v){
-    var yaw = (temp - 0.5) * 3.2, pitch = -(v - 0.5) * 2.6;
+  function hueOf(t){ return t < 0.5 ? ltMix(COLD, MID, t * 2) : ltMix(MID, WARM, (t - 0.5) * 2); }
+  // v - яркость, tx - теплота (1.53: шар крутят и вбок, как в пульте)
+  return {set: function(v, tx){
+    if (tx === undefined) tx = temp;
+    var hue = hueOf(tx);
+    var yaw = (tx - 0.5) * 3.2, pitch = -(v - 0.5) * 2.6;
     var a = Math.cos(yaw), b = Math.sin(yaw), c = Math.cos(pitch), d = Math.sin(pitch);
     function P(q){ var X = q[0] * a + q[2] * b, Z = -q[0] * b + q[2] * a; return [X, q[1] * c - Z * d, q[1] * d + Z * c]; }
     var pc = G.C.map(P), out = [];
@@ -131,6 +136,9 @@ LIVE_TILE.light = function(node){
     fill.setAttribute('d', ltArcDir(cx, cy, R, 165, 165 + 90 * v));
     var p = ltPt(cx, cy, R, 165 + 90 * v);
     kb.setAttribute('cx', ltR(p[0])); kb.setAttribute('cy', ltR(p[1]));
+    var q = ltPt(cx, cy, R, 140 - 100 * tx);
+    kt.setAttribute('cx', ltR(q[0])); kt.setAttribute('cy', ltR(q[1]));
+    for (var h = 0; h < hstops.length; h++) hstops[h].setAttribute('stop-color', ltCss(hue));
     if (stops.length === 3) {
       var col = ltMix(lt ? BASE : DARK, hue, 0.18 + 0.82 * v);
       stops[0].setAttribute('stop-color', ltCss(ltMix(col, [255, 255, 255], 0.25 * v)));

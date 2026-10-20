@@ -169,6 +169,19 @@ function hold(node){
   }
 }
 
+/* Вернуть часть к тому, что знает сервер (1.53): страница сама
+   перерисовала плитку (живая плитка), а жест отменили. Строку части
+   забываем - следующий ответ заменит её, даже если он тот же. */
+function redraw(node){
+  var g = host.querySelector('svg') ? mainOf(host.querySelector('svg')) : null;
+  if (!g || !shownParts) return;
+  var k = kids(g);
+  for (var n = node; n && n !== g; n = n.parentNode) {
+    var i = k.indexOf(n);
+    if (i >= 0) { shownParts[i] = ''; delete holds[i]; shownSvg = null; refresh(true); return; }
+  }
+}
+
 /* Свести новые части (strs) с показанными. Одинаковые узлы остаются на
    месте, новые вставляются, пропавшие удаляются. Число частей то же -
    сравниваем по местам; другое (раздел свернули, чип появился, 1.47) -

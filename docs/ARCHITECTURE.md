@@ -524,6 +524,13 @@ localStorage) → `liveOn()`, `dragOn()` (core.js). `liveSender(send, ms)`:
 вертикальные — только если страница не листается (`tdMarks` → классы
 `tdrag`, `tdrag-v` → `touch-action` в panel.css); `tdModel` — что и как
 слать (те же `data-*`, что у пультов); плашка `#tdrag`.
+С 1.52 — `static/js/live-tiles.js`: `liveTile(node, m)` → `{set(v)}` по
+виду плитки (`LIVE_TILE.dimmer/light/thermostat/ac/fancoil/roller/
+curtain`) перестраивает в самой плитке то, что зависит от значения, той
+же геометрией, что сервер (skeuo.py, ac_disk.py, sky.py, шаблоны). Фанкойл
+— общие с пультом `fcData`/`fcShow` (pads-climate.js) и `data-fcl` у группы
+плитки. Перерисовка — `tdPaint` через requestAnimationFrame; по
+отпускании `hold(node)` держит нарисованное до ответа прибора.
 
 Скрипты страницы — обычные файлы с общими глобальными именами, без модулей:
 код, выполняемый при загрузке, зовёт только функции из своего и предыдущих

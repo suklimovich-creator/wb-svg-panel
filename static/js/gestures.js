@@ -145,7 +145,10 @@ function tdMove(p, node, e){
     // маленькой плитке иначе не попасть в нужный процент.
     var span = Math.max(160, axis === 'y' ? r.height : r.width);
     p.drag = {axis: axis, m: m, x: pt.clientX, y: pt.clientY, span: span,
-              live: liveSender(function(){ return m.send(m.v); }, m.slow ? 700 : LIVE_MS)};
+              live: liveSender(function(){ return m.send(m.v); }, m.slow ? 700 : liveMs()),
+              // живая плитка (1.52): рисунок самой плитки идёт за пальцем;
+              // не вышло (другой вид, нестандартная разметка) - плашка
+              lt: liveTile(node, m)};
   }
   var g = p.drag, m2 = g.m;
   var d = g.axis === 'y' ? -(pt.clientY - g.y) : (pt.clientX - g.x);
@@ -156,7 +159,7 @@ function tdMove(p, node, e){
   } else {
     m2.v = Math.max(0, Math.min(1, m2.v0 + d / g.span));
   }
-  tdShow(g, node);
+  tdPaint(g, node);
   // Уставку - только по отпускании: прибору важен итог, а не путь.
   if (m2.kind !== 'set') g.live.tick();
   return true;
@@ -167,15 +170,30 @@ function tdEnd(p, node){
   var g = p && p.drag;
   if (!g) return false;
   var m = g.m;
+  tdPaint(g, node, true);
   if (m.v !== m.v0) {
-    node.classList.add('busy');
+    // Живая плитка остаётся такой, какой её довели, пока прибор не
+    // ответит (hold, update.js); плашка - гаснет, плитка бледнеет до ответа.
+    if (g.lt) hold(node); else node.classList.add('busy');
     g.live.end()
       .then(function(){ setTimeout(refresh, 500); setTimeout(refresh, 2000); })
       .then(null, function(e){ flash('Не удалось: ' + e.message); })
       .then(function(){ node.classList.remove('busy'); });
   }
-  tdGone(1200);
+  if (!g.lt) tdGone(1200);
   return true;
+}
+/* Перерисовка - не чаще кадра: на старом планшете касания приходят чаще,
+   чем он успевает рисовать, и без этого рисунок отставал рывками. now -
+   сразу (отпускание). */
+function tdPaint(g, node, now){
+  function paint(){
+    g.raf = 0;
+    if (g.lt) { try { g.lt.set(g.m.v); return; } catch (e) { g.lt = null; } }
+    tdShow(g, node);
+  }
+  if (now) { if (g.raf) { (window.cancelAnimationFrame || clearTimeout)(g.raf); } paint(); return; }
+  if (!g.raf) g.raf = (window.requestAnimationFrame || setTimeout)(paint);
 }
 /* Касание по плитке с жестом: если жест начат или идёт вдоль оси, браузер
    не должен листать страницу (старые браузеры без PointerEvent и Safari

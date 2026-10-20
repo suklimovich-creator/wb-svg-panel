@@ -250,22 +250,25 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
         const x = b.x + b.width / 2, y = b.y + b.height / 2;
         await p.mouse.move(x, y); await p.mouse.down();
         for (let k = 1; k <= 8; k++) { await p.mouse.move(x + dx * k / 8, y + dy * k / 8); await p.waitForTimeout(40); }
+        // живая плитка (1.52): рисунок самой плитки идёт за пальцем, без плашки
+        const lt = await p.evaluate(() => !!(press && press.drag && press.drag.lt));
         await p.mouse.up(); await p.waitForTimeout(900);
+        return lt;
       }
       const n0 = (await log()).length;
       const st = await p.evaluate(() => ({cls: document.documentElement.className,
         lvl: +document.querySelector('[data-kind="dimmer"]').getAttribute('data-level'),
         tgt: +document.querySelector('[data-kind="thermostat"]').getAttribute('data-target'),
         step: +document.querySelector('[data-kind="thermostat"]').getAttribute('data-step')}));
-      await swipe('[data-kind="dimmer"]', 70, 0);
-      await swipe('[data-kind="thermostat"]', 50, 0);
+      st.live = [await swipe('[data-kind="dimmer"]', 70, 0), await swipe('[data-kind="thermostat"]', 50, 0)];
       const sent = (await log()).slice(n0);
       const bright = sent.filter(s => /Channel 1\/on$/.test(s[0])).map(s => +s[1]);
       const tgt = sent.filter(s => s[0] === 'th/tgt/on').map(s => +s[1]);
       const toggled = sent.some(s => s[0] === '/devices/dm/controls/K1/on' && s[1] === '0');
       st.bright = bright; st.tgt2 = tgt; st.toggled = toggled;
       ok('жесты на плитках', /tdrag/.test(st.cls) && bright.length && bright[bright.length - 1] > st.lvl * 100
-         && tgt.length === 1 && Math.abs(tgt[0] - (st.tgt + 2 * st.step)) < 1e-6 && !toggled, JSON.stringify(st));
+         && tgt.length === 1 && Math.abs(tgt[0] - (st.tgt + 2 * st.step)) < 1e-6 && !toggled
+         && st.live[0] && st.live[1], JSON.stringify(st));
       await p.context().close();
     }
 

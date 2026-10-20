@@ -205,8 +205,10 @@ class Dimmer(Tile):
                 Zone("bright", "pad", "bright")]
 
     def pad(self, ctx, data):
+        # Уровень - и у выключенного (1.52): диммер помнит яркость, с ней и
+        # включится; пульт и жест на плитке начинают с неё, а не с нуля.
         out = {"bright_max": str(to_float(ctx.meta("bright", "max"), 100.0) or 100.0),
-               "level": "%.3f" % (data.get("fill") or 0.0)}
+               "level": "%.3f" % (data.get("level") or 0.0)}
         if ctx.opt("look") == "classic":
             out["look"] = "classic"
         return out

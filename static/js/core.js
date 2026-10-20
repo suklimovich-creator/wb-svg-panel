@@ -433,6 +433,8 @@ function dragOn(){ return !!INTERACTIVE && (DRAG_MODE === '1' || (DRAG_MODE === 
    значение - по отпускании (end), строго после всех уже ушедших: ответы
    могли бы прийти не по порядку, и прибор остался бы на промежуточном. */
 var LIVE_MS = 300;
+/* live_interval в конфиге (1.52): подогнать под плавность диммера. */
+function liveMs(){ var v = +CONTROLS.ms; return v >= 100 && v <= 2000 ? v : LIVE_MS; }
 function liveSender(send, ms){
   var chain = Promise.resolve(), busy = false, last = 0;
   function run(fn){
@@ -443,7 +445,7 @@ function liveSender(send, ms){
   }
   return {
     tick: function(){
-      if (liveOn() && !busy && Date.now() - last >= (ms || LIVE_MS)) run().then(null, function(){});
+      if (liveOn() && !busy && Date.now() - last >= (ms || liveMs())) run().then(null, function(){});
     },
     // fn - своя последняя отправка вместо send (пульт шторы следит за приводом)
     end: function(fn){ return run(fn); }

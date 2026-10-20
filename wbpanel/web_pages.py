@@ -301,7 +301,9 @@ def panel_html(name):
             # общие; устройство может выбрать своё в меню шестерёнки.
             ("__CONTROLS__", json.dumps({
                 "live": bool(panel_conf.get("live_controls", web.config.get("live_controls", False))),
-                "drag": bool(panel_conf.get("tile_gestures", web.config.get("tile_gestures", False)))})),
+                "drag": bool(panel_conf.get("tile_gestures", web.config.get("tile_gestures", False))),
+                # шаг отправки «сразу», мс (1.52): под скорость диммера
+                "ms": panel_conf.get("live_interval", web.config.get("live_interval", 300))})),
             ("__APP_JS__", json.dumps(__version__)),
             ("__APP__", html.escape(__version__)),
             # Список тем для меню и цвета полей страницы - из данных тем,

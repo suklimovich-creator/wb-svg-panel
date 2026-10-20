@@ -369,8 +369,11 @@ def slider_block(sx, top, bot, lo, hi, current, target, power, labels=True):
     fill = None
     if power and cur_y is not None and target is not None and abs(cur_y - cap_y) > 1:
         fill = {"y": min(cur_y, cap_y), "h": round(abs(cur_y - cap_y), 1)}
+    # top, bot, smin, smax - для живой плитки (1.52): страница двигает
+    # колпачок за пальцем по той же шкале, что и пульт.
     return {"sx": sx, "ticks": ticks, "slot_y": top - 8, "slot_h": bot - top + 16,
-            "cap_y": cap_y, "cur_y": cur_y, "fill": fill}
+            "cap_y": cap_y, "cur_y": cur_y, "fill": fill,
+            "top": top, "bot": bot, "smin": lo, "smax": hi}
 
 
 def build_panel(lo, hi, current, target, power, tone, level, keys, mode, valve, spinning, spin):

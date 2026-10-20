@@ -860,11 +860,13 @@
 {% macro fcpanel(t) %}
   {% set p = t.panel %}{% set id = uid ~ 'fc' ~ t.i %}
   {{ fc_defs(id) }}
-  <g transform="translate({{ p.dx }} {{ p.dy }}) scale({{ p.k }})" class="fcp {{ p.tone }}{{ ' off' if not t.enabled }}">
+  <g transform="translate({{ p.dx }} {{ p.dy }}) scale({{ p.k }})" class="fcp {{ p.tone }}{{ ' off' if not t.enabled }}"
+ data-fcl="1" data-top="{{ p.top }}" data-bot="{{ p.bot }}" data-smin="{{ p.smin }}" data-smax="{{ p.smax }}"
+     data-cap="{{ p.cap_y }}" data-cur="{{ p.cur_y if p.cur_y is not none else '' }}" data-seg="{{ p.lcd.seg|join(',') }}">
     {{ fc_slider(p, id) }}
     {{ fc_grille(p.grille) }}
     {{ fc_lcd(p.lcd) }}
-    {{ fc_cap(p, id) }}
+    <g class="fcp-capg">{{ fc_cap(p, id) }}</g>
     {#- правая колонка -#}
     <text x="340" y="26" text-anchor="end" font-size="11" class="tag">{{ p.title }}</text>
     <text x="{{ p.right }}" y="26" font-size="11" class="fcp-dim">сейчас</text>
@@ -889,7 +891,9 @@
 {% macro fcsquare(t) %}
   {% set p = t.panel %}{% set id = uid ~ 'fc' ~ t.i %}
   {{ fc_defs(id) }}
-  <g transform="translate({{ p.dx }} {{ p.dy }}) scale({{ p.k }})" class="fcp {{ p.tone }}{{ ' off' if not t.enabled }}">
+  <g transform="translate({{ p.dx }} {{ p.dy }}) scale({{ p.k }})" class="fcp {{ p.tone }}{{ ' off' if not t.enabled }}"
+ data-fcl="1" data-top="{{ p.top }}" data-bot="{{ p.bot }}" data-smin="{{ p.smin }}" data-smax="{{ p.smax }}"
+     data-cap="{{ p.cap_y }}" data-cur="{{ p.cur_y if p.cur_y is not none else '' }}" data-seg="{{ p.lcd.seg|join(',') }}">
     {{ fc_slider(p, id, False) }}
     <text x="14" y="22" font-size="13" class="fcp-num">{{ p.current }}<tspan font-size="8" dy="-5">°</tspan></text>
     <text x="156" y="22" font-size="11" text-anchor="end" class="tag">{{ p.title }}</text>
@@ -899,6 +903,6 @@
     </g>
     {{ fc_grille(p.grille) }}
     {{ fc_lcd(p.lcd) }}
-    {{ fc_cap(p, id) }}
+    <g class="fcp-capg">{{ fc_cap(p, id) }}</g>
   </g>
 {% endmacro %}

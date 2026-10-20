@@ -24,6 +24,33 @@ function padAC(node){
    табло, пока ползунок тянут; нажатия - по data-z: back, power, mode, key. */
 var SEG7 = {'0':'abcdef','1':'bc','2':'abged','3':'abgcd','4':'fgbc','5':'afgcd',
             '6':'afgedc','7':'abc','8':'abcdefg','9':'abcfgd','-':'g'};
+/* Ползунок и табло фанкойла: пульт и живая плитка (1.52) двигают их одинаково.
+   D - шкала из data-* группы (top, bot, smin, smax, cap, cur, seg). */
+function fcData(G){
+  function num(a){ return parseFloat(G.getAttribute('data-' + a)); }
+  return {top: num('top'), bot: num('bot'), smin: num('smin'), smax: num('smax'), lo: num('lo'), hi: num('hi'),
+          step: num('step') || 0.5, cur: num('cur'), cap: num('cap'), t: num('target'),
+          seg: (G.getAttribute('data-seg') || '').split(',').map(parseFloat), on: G.getAttribute('data-on') === '1'};
+}
+function fcY(D, t){ t = Math.max(D.smin, Math.min(D.smax, t)); return D.bot - (t - D.smin) * (D.bot - D.top) / ((D.smax - D.smin) || 1); }
+function fcLcdText(t){ return isNaN(t) ? '--.-' : (t >= 99.95 ? String(Math.round(t)) : (Math.round(t * 2) / 2).toFixed(1)); }
+function fcShow(G, D, t){
+  var y = fcY(D, t), capg = G.querySelector('.fcp-capg');
+  if(capg) capg.setAttribute('transform', 'translate(0 ' + (y - D.cap).toFixed(1) + ')');
+  var fill = G.querySelector('.fcp-fill');
+  if(fill && !isNaN(D.cur)){
+    fill.setAttribute('y', Math.min(D.cur, y).toFixed(1));
+    fill.setAttribute('height', Math.abs(D.cur - y).toFixed(1));
+  }
+  var lg = G.querySelector('.fcp-lcdg');
+  if(lg && D.seg.length === 6){
+    var old = lg.querySelectorAll('polygon, circle');
+    for(var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
+    var tmp = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    tmp.innerHTML = sevenSegSvg(fcLcdText(t), D.seg[0], D.seg[1], D.seg[2], D.seg[3], D.seg[4], D.seg[5]);
+    while(tmp.firstChild) lg.insertBefore(tmp.firstChild, lg.firstChild);
+  }
+}
 function sevenSegSvg(text, x, y, w, h, t, gap){
   var hh = h / 2, k = t / 2, out = '';
   function sk(p){ return (p[0] + (y + h - p[1]) * 0.1).toFixed(1) + ',' + p[1].toFixed(1); }
@@ -91,9 +118,7 @@ function padFancoil(node){
   function wire(){
     G = wrap.querySelector('[data-fcpad]');
     if(!G) return;
-    D = {top: num('top'), bot: num('bot'), smin: num('smin'), smax: num('smax'), lo: num('lo'), hi: num('hi'),
-         step: num('step') || 0.5, cur: num('cur'), cap: num('cap'), t: num('target'),
-         seg: (G.getAttribute('data-seg') || '').split(',').map(parseFloat), on: G.getAttribute('data-on') === '1'};
+    D = fcData(G);
     if(!wired){ drag(wrap, move, done, begin); wired = true; }
   }
   function local(ev){
@@ -107,25 +132,8 @@ function padFancoil(node){
     while(n && n.nodeType === 1){ if(n.matches ? n.matches(sel) : n.msMatchesSelector(sel)) return n; n = n.parentNode; }
     return null;
   }
-  function fy(t){ t = Math.max(D.smin, Math.min(D.smax, t)); return D.bot - (t - D.smin) * (D.bot - D.top) / ((D.smax - D.smin) || 1); }
-  function lcdText(t){ return isNaN(t) ? '--.-' : (t >= 99.95 ? String(Math.round(t)) : (Math.round(t * 2) / 2).toFixed(1)); }
-  function show(t){
-    var y = fy(t), capg = G.querySelector('.fcp-capg');
-    if(capg) capg.setAttribute('transform', 'translate(0 ' + (y - D.cap).toFixed(1) + ')');
-    var fill = G.querySelector('.fcp-fill');
-    if(fill && !isNaN(D.cur)){
-      fill.setAttribute('y', Math.min(D.cur, y).toFixed(1));
-      fill.setAttribute('height', Math.abs(D.cur - y).toFixed(1));
-    }
-    var lg = G.querySelector('.fcp-lcdbox .fcp-lcdg');
-    if(lg && D.seg.length === 6){
-      var old = lg.querySelectorAll('polygon, circle');
-      for(var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
-      var tmp = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      tmp.innerHTML = sevenSegSvg(lcdText(t), D.seg[0], D.seg[1], D.seg[2], D.seg[3], D.seg[4], D.seg[5]);
-      while(tmp.firstChild) lg.insertBefore(tmp.firstChild, lg.firstChild);
-    }
-  }
+  function fy(t){ return fcY(D, t); }
+  function show(t){ fcShow(G, D, t); }
   function valueAt(y){
     var t = D.smin + (D.bot - y) * (D.smax - D.smin) / ((D.bot - D.top) || 1);
     t = Math.max(D.lo, Math.min(D.hi, t));

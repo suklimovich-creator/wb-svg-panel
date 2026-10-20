@@ -207,7 +207,8 @@ function padSphere(node){
   openOv([head, box, vals, hint]);
 
   function draw(){
-    var dpr = window.devicePixelRatio || 1, W = side, H = side;
+    // облегчённо - холст в одну точку на пиксель CSS и сот вдвое меньше
+    var dpr = LITE ? 1 : Math.min(window.devicePixelRatio || 1, 2), W = side, H = side;
     if (cv.width !== Math.round(W * dpr)){ cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
     var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
     var cx = W / 2, cy = H / 2, r = W * .27, lit = power.on || touched;
@@ -244,7 +245,7 @@ function padSphere(node){
     body.addColorStop(1, css(mix(c, DARK, PAL.lt ? .6 : .78)));
     g.fillStyle = body; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
     // соты
-    var G = sphereGeo(9), cyw = Math.cos(rot.x), syw = Math.sin(rot.x), cp = Math.cos(rot.y), sp = Math.sin(rot.y);
+    var G = sphereGeo(LITE ? 6 : 9), cyw = Math.cos(rot.x), syw = Math.sin(rot.x), cp = Math.cos(rot.y), sp = Math.sin(rot.y);
     function P(v){ var X = v[0]*cyw + v[2]*syw, Z = -v[0]*syw + v[2]*cyw; return [X, v[1]*cp - Z*sp, v[1]*sp + Z*cp]; }
     var pc = G.C.map(P), pv = G.V.map(P), path = new Path2D();
     G.cells.forEach(function(cell){
@@ -306,7 +307,15 @@ function padSphere(node){
     var nx = clamp(x + (hasTemp ? ax / YAW : 0)), nl = clamp(lvl - ay / PITCH);
     rot.x += (nx - x) * YAW; rot.y -= (nl - lvl) * PITCH;
     x = nx; lvl = nl;
-    draw(); paintVals();
+    drawSoon(); paintVals();
+  }
+  /* Шар рисуется не чаще кадра (1.52): Firefox 68 на планшете получает
+     касания чаще, чем успевает перерисовать холст, и шар шёл рывками -
+     каждое касание ждало полной отрисовки предыдущего. */
+  var drawRaf = 0;
+  function drawSoon(){
+    if (drawRaf) return;
+    drawRaf = (window.requestAnimationFrame || setTimeout)(function(){ drawRaf = 0; draw(); });
   }
   var last = null, touched = false, moved = false;
   // крутят выключенную - на шаре сразу видно, каким будет свет

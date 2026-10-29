@@ -27,7 +27,8 @@ PREFIX = "_demo_"
 
 
 def is_demo(name):
-    return name == NAME
+    """Витрина тем или демо своей панели (_demo-<панель>, demo.py)."""
+    return name == NAME or str(name).startswith(NAME + "-")
 
 
 _TOPIC = re.compile(r"^/devices/" + PREFIX + r"[^/]+/controls/[^/]+/on$")
@@ -199,9 +200,14 @@ def publish(topic, value):
     # Кнопки пульта телевизора и сцен - новые ключи; но не сотни: витрину
     # нельзя раздуть, засыпав её выдуманными топиками.
     if len(parts) == 5 and "%s/%s" % (parts[2], parts[4]) not in state.values \
-            and len(state.values) > 300:
+            and len(state.values) > 3000:
         return
     state.on_message(topic, str(value))
+    # демо своей панели: прибор отвечает, как настоящий (штора приезжает,
+    # термостат греет, «выключить всё» гасит свет)
+    if len(parts) == 5:
+        from . import demo
+        demo.after_publish("%s/%s" % (parts[2], parts[4]), str(value))
 
 
 class _History:
@@ -210,6 +216,16 @@ class _History:
     mode = "demo"
 
     def get(self, channel, span, points):
+        # демо своей панели: графики - настоящая история дома
+        from . import demo, web
+        real = demo.real_channel(channel)
+        if real and web.history is not None:
+            try:
+                got = web.history.get(real, span, points)
+                if got:
+                    return got
+            except Exception:                       # база недоступна - волны
+                pass
         now = time.time()
         points = max(int(points or 2), 2)
         out = []

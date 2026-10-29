@@ -56,6 +56,11 @@
     контура почти нет, тень и отделяет плитку от фона. -#}
 {% set sh_amb = th_shadow.amb if th_shadow else 0 %}
 {% set sh_key = th_shadow.key if th_shadow else 0 %}
+{% set sh_lift = th_shadow.lift if th_shadow and th_shadow.lift else 0 %}
+{#- парящая тень (1.55): размытие, сдвиг вниз и вылет за край - из темы -#}
+{% set sh_blur = th_shadow.blur if th_shadow and th_shadow.blur else (14 if sh_lift else 10) %}
+{% set sh_dy = th_shadow.dy if th_shadow and th_shadow.dy is number else 7 %}
+{% set sh_sp = th_shadow.spread if th_shadow and th_shadow.spread is number else 2 %}
 {#- В неоморфизме amb - тёмная тень, key - светлая. Тема, унаследовавшая
     слабые тени обычной формы, получает свои. -#}
 {% if depth == 'neumo' %}
@@ -120,13 +125,17 @@
     <feGaussianBlur stdDeviation="7"/>
   </filter>
 {% elif use_shadows %}
-  <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="0" y="0"
-          width="{{ width }}" height="{{ height + 40 }}">
-    <feGaussianBlur stdDeviation="1.4"/>
+  {#- у парящей тени ключевая - тёмная кайма у самой плитки со всех
+      сторон: тень темнее у края и светлеет к широкой рассеянной -#}
+  <filter id="{{ uid }}sh-key" filterUnits="userSpaceOnUse" x="{{ -30 if sh_lift else 0 }}" y="{{ -30 if sh_lift else 0 }}"
+          width="{{ width + (60 if sh_lift else 0) }}" height="{{ height + (80 if sh_lift else 40) }}">
+    <feGaussianBlur stdDeviation="{{ th_shadow.key_blur if sh_lift and th_shadow.key_blur else 1.4 }}"/>
   </filter>
-  <filter id="{{ uid }}sh-amb" filterUnits="userSpaceOnUse" x="0" y="0"
-          width="{{ width }}" height="{{ height + 40 }}">
-    <feGaussianBlur stdDeviation="10"/>
+  {#- «парящая» тень (shadow.lift, 1.55): шире плитки со всех сторон и
+      мягче - область фильтра за краями панели, иначе крайние обрезаны -#}
+  <filter id="{{ uid }}sh-amb" filterUnits="userSpaceOnUse" x="{{ -30 if sh_lift else 0 }}" y="{{ -30 if sh_lift else 0 }}"
+          width="{{ width + (60 if sh_lift else 0) }}" height="{{ height + (80 if sh_lift else 40) }}">
+    <feGaussianBlur stdDeviation="{{ sh_blur }}"/>
   </filter>
 {% endif %}
 {% if depth == 'glass' %}
@@ -150,7 +159,7 @@
       заливка уходит под неё без зазора. Раньше обрезали на точку внутрь,
       и между заливкой и рамкой светилась полоска подложки. -#}
   <clipPath id="{{ uid }}clip{{ t.i }}">
-    <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
+    <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"/>
   </clipPath>
 {% endfor %}
 </defs>
@@ -309,29 +318,145 @@
 <g class="shadows">
   <g filter="url(#{{ uid }}sh-neu)" opacity="{{ sh_amb }}" style="fill:var(--shadow)">
   {% for t in raised %}
-    <rect x="{{ t.x + 7 }}" y="{{ t.y + 8 }}" width="{{ t.w - 4 }}" height="{{ t.h - 4 }}" rx="{{ rx }}"/>
+    <rect x="{{ t.x + 7 }}" y="{{ t.y + 8 }}" width="{{ t.w - 4 }}" height="{{ t.h - 4 }}" rx="{{ (t.rx|default(rx)) }}"/>
   {% endfor %}
   </g>
   <g filter="url(#{{ uid }}sh-neu)" opacity="{{ sh_key }}" style="fill:var(--neu-light)">
   {% for t in raised %}
-    <rect x="{{ t.x - 5 }}" y="{{ t.y - 5 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
+    <rect x="{{ t.x - 5 }}" y="{{ t.y - 5 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"/>
   {% endfor %}
   </g>
+</g>
+{% elif use_shadows and PAL.info(theme).rings %}
+{#- Тень по точкам (1.55): у каждой плитки подложка и кольца вокруг -
+    сила и цвет на каждом расстоянии от края - как заданы в теме. Поверх
+    одно лёгкое размытие на всю панель, чтобы кольца слились. -#}
+{% set rg = PAL.info(theme).rings %}
+{% set plated = tiles | rejectattr('kind', 'equalto', 'header') | list %}
+{% if rg.soft > 0 %}
+<defs><filter id="{{ uid }}sh-ring" filterUnits="userSpaceOnUse" x="-80" y="-80"
+        width="{{ width + 160 }}" height="{{ height + 160 }}"><feGaussianBlur stdDeviation="{{ rg.soft }}"/></filter></defs>
+{% endif %}
+<g class="shadows"{% if rg.soft > 0 %} filter="url(#{{ uid }}sh-ring)"{% endif %}>
+  {% for t in plated %}{% set r0 = (t.rx|default(rx)) %}{% set y0 = t.y + rg.dy %}
+  <rect x="{{ t.x }}" y="{{ y0 }}" width="{{ t.w }}" height="{{ t.h }}" rx="{{ r0 }}" fill="{{ rg.base }}" fill-opacity="{{ rg.base_o }}"/>
+  {% for g in rg.rings %}
+  <rect x="{{ (t.x - g.e)|round(2) }}" y="{{ (y0 - g.e)|round(2) }}" width="{{ (t.w + 2 * g.e)|round(2) }}" height="{{ (t.h + 2 * g.e)|round(2) }}"
+        rx="{{ (r0 + g.e)|round(2) }}" fill="none" stroke="{{ g.c }}" stroke-opacity="{{ g.o }}" stroke-width="{{ g.w }}"/>
+  {% endfor %}
+  {% endfor %}
 </g>
 {% elif use_shadows %}
 {% set plated = tiles | rejectattr('kind', 'equalto', 'header') | list %}
 <g class="shadows" style="fill:var(--shadow)">
   <g filter="url(#{{ uid }}sh-amb)" opacity="{{ sh_amb }}">
   {% for t in plated %}
-    <rect x="{{ t.x + 8 }}" y="{{ t.y + 10 }}" width="{{ t.w - 16 }}" height="{{ t.h - 6 }}" rx="{{ rx }}"/>
+    {% if sh_lift %}
+    <rect x="{{ t.x - sh_sp }}" y="{{ t.y + sh_dy }}" width="{{ t.w + 2 * sh_sp }}" height="{{ t.h + sh_sp - sh_dy + 3 }}" rx="{{ (t.rx|default(rx)) }}"/>
+    {% else %}
+    <rect x="{{ t.x + 8 }}" y="{{ t.y + 10 }}" width="{{ t.w - 16 }}" height="{{ t.h - 6 }}" rx="{{ (t.rx|default(rx)) }}"/>
+    {% endif %}
   {% endfor %}
   </g>
   <g filter="url(#{{ uid }}sh-key)" opacity="{{ sh_key }}">
   {% for t in plated %}
-    <rect x="{{ t.x + 1 }}" y="{{ t.y + 2.5 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"/>
+    {% if sh_lift %}
+    <rect x="{{ t.x }}" y="{{ t.y + 1.5 }}" width="{{ t.w }}" height="{{ t.h }}" rx="{{ (t.rx|default(rx)) }}"/>
+    {% else %}
+    <rect x="{{ t.x + 1 }}" y="{{ t.y + 2.5 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"/>
+    {% endif %}
   {% endfor %}
   </g>
 </g>
+{% endif %}
+
+{#- Свет за край плитки (1.55, тема с glow: true): под горящей лампой -
+    размытое пятно цвета её карточки, шире плитки. Плитка непрозрачная,
+    поэтому видно только то, что вышло за край. Одно размытие на панель;
+    «облегчённо» - без него. -#}
+{% set glowing = tiles | selectattr('glow') | list %}
+{% set gs = PAL.info(theme).glow %}
+{% set gp = PAL.info(theme).glow_power %}
+{% if glowing and not lite and not bare %}
+<defs>
+  <filter id="{{ uid }}glow-blur" filterUnits="userSpaceOnUse" x="-60" y="-60"
+          width="{{ width + 120 }}" height="{{ height + 120 }}"><feGaussianBlur stdDeviation="{{ {'rim': 5, 'beam': 15}.get(gs, 13) }}"/></filter>
+  {#- подсветка из-за карточки: пятно ярче в середине, гаснет к краю -#}
+  <radialGradient id="{{ uid }}glow-back" cx=".5" cy=".5" r=".5">
+    <stop offset="0" stop-color="var(--glow-light)"/>
+    <stop offset=".5" stop-color="var(--glow-light2)" stop-opacity=".55"/>
+    <stop offset="1" stop-color="var(--glow-light2)" stop-opacity="0"/>
+  </radialGradient>
+  {#- свет лампы за краем - золотой, не цвет карточки -#}
+  <linearGradient id="{{ uid }}glow-gold" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="var(--glow-light)"/>
+    <stop offset="1" stop-color="var(--glow-light2)"/>
+  </linearGradient>
+</defs>
+{% if gs == 'flare' %}
+{#- «солнце сквозь щель» (flare): свет за карточкой пробивается узкой
+    кромкой по левому и верхнему краю. Горячая белая середина, золото
+    вокруг, свечение кромки размыто чуть-чуть. -#}
+<defs>
+  <filter id="{{ uid }}flare-bloom" filterUnits="userSpaceOnUse" x="-60" y="-60"
+          width="{{ width + 120 }}" height="{{ height + 120 }}"><feGaussianBlur stdDeviation="4"/></filter>
+  <filter id="{{ uid }}flare-soft" filterUnits="userSpaceOnUse" x="-60" y="-60"
+          width="{{ width + 120 }}" height="{{ height + 120 }}"><feGaussianBlur stdDeviation="1.2"/></filter>
+  <linearGradient id="{{ uid }}flare-edge" x1="0" y1="1" x2="1" y2="0">
+    <stop offset="0" stop-color="var(--glow-light)" stop-opacity="0"/>
+    <stop offset=".35" stop-color="#FFFFFF"/>
+    <stop offset=".6" stop-color="var(--glow-light)"/>
+    <stop offset="1" stop-color="var(--glow-light)" stop-opacity="0"/>
+  </linearGradient>
+</defs>
+<g class="glows" pointer-events="none" opacity="{{ [gp, 1]|min }}">
+  {% for t in glowing %}{% set lv = t.level if t.level is number else 1 %}{% set k = 0.55 + 0.45 * lv %}
+  {% set r = [(t.rx|default(rx)), t.w / 2, t.h / 2]|min %}
+  {% set edge %}M{{ t.x }},{{ (t.y + t.h * 0.8)|round(1) }} L{{ t.x }},{{ (t.y + r)|round(1) }} A{{ r }},{{ r }} 0 0 1 {{ (t.x + r)|round(1) }},{{ t.y }} L{{ (t.x + t.w * 0.7)|round(1) }},{{ t.y }}{% endset %}
+  {#- золотое свечение вокруг кромки -#}
+  <path d="{{ edge }}" fill="none" stroke="var(--glow-light)" stroke-width="{{ (10 * [gp, 0.6]|max)|round(1) }}" stroke-linecap="round"
+        filter="url(#{{ uid }}flare-bloom)" opacity="{{ (0.75 * k)|round(2) }}"/>
+  {#- сама щель: тонкая горячая кромка -#}
+  <path d="{{ edge }}" fill="none" stroke="url(#{{ uid }}flare-edge)" stroke-width="3.2" stroke-linecap="round"
+        filter="url(#{{ uid }}flare-soft)" opacity="{{ k|round(2) }}"/>
+  {% endfor %}
+</g>
+{% elif gs == 'back' %}
+{#- подсветка сзади: лампа за карточкой, свет выходит из-за краёв, выше
+    всего - сверху. Без размытия: радиальный градиент мягкий сам. -#}
+<g class="glows" pointer-events="none" opacity="{{ [gp, 1]|min }}">
+  {% for t in glowing %}{% set lv = t.level if t.level is number else 1 %}
+  <ellipse cx="{{ (t.x + t.w / 2)|round(1) }}" cy="{{ (t.y + t.h * 0.38)|round(1) }}"
+           rx="{{ (t.w * 0.5 + 30 + 26 * lv)|round(1) }}" ry="{{ (t.h * 0.5 + 34 + 26 * lv)|round(1) }}"
+           fill="url(#{{ uid }}glow-back)" opacity="{{ (0.55 + 0.45 * lv)|round(2) }}"/>
+  {% endfor %}
+</g>
+{% elif gs == 'beam' %}
+{#- луч: свет вырывается из-за карточки вверх-влево, как от торшера -
+    клин от середины плитки за её угол и слабый ореол вокруг -#}
+<g class="glows" filter="url(#{{ uid }}glow-blur)" pointer-events="none" opacity="{{ [gp, 1]|min }}">
+  {% for t in glowing %}{% set lv = t.level if t.level is number else 1 %}{% set k = 0.6 + 0.4 * lv %}
+  <rect x="{{ t.x - 3 }}" y="{{ t.y + 2 }}" width="{{ t.w + 6 }}" height="{{ t.h + 4 }}" rx="{{ (t.rx|default(rx)) }}"
+        fill="url(#{{ uid }}glow-gold)" opacity="{{ (0.35 * k)|round(2) }}"/>
+  <polygon points="{{ (t.x + t.w * 0.35)|round(1) }},{{ (t.y + t.h * 0.35)|round(1) }} {{ (t.x - 34 * k)|round(1) }},{{ (t.y + t.h * 0.25)|round(1) }} {{ (t.x - 26 * k)|round(1) }},{{ (t.y - 40 * k)|round(1) }} {{ (t.x + t.w * 0.55)|round(1) }},{{ (t.y - 34 * k)|round(1) }}"
+           fill="var(--glow-light)" opacity="{{ (0.75 * k)|round(2) }}"/>
+  {% endfor %}
+</g>
+{% else %}
+{#- ореол (halo) - пятно цвета карточки шире плитки; светящийся край
+    (rim) - то же, но узкое и плотное, у самой рамки -#}
+<g class="glows" filter="url(#{{ uid }}glow-blur)" pointer-events="none" opacity="{{ [gp, 1]|min }}">
+  {% for t in glowing %}{% set lv = t.level if t.level is number else 1 %}
+  {% if gs == 'rim' %}
+  <rect x="{{ t.x - 3 }}" y="{{ t.y - 3 }}" width="{{ t.w + 6 }}" height="{{ t.h + 6 }}" rx="{{ (t.rx|default(rx)) + 3 }}"
+        fill="url(#{{ uid }}glow-gold)" opacity="{{ (0.6 + 0.4 * lv)|round(2) }}"/>
+  {% else %}
+  <rect x="{{ t.x - 5 }}" y="{{ t.y + 1 }}" width="{{ t.w + 10 }}" height="{{ t.h + 9 }}" rx="{{ (t.rx|default(rx)) }}"
+        fill="url(#{{ uid }}glow-gold)" opacity="{{ (0.5 + 0.45 * lv)|round(2) }}"/>
+  {% endif %}
+  {% endfor %}
+</g>
+{% endif %}
 {% endif %}
 
 {% if depth == 'glass' %}
@@ -346,12 +471,12 @@
           width="{{ width + 60 }}" height="{{ height + 80 }}"><feGaussianBlur stdDeviation="11"/></filter>
   <mask id="{{ uid }}glass-mask" maskUnits="userSpaceOnUse" x="-30" y="-30" width="{{ width + 60 }}" height="{{ height + 80 }}">
     <rect x="-30" y="-30" width="{{ width + 60 }}" height="{{ height + 80 }}" fill="#FFFFFF"/>
-    {% for t in glassy %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="#000000"/>{% endfor %}
+    {% for t in glassy %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" fill="#000000"/>{% endfor %}
   </mask>
 </defs>
 <g mask="url(#{{ uid }}glass-mask)" pointer-events="none">
   <g filter="url(#{{ uid }}glass-sh)" opacity="{{ '.55' if PAL.is_dark(theme) else '.26' }}" style="fill:var(--shadow)">
-    {% for t in glassy %}<rect x="{{ t.x + 6 }}" y="{{ t.y + 12 }}" width="{{ t.w - 12 }}" height="{{ t.h - 8 }}" rx="{{ rx }}"/>{% endfor %}
+    {% for t in glassy %}<rect x="{{ t.x + 6 }}" y="{{ t.y + 12 }}" width="{{ t.w - 12 }}" height="{{ t.h - 8 }}" rx="{{ (t.rx|default(rx)) }}"/>{% endfor %}
   </g>
 </g>
 {% endif %}
@@ -368,18 +493,18 @@
     </g>
   </g>
   {% endif %}
-  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="glass-fill"/>
+  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" class="glass-fill"/>
   {% if t.tint and not t.on %}{#- цветное стекло (1.43) -#}
-  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="glass-tint-{{ t.tint }}"/>
+  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" class="glass-tint-{{ t.tint }}"/>
   {% endif %}
-  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glass-top)"/>
-  {% if not bare and not lite %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" fill="url(#{{ uid }}glare)"/>{% endif %}
+  <rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" fill="url(#{{ uid }}glass-top)"/>
+  {% if not bare and not lite %}<rect x="{{ t.x + 1 }}" y="{{ t.y + 1 }}" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" fill="url(#{{ uid }}glare)"/>{% endif %}
   {% endfor %}
 </g>
 {% endif %}
 
 {% for t in tiles %}
-<g transform="translate({{ t.x }},{{ t.y }})" class="{{ 'offline' if t.offline }}{{ ' tile-on' if t.on }}{{ ' inv' if t.inv }}{{ ' tint tint-' ~ t.tint if t.tint }}"{{ t.attrs|safe }}>
+<g transform="translate({{ t.x }},{{ t.y }})" class="{{ 'offline' if t.offline }}{{ ' tile-on' if t.on }}{{ ' inv' if t.inv }}{{ ' glow' if t.glow }}{{ ' tint tint-' ~ t.tint if t.tint }}"{{ t.attrs|safe }}>
   {% if   t.kind == 'chart'   %}{{ chart.tile_chart(t) }}
   {% elif t.kind == 'switch'  %}{{ basic.tile_switch(t) }}
   {% elif t.kind == 'curtain' %}{{ devices.tile_curtain(t) }}
@@ -416,10 +541,10 @@
 {#- блик края стекла - поверх плиток, мимо нажатий -#}
 <g class="glass-rims" pointer-events="none">
   {% for t in glassy %}
-  <rect x="{{ t.x + 0.5 }}" y="{{ t.y + 0.5 }}" width="{{ t.w - 1 }}" height="{{ t.h - 1 }}" rx="{{ rx + 0.5 }}" class="glass-edge"/>
-  <rect x="{{ t.x + 1.6 }}" y="{{ t.y + 1.6 }}" width="{{ t.w - 3.2 }}" height="{{ t.h - 3.2 }}" rx="{{ [rx - 0.6, 0]|max }}" class="glass-rim"/>
+  <rect x="{{ t.x + 0.5 }}" y="{{ t.y + 0.5 }}" width="{{ t.w - 1 }}" height="{{ t.h - 1 }}" rx="{{ (t.rx|default(rx)) + 0.5 }}" class="glass-edge"/>
+  <rect x="{{ t.x + 1.6 }}" y="{{ t.y + 1.6 }}" width="{{ t.w - 3.2 }}" height="{{ t.h - 3.2 }}" rx="{{ [(t.rx|default(rx)) - 0.6, 0]|max }}" class="glass-rim"/>
   {#- вторая кромка внутри: толщина стекла - блик сверху слева и отсвет снизу справа -#}
-  <rect x="{{ t.x + 4 }}" y="{{ t.y + 4 }}" width="{{ t.w - 8 }}" height="{{ t.h - 8 }}" rx="{{ [rx - 3, 0]|max }}"
+  <rect x="{{ t.x + 4 }}" y="{{ t.y + 4 }}" width="{{ t.w - 8 }}" height="{{ t.h - 8 }}" rx="{{ [(t.rx|default(rx)) - 3, 0]|max }}"
         fill="none" stroke="url(#{{ uid }}glass-in)" stroke-width="2.4" opacity=".55"/>
   {% endfor %}
 </g>

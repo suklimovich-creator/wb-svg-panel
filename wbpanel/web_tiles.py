@@ -180,7 +180,7 @@ def wall_jpg(key):
     Обои стекла своей картинкой (1.50), размытые на сервере. Ключ меняется
     вместе с файлом - браузер держит картинку у себя без срока.
     """
-    data = wallpaper.image(key) if re.match(r"^[0-9a-f]{12}$", key) else None
+    data = wallpaper.image(key) if re.match(r"^[0-9a-f]{12}(-s)?$", key) else None
     if data is None:
         abort(404)
     return Response(data, mimetype="image/jpeg",

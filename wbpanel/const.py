@@ -69,6 +69,13 @@ DARK_THEMES = tuple(n for n in THEMES if _palette.is_dark(n))
 INV_SKIP = ("light", "camera", "header", "link", "curtain", "roller", "ac",
             "thermostat", "fancoil")
 
+#: Свет за край плитки (тема с glow: true, 1.55): какие включённые плитки
+#: становятся цветной карточкой со свечением.
+GLOW_KINDS = ("light", "dimmer", "switch")
+
+#: Радиус угла плитки - не больше этой доли её короткой стороны (1.55).
+RX_SHARE = 0.17
+
 CELL = 78           # сторона мелкой ячейки, px
 
 

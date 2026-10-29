@@ -18,7 +18,7 @@
       list: shopping
       w: 2
       h: 2
-      font: 15          # кегль пунктов, по умолчанию 15
+      font: 15          # кегль пунктов, по умолчанию 15 (и в окне - с 1.57)
 """
 
 from .const import CELL
@@ -134,4 +134,14 @@ class TodoList(Tile):
         return [Zone("open", "all", pad="list")]
 
     def pad(self, ctx, data):
-        return {"list": data.get("list")} if data.get("ok") else {}
+        if not data.get("ok"):
+            return {}
+        out = {"list": data.get("list")}
+        # Кегль пунктов (font:) - и в окне списка (1.57), чуть крупнее, чем
+        # на плитке: окно читают с руки.
+        if ctx.opt("font") is not None:
+            try:
+                out["list_font"] = round(float(ctx.opt("font")) * 16 / 15)
+            except (TypeError, ValueError):
+                pass
+        return out

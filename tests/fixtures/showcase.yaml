@@ -1,5 +1,9 @@
 mqtt:
   host: 127.0.0.1
+demo_panels: [gal]
+# бездействие (1.57): окно закрывается само, заставка с обоями
+pad_close: 2m
+screensaver: {after: 5m, image: tests/fixtures/wall.jpg, panel: obj}
 panels:
   ac_light:
     title: ''
@@ -521,6 +525,7 @@ panels:
     interactive: true
     tiles:
     - type: list
+      font: 18
       list: shopping
       icon: cart
       w: 2

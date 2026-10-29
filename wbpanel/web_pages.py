@@ -16,7 +16,7 @@ import time
 from flask import Response, request
 
 from . import web
-from . import __version__, checkup, palette, showcase, stats, themes
+from . import __version__, checkup, demo, palette, showcase, stats, themes
 from .assemble import resolve_sections
 from .const import BASE_DIR, TEMPLATE_DIRS
 from .state import state
@@ -77,6 +77,18 @@ def index():
                 "cls": " is-hidden" if is_hidden else "",
                 "mark": ' <span class="tagx">скрыта</span>' if is_hidden else "",
             })
+
+    # Демо своих панелей (1.54): те же плитки на выдуманных приборах.
+    for name in demo.config_names(web.config):
+        src = web.config.panels.get(demo.source_name(name)) or {}
+        rows.append(
+            '<a class="card" data-n="%(n)s" href="%(n)s.html">'
+            '<div class="thumb">'
+            '<img data-n="%(n)s" src="%(n)s.svg" loading="lazy" alt=""></div>'
+            '<div class="meta"><b>%(t)s <span class="tagx">демо</span></b>'
+            '<span class="slug">/%(n)s.html</span>'
+            '<span class="sum">нажатия, ручки и жесты - без настоящих приборов</span></div></a>' % {
+                "n": html.escape(name), "t": html.escape(src.get("title") or demo.source_name(name))})
 
     # Переключатель показываем, только когда есть что показывать: иначе он
     # просто мозолит глаза.
@@ -287,6 +299,8 @@ def panel_html(name):
     web.config.reload()
     every = int(web.config.get("http", {}).get("refresh", 10))
     panel_conf = web.config.panels.get(name) or {}
+    if demo.is_demo_panel(name):
+        panel_conf = demo.panel(web.config, name) or {}
     interactive = bool(panel_conf.get("interactive",
                        web.config.get("interactive", False))) or showcase.is_demo(name)
 
@@ -303,7 +317,9 @@ def panel_html(name):
                 "live": bool(panel_conf.get("live_controls", web.config.get("live_controls", False))),
                 "drag": bool(panel_conf.get("tile_gestures", web.config.get("tile_gestures", False))),
                 # шаг отправки «сразу», мс (1.52): под скорость диммера
-                "ms": panel_conf.get("live_interval", web.config.get("live_interval", 300))})),
+                "ms": panel_conf.get("live_interval", web.config.get("live_interval", 300)),
+                # бездействие (1.57): окно закрывается само, заставка
+                **web.idle_of(panel_conf)})),
             ("__APP_JS__", json.dumps(__version__)),
             ("__APP__", html.escape(__version__)),
             # Список тем для меню и цвета полей страницы - из данных тем,

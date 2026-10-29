@@ -41,15 +41,15 @@ log = logging.getLogger("wb-svg-panel")
 BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_themes")
 
 #: Порядок в меню выбора темы: сначала светлые, потом тёмные, потом свои.
-ORDER = ("light", "autumn", "retro", "noir", "neumo", "glass-day", "dark", "graphite",
+ORDER = ("light", "sprut", "autumn", "retro", "noir", "neumo", "glass-day", "cloud", "dark", "sprut-dark", "graphite",
          "noir-dark", "glass")
 
 #: Свойства темы, кроме цветов. Своя тема наследует незаданные.
 PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart", "depth", "edge",
-         "bevel", "radius", "page")
+         "bevel", "radius", "page", "glow")
 _PROP_DEFAULTS = {"mode": "light", "on_style": "rim", "inv_kinds": (), "sheen": False,
                   "shadow": None, "chart": None, "depth": "soft", "edge": "teeth",
-                  "bevel": "round", "radius": 24, "page": None}
+                  "bevel": "round", "radius": 24, "page": None, "glow": False}
 #: Форма - вторая ось темы (с 1.32): глубина плиток и органов управления.
 #: soft - мягкая тень снизу, как было; flat - без теней; neumo -
 #: неоморфизм: плитка из того же материала, что и фон, светлая тень
@@ -60,6 +60,9 @@ EDGES = ("teeth", "smooth", "knurl")
 #: Фаска ручек и клавиш (с 1.34): скруглённая (мягкий блик, как было),
 #: без фаски (плоское лицо), острая (кольцо скоса вокруг плоского лица).
 BEVELS = ("round", "none", "sharp")
+#: Свет за край плитки (с 1.55): ореол со всех сторон, подсветка из-за
+#: карточки, луч в сторону, светящийся край. true - ореол.
+GLOWS = ("halo", "back", "beam", "rim", "flare")
 #: Какие свойства какими значениями бывают - для проверки файлов.
 #: Поле страницы (с 1.43): тёмное или светлое, если не как у плиток. У
 #: тёмного нуара плитки светлые (mode: light - от него тени и подписи
@@ -383,13 +386,123 @@ def info(name):
         "card": prop(name, "on_style") == "card",
         "inv_kinds": tuple(prop(name, "inv_kinds") or ()),
         "sheen": bool(prop(name, "sheen")),
-        "shadow": dict(shadow) if isinstance(shadow, dict) else None,
+        # Свет за край плитки (1.55): включённая лампа - цветная карточка,
+        # и свечение выходит из-под неё на поле.
+        "glow": _glow(prop(name, "glow")),
+        "glow_power": _glow_power(prop(name, "glow")),
+        "shadow": clean_shadow(shadow),
+        # Тень по точкам (1.55): кольца вокруг плитки, см. shadow_rings.
+        "rings": shadow_rings(clean_shadow(shadow)),
         "page_bg": css_vars(name).get("--bg-bottom", "#E6E6E9"),
         "depth": prop(name, "depth") if prop(name, "depth") in DEPTHS else "soft",
         "edge": prop(name, "edge") if prop(name, "edge") in EDGES else "teeth",
         "bevel": prop(name, "bevel") if prop(name, "bevel") in BEVELS else "round",
         "radius": _radius(prop(name, "radius")),
     }
+
+
+def _glow(value):
+    """glow темы -> вид свечения или "" (нет). Бывает словарём:
+    {style: flare, power: 1.2}."""
+    if isinstance(value, dict):
+        value = value.get("style", True)
+    if value is True:
+        return "halo"
+    return value if value in GLOWS else ""
+
+
+def _glow_power(value):
+    """Сила свечения: множитель яркости, 0-2 (1 - как задумано)."""
+    try:
+        return max(0.0, min(2.0, float(value.get("power", 1)))) if isinstance(value, dict) else 1.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
+#: Что бывает в shadow: темы и в какую рамку значения загнать. Значения
+#: уходят прямо в атрибуты SVG - чужое не пропускаем.
+_SHADOW_NUM = {"amb": (0, 1), "key": (0, 1), "lift": (0, 1), "blur": (0, 30), "dy": (-10, 30),
+               "spread": (-10, 20), "key_blur": (0, 10), "soft": (0, 8), "power": (0, 3),
+               "shade": (-1, 1)}
+_COLOR_RE = re.compile(r"^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|"
+                       r"rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*[0-9.]+\s*)?\))$")
+
+
+def clean_shadow(value):
+    """Тени темы - словарь с проверенными числами, или None.
+
+    stops (1.55) - тень по точкам: [[расстояние от края, сила 0-1, цвет],
+    ...], до шести точек; между ними - прямой или плавный (curve: smooth)
+    переход. power - сила всей тени, shade - светлее (+) или темнее (-)
+    цвета, dy - сдвиг вниз, soft - размытие поверх колец."""
+    if not isinstance(value, dict):
+        return None
+    out = {}
+    for key, (lo, hi) in _SHADOW_NUM.items():
+        if key in value:
+            try:
+                out[key] = max(lo, min(hi, float(value[key])))
+            except (TypeError, ValueError):
+                pass
+    if value.get("curve") in ("linear", "smooth"):
+        out["curve"] = value["curve"]
+    stops = []
+    for s in (value.get("stops") or [])[:6] if isinstance(value.get("stops"), list) else []:
+        try:
+            d, op, col = float(s[0]), float(s[1]), str(s[2]).strip()
+        except (TypeError, ValueError, IndexError):
+            continue
+        if _COLOR_RE.match(col):
+            stops.append([max(0.0, min(60.0, d)), max(0.0, min(1.0, op)), col])
+    if len(stops) >= 2:
+        out["stops"] = sorted(stops, key=lambda s: s[0])
+    return out
+
+
+def shadow_rings(sh):
+    """Тень по точкам -> кольца вокруг плитки: (отступ середины кольца,
+    толщина, цвет, сила). Каждая точка тени закрыта ровно одним кольцом,
+    поэтому темнота на расстоянии d - ровно та, что задана, без сложения
+    размытых слоёв. Мягкость поверх - одно размытие на всю панель."""
+    if not sh or not sh.get("stops"):
+        return None
+    stops = sh["stops"]
+    cols = [_rgba(s[2], {}) or (60, 70, 120, 1) for s in stops]
+    power, shade = sh.get("power", 1.0), sh.get("shade", 0.0)
+    smooth = sh.get("curve") == "smooth"
+    top = stops[-1][0]
+    step = 2.0 if top <= 30 else 3.0
+
+    def at(d):
+        for i in range(len(stops) - 1):
+            a, b = stops[i], stops[i + 1]
+            if d <= b[0] or i == len(stops) - 2:
+                f = 0.0 if b[0] <= a[0] else max(0.0, min(1.0, (d - a[0]) / (b[0] - a[0])))
+                if smooth:
+                    f = f * f * (3 - 2 * f)
+                rgb = _mix(cols[i][:3], cols[i + 1][:3], f)
+                op = a[1] + (b[1] - a[1]) * f
+                return rgb, op
+        return cols[-1][:3], stops[-1][1]
+
+    def paint(rgb):
+        if shade > 0:
+            rgb = _mix(rgb, _WHITE, shade)
+        elif shade < 0:
+            rgb = _mix(rgb, _BLACK, -shade)
+        return _hex(rgb)
+
+    base_rgb, base_op = at(0.0)
+    rings, d = [], 0.0
+    while d < top - 0.01 and len(rings) < 24:
+        w = min(step, top - d)
+        rgb, op = at(d + w / 2)
+        if op * power > 0.004:
+            rings.append({"e": round(d + w / 2, 2), "w": round(w + 0.3, 2), "c": paint(rgb),
+                          "o": round(min(1.0, op * power), 3)})
+        d += w
+    return {"rings": rings, "base": paint(base_rgb), "base_o": round(min(1.0, base_op * power), 3),
+            "dy": sh.get("dy", 0.0), "soft": sh.get("soft", 1.5), "reach": top}
 
 
 def _radius(value):
@@ -542,7 +655,7 @@ def describe(name):
                 "extends": theme.get("extends") or "",
                 "props": dict((k, v) for k, v in theme["props"].items()
                               if k in ("mode", "on_style", "sheen", "inv_kinds", "shadow", "chart",
-                                       "depth", "edge", "bevel", "radius")),
+                                       "depth", "edge", "bevel", "radius", "glow")),
                 "vars": dict((k[2:], v) for k, v in theme.get("raw", {}).items())}}
 
 
@@ -918,7 +1031,7 @@ def _clean_draft(data):
             out[key] = str(data[key])
     if data.get("radius") is not None:
         out["radius"] = _radius(data["radius"])
-    for key in ("sheen", "inv_kinds", "shadow", "chart"):
+    for key in ("sheen", "inv_kinds", "shadow", "chart", "glow"):
         if key in data:
             out[key] = data[key]
     vars_ = data.get("vars") or {}
@@ -1018,7 +1131,7 @@ def to_yaml(data, stamp=""):
     if data.get("radius") is not None:
         lines.append("radius: %s              # скругление углов плитки, px (0-40)"
                      % str(data["radius"]).ljust(3))
-    for key in ("sheen", "inv_kinds", "shadow"):
+    for key in ("sheen", "inv_kinds", "shadow", "glow"):
         if key in data:
             lines.append("%s: %s" % (key, json.dumps(data[key], ensure_ascii=False)))
     if data.get("chart"):

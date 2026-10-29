@@ -33,6 +33,8 @@ except ImportError:                            # pragma: no cover - на кон�
 SIDE = 720
 #: Радиус размытия - доля длинной стороны.
 BLUR = 1 / 36.0
+#: Заставка (1.57): та же картинка резкой, длинная сторона - точки.
+SHARP_SIDE = 1600
 #: Версия обработки: поменялась - ключи у всех картинок новые.
 RECIPE = "1"
 
@@ -74,37 +76,42 @@ def key_for(path):
     return key
 
 
-def url_for(path):
-    """Адрес размытой картинки относительно страницы или None."""
+def url_for(path, sharp=False):
+    """Адрес размытой картинки относительно страницы или None. sharp -
+    резкая, для заставки (1.57): ключ с хвостом «-s»."""
     key = key_for(path)
-    return "wall/%s.jpg" % key if key else None
+    return "wall/%s%s.jpg" % (key, "-s" if sharp else "") if key else None
 
 
-def blur(path):
-    """Файл -> JPEG: повернуть по EXIF, уменьшить, размыть."""
+def blur(path, sharp=False):
+    """Файл -> JPEG: повернуть по EXIF, уменьшить, размыть (sharp - без
+    размытия и крупнее: заставка показывает фото как есть)."""
     img = Image.open(path)
     try:
         img = ImageOps.exif_transpose(img)
     except Exception:                           # старый Pillow или битый EXIF
         pass
     img = img.convert("RGB")
-    img.thumbnail((SIDE, SIDE), Image.LANCZOS)
-    img = img.filter(ImageFilter.GaussianBlur(max(img.size) * BLUR))
+    side = SHARP_SIDE if sharp else SIDE
+    img.thumbnail((side, side), Image.LANCZOS)
+    if not sharp:
+        img = img.filter(ImageFilter.GaussianBlur(max(img.size) * BLUR))
     out = io.BytesIO()
-    img.save(out, "JPEG", quality=82, optimize=True, progressive=True)
+    img.save(out, "JPEG", quality=85 if sharp else 82, optimize=True, progressive=True)
     return out.getvalue()
 
 
 def image(key):
-    """Готовый JPEG по ключу или None."""
+    """Готовый JPEG по ключу или None. Ключ с «-s» - резкая картинка."""
+    sharp = key.endswith("-s")
     with _lock:
         if key in _ready:
             return _ready[key]
-        path = _paths.get(key)
+        path = _paths.get(key[:-2] if sharp else key)
     if not path or Image is None:
         return None
     try:
-        data = blur(path)
+        data = blur(path, sharp)
     except Exception as exc:                    # не картинка, не читается
         _errors[path] = "не открывается как картинка (%s)" % exc
         log.warning("обои %s: %s", path, exc)
@@ -115,6 +122,13 @@ def image(key):
             _ready.clear()
         _ready[key] = data
     return data
+
+
+def data_uri(key):
+    """Картинка по ключу data:-адресом (для панели-картинки заставки)."""
+    import base64
+    data = image(key)
+    return "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii") if data else None
 
 
 def problems(paths):

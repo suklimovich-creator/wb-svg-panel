@@ -59,6 +59,9 @@
   .inv .fanbars.live rect.on { fill: var(--inv-accent); }
   .inv .wnotch      { stroke: var(--inv-dim); }
   .inv .ag-now      { fill: var(--inv-accent); }
+  /* ---- свет за край плитки (glow, 1.55): горящая лампа - цветная карточка */
+  .glow .plate, .glow .plate.on { fill: url(#{{ uid }}glow-card); stroke: var(--glow-rim); stroke-width: var(--glow-rim-w); }
+  .glow .rim, .glow .rim.on     { stroke: none; }
   .shadows   { pointer-events: none; }
   /* ---- органы управления (1.17): клавиша, диод, колесо ---- */
   .led-frame  { fill: #000000; opacity: .55; }
@@ -264,6 +267,12 @@
     Выпускается всегда целиком: имя значка приходит из конфига,
     и заранее неизвестно, какие понадобятся. -#}
 {% macro defs() %}
+  {#- карточка горящей лампы и её свечение за краем (glow, 1.55) -#}
+  <linearGradient id="{{ uid }}glow-card" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="var(--glow-a)"/>
+    <stop offset=".55" stop-color="var(--glow-b)"/>
+    <stop offset="1" stop-color="var(--glow-c)"/>
+  </linearGradient>
   {#- Органы управления (с 1.17): блик на ручке и клавише, цилиндр колеса
       диммера, светящийся диод. Один раз на документ. -#}
   {#- острая фаска: свет на верхнем-левом скосе, тень на нижнем-правом -#}
@@ -955,17 +964,17 @@
 {% endmacro %}
 
 {% macro plate(t) %}
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="plate {{ 'on' if t.on }}"/>
   {#- Неоморфизм: включённая плитка утоплена - тень у верхнего края внутри,
       свет у нижнего. Внешних теней у неё нет (panel.svg.j2). -#}
   {% if NEU and t.on %}
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         fill="url(#{{ uid }}neu-in)" class="neu-in"/>
   {% endif %}
   {#- кромка: у выпуклой свет сверху-слева, у утопленной - наоборот -#}
   {% if NEU %}
-  <rect x="1.6" y="1.6" width="{{ t.w - 3.2 }}" height="{{ t.h - 3.2 }}" rx="{{ [rx - 0.6, 0]|max }}" fill="none"
+  <rect x="1.6" y="1.6" width="{{ t.w - 3.2 }}" height="{{ t.h - 3.2 }}" rx="{{ [(t.rx|default(rx)) - 0.6, 0]|max }}" fill="none"
         stroke="url(#{{ uid }}neu-edge{{ '-in' if t.on else '' }})" stroke-width="1.2"/>
   {% endif %}
   {{ sheen(t, t.on) }}
@@ -979,7 +988,7 @@
     отступ в полторы точки внутрь. -#}
 {% macro sheen(t, on=False) %}
   {% if PAL.info(theme).sheen %}
-  <rect x="1.5" y="1.5" width="{{ t.w - 3 }}" height="{{ t.h - 3 }}" rx="{{ [rx - 0.5, 0]|max }}"
+  <rect x="1.5" y="1.5" width="{{ t.w - 3 }}" height="{{ t.h - 3 }}" rx="{{ [(t.rx|default(rx)) - 0.5, 0]|max }}"
         fill="url(#{{ uid }}sheen{{ '-on' if on }})" class="sheen"/>
   {% endif %}
 {% endmacro %}

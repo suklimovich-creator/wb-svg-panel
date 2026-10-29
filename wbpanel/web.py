@@ -10,18 +10,19 @@ import gzip
 import json
 import logging
 import os
+import re
 import sys
 import threading
 
 from flask import Flask, Response, abort, request
 from jinja2 import Environment, FileSystemLoader
 
-from . import assemble, cameras, palette, showcase, stats, themes, wallpaper
+from . import assemble, cameras, demo, palette, showcase, stats, themes, wallpaper
 from .assemble import prepare
 from .calendars import calendars
 from .config import Config
 from .const import BASE_DIR, CONFIG_PATH, DB_PATH, TEMPLATE_DIRS, log
-from .geometry import clock_now
+from .geometry import clock_now, parse_duration
 from .history import History
 from .lists import lists
 from .render import resolve_css_vars  # noqa: F401 - web.resolve_css_vars для проверок и tools/
@@ -112,6 +113,11 @@ def panel_theme(panel_conf=None):
 def _source(name):
     """Откуда панель: (конфиг, состояние, история, все панели). Витрина тем
     (/themes) живёт на своём состоянии, а не на приборах из MQTT."""
+    if demo.is_demo_panel(name):
+        conf = demo.panel(config, name)
+        if conf is None:
+            abort(404, "демо %r не включено (demo_panels в конфиге)" % name)
+        return conf, showcase.state, showcase.history, {}
     if showcase.is_demo(name):
         return showcase.panel(), showcase.state, showcase.history, {}
     panel_conf = config.panels.get(name)
@@ -155,6 +161,10 @@ def render_panel(name, cols=None):
         name=name, closed=closed, opened=opened, mode=mode, nav=nav)
     template = _template(panel_conf.get("template", "panel.svg.j2"))
     wall_img, wall_dim = wall_of(panel_conf, theme)
+    # Заставка (1.57) показывает панель картинкой (<img>): внешних файлов
+    # такая картинка не грузит - обои стекла кладём внутрь, data:-адресом.
+    if wall_img and request.args.get("inline") == "1":
+        wall_img = wallpaper.data_uri(wall_img.split("/")[-1][:-4]) or wall_img
     return template.render(
         wall_img=wall_img,
         wall_dim=wall_dim,
@@ -210,6 +220,49 @@ def wall_of(panel_conf, theme):
     dim = max(0.0, min(dim, 0.9))
     rgb = "0,0,0" if palette.page_dark(theme) else "255,255,255"
     return url, "rgba(%s,%.2f)" % (rgb, dim)
+
+
+def _seconds(value):
+    """Срок из конфига: 90, '30s', '5m', '1h' -> секунды; none/0/нет - 0."""
+    if value in (None, False) or str(value).strip().lower() in ("", "0", "none", "no", "false", "off"):
+        return 0
+    if value is True:
+        return 300
+    if not re.match(r"^\s*\d+\s*[smhd]?\s*$", str(value)):
+        return 0                            # непонятное - выключено, а не сутки
+    return max(0, int(parse_duration(value)))
+
+
+def idle_of(panel_conf):
+    """
+    Бездействие (1.57): через сколько секунд без касаний закрывается окно
+    на весь экран (pad_close) и включается заставка (screensaver), её
+    картинка и часы. У панели - своё, иначе общее из конфига.
+
+        pad_close: 1m
+        screensaver:
+          after: 5m            # или просто screensaver: 5m
+          panel: saver         # своя панель заставки (графики, дела...)
+          image: data/saver.jpg   # фон; иначе wallpaper:, иначе тёмный
+          clock: true          # без панели - да, с панелью - нет
+    """
+    pc = panel_conf or {}
+    saver = pc.get("screensaver", config.get("screensaver") if config else None)
+    if not isinstance(saver, dict):
+        saver = {"after": saver}
+    raw = saver.get("image") or pc.get("wallpaper", config.get("wallpaper") if config else None)
+    img = wallpaper.url_for(wallpaper.resolve(raw, BASE_DIR), sharp=True) if raw else None
+    panel = str(saver.get("panel") or "")
+    if panel and panel not in ((config.panels or {}) if config else {}):
+        panel = ""
+    return {"pad_close": _seconds(pc.get("pad_close", config.get("pad_close") if config else None)),
+            "saver": _seconds(saver.get("after")),
+            "saver_img": img or "",
+            "saver_panel": panel,
+            # своя тема у панели заставки - её; иначе - тема устройства
+            "saver_theme": bool(panel and (config.panels.get(panel) or {}).get("theme")),
+            # часы поверх - если панели заставки нет: у панели свои в шапке
+            "saver_clock": saver.get("clock", not panel) is not False and bool(saver.get("clock", not panel))}
 
 
 def _json(body, status=200):

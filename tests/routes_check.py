@@ -27,9 +27,23 @@ client = web.app.test_client()
 _wall = client.get("/gal.svg?theme=glass").get_data(as_text=True)
 _wall = _wall.split('data-wall-img="', 1)[1].split('"', 1)[0] if 'data-wall-img="' in _wall else "wall/none.jpg"
 
+# Заставка (1.57): резкая картинка - адрес из настроек страницы панели.
+_page = client.get("/gal.html").get_data(as_text=True)
+_sharp = _page.split('"saver_img": "', 1)[1].split('"', 1)[0] if '"saver_img": "' in _page else "wall/none-s.jpg"
+
 # (метод, адрес, тело, допустимые ответы, что должно быть в ответе)
 CASES = [
     ("GET", "/" + _wall, None, (200,), ""),
+    ("GET", "/" + _sharp, None, (200,), ""),
+    ("GET", "/gal.html", None, (200,), '"pad_close": 120'),
+    ("GET", "/obj.svg", None, (200,), 'data-list-font="19"'),
+    ("GET", "/gal.html", None, (200,), '"saver_panel": "obj"'),
+    ("GET", "/gal.svg?theme=glass&inline=1", None, (200,), 'data:image/jpeg;base64,'),
+    # демо своей панели (1.54): demo_panels: [gal] в fixtures/showcase.yaml
+    ("GET", "/_demo-gal.html", None, (200,), "_demo-gal"),
+    ("GET", "/_demo-gal.svg", None, (200,), "/devices/_demo_"),
+    ("GET", "/_demo-misc.svg", None, (404,), ""),
+    ("GET", "/tile/_demo-gal/0.svg?w=390&h=844&view=pad", None, (200,), "<svg"),
     ("GET", "/wall/0123456789ab.jpg", None, (404,), ""),
     ("GET", "/", None, (200,), "gal"),
     ("GET", "/healthz", None, (200,), ""),
@@ -104,6 +118,18 @@ def main():
     if missing:
         bad += 1
         print("FAIL адреса без проверки в tests/routes_check.py: %s" % ", ".join(missing))
+    # Демо: ни одного настоящего топика в картинке, и нажатие не уходит в брокер.
+    import re as _re
+    demo_svg = client.get("/_demo-gal.svg").get_data(as_text=True)
+    real = [t for t in _re.findall(r'data-(?:topic|bright|temp|target|ac-[a-z-]+|mode-topic|stop|reset)="([^"]*/[^"]*)"',
+                                     demo_svg) if not t.startswith("/devices/_demo_")]
+    n_sent = len(sent)
+    topic = _re.search(r'data-kind="switch"[^>]*data-topic="([^"]+)"', demo_svg).group(1)
+    r = client.post("/api/publish", data=json.dumps({"topic": topic, "value": "1"}),
+                    content_type="application/json")
+    if real or r.status_code != 200 or len(sent) != n_sent:
+        bad += 1
+        print("FAIL демо: настоящие топики %s, ответ %d, ушло в брокер %d" % (real[:3], r.status_code, len(sent) - n_sent))
     if not any(t == "/devices/sw/controls/K1/on" for t, _v in sent):
         bad += 1
         print("FAIL публикация не дошла до брокера")

@@ -78,7 +78,7 @@
       {% endfor %}
     {% endif %}
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" class="rim"/>
 
   {{ base.icon_c(t, t.icon or t.icon_now or 'sun', 26) }}
   <text x="{{ t.w - 20 }}" y="42" class="wnow" text-anchor="end">{{ t.now_temp }}</text>

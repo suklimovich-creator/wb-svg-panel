@@ -178,7 +178,7 @@ CMD_ATTRS = [
     ("tv_state", "data-tv-state"), ("tv_app", "data-tv-app"),
     ("tv_apps", "data-tv-apps"),
     # Список: окну нужно только имя, всё остальное оно спросит у демона.
-    ("list", "data-list"),
+    ("list", "data-list"), ("list_font", "data-list-font"),
     # Вода: список датчиков для окна протечки, топик сброса тревоги, флаг
     # тревоги и цвет воды у крана.
     ("leak_rows", "data-leak-rows"), ("reset", "data-reset"),

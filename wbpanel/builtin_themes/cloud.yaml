@@ -1,0 +1,72 @@
+# Встроенная тема wb-svg-panel: облако (с 1.55).
+#
+# Белые карточки на сиренево-голубом поле, мягкая голубая тень, синие
+# акценты. Горящий свет - цветная карточка (персик - роза - фиалка), и
+# свечение выходит за её край (glow).
+name: cloud
+title: "облако"
+extends: light
+derive: true
+mode: light
+on_style: rim
+sheen: false
+# Тень по точкам (1.55): сила на каждом расстоянии от края плитки - тёмная
+# кайма у самого края, дальше ровная лёгкая тень. Подобрана в конструкторе
+# на демо-странице (22.10.2026).
+shadow:
+  dy: 6.5
+  soft: 3.5
+  power: 0.6
+  shade: -0.3
+  curve: smooth
+  stops: [[0, 0.65, "#2E3F81"], [1, 0.09, "#4F68C2"], [14, 0.09, "#7E92D8"]]
+depth: soft
+radius: 17
+glow: {style: flare, power: 1.4}   # горящий свет: щель - кромка света из-за карточки
+chart:
+  temperature: "#F08A3C"
+  humidity: "#3E8EF0"
+  co2: "#22B07D"
+  voc: "#8B5CF6"
+  pressure: "#7A819A"
+  power: "#F25C8A"
+  palette: ["#F08A3C", "#3E8EF0", "#8B5CF6", "#22B07D", "#F25C8A", "#7A819A"]
+vars:
+  card-sage: "#E3F4EC"
+  card-mustard: "#FFF3D6"
+  card-terracotta: "#FFE6DC"
+  card-sky: "#E2EDFF"
+  card-lilac: "#ECE6FF"
+  card-sand: "#F5EEE2"
+  bg-top: "#F1F3FC"
+  bg-bottom: "#DDE3F7"
+  tile: "#FFFFFF"
+  tile-on: "#FFFFFF"
+  edge: "rgba(52,72,140,.34)"
+  edge-w: "0.8"
+  active: "#2F7CF6"
+  active-w: "2.5"
+  active-soft: "#DEE9FE"
+  active-soft-edge: "rgba(47,124,246,.30)"
+  active-ink: "#2466D8"
+  ink: "#1B2233"
+  ink-dim: "#7B8299"
+  ink-faint: "rgba(27,34,51,.28)"
+  stroke: "#4A5068"
+  shadow: "#4F68C2"
+  cool: "#2F7CF6"
+  section: "#FFFFFF"
+  section-op: ".38"
+  # горящий свет: белые подписи на цветной карточке
+  inv-tile: "#F25C8A"
+  inv-ink: "#FFFFFF"
+  inv-dim: "rgba(255,255,255,.80)"
+  inv-stroke: "#FFFFFF"
+  inv-accent: "#FFFFFF"
+  # кондиционер: светлый диск, синие кнопки
+  ac-pill-on: "#2F7CF6"
+  ac-pill-ink: "#FFFFFF"
+  ac-seg-cool: "#2F7CF6"
+  glow-a: "#FFA24A"
+  glow-b: "#F25C8A"
+  glow-c: "#8B5CF6"

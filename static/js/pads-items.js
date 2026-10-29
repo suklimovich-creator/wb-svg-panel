@@ -25,6 +25,7 @@ function listView(node){
   var name = node.getAttribute('data-list');
   if(!name) return null;
   var url = 'api/list/' + encodeURIComponent(name);
+  var lfont = +node.getAttribute('data-list-font') || 0;
   var box = el('div','lst sheet');
   var head = el('div','lhead'), ttl = el('div','lttl', node.getAttribute('data-title') || ''),
       cnt = el('div','lcnt');
@@ -88,6 +89,7 @@ function listView(node){
     var chk = el('div','lchk'); chk.appendChild(el('i'));
     chk.onclick = function(){ call({op: done ? 'undo' : 'done', id: item.id}); };
     var txt = el('div','ltxt', item.text);
+    if (lfont) txt.style.fontSize = lfont + 'px';      // font: у плитки (1.57)
     // Правка - по нажатию на текст. Окно ввода системное: на телефоне
     // оно же открывает клавиатуру, своё рисовать незачем.
     txt.onclick = function(){

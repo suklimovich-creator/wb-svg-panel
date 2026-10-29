@@ -1,0 +1,36 @@
+# Встроенная тема wb-svg-panel: тёмный спрут (с 1.56).
+#
+# Тёмная тема приложения Sprut.hub: почти чёрное поле, разделы - серые
+# подложки, плитки на них темнее подложки, без теней, отсвета и контура;
+# текст белый, значки светло-серые, включённое - оранжевая рамка.
+name: sprut-dark
+title: "тёмный спрут"
+extends: dark
+derive: true
+mode: dark
+on_style: rim
+sheen: false
+shadow: null
+depth: flat
+edge: smooth
+bevel: none
+radius: 22
+glow: false
+vars:
+  bg-top: "#121212"
+  bg-bottom: "#141414"
+  tile: "#262626"
+  tile-on: "#262626"
+  edge: "rgba(0,0,0,0)"
+  edge-w: "0"
+  active: "#F5A623"
+  active-w: "3"
+  active-soft: "#4A3A1C"
+  active-soft-edge: "rgba(245,166,35,.40)"
+  active-ink: "#F5B547"
+  ink: "#F2F2F2"
+  ink-dim: "#9A9A9E"
+  ink-faint: "rgba(255,255,255,.28)"
+  stroke: "#D4D4D6"
+  section: "#323232"
+  section-op: "1"

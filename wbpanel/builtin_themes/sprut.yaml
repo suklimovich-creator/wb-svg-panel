@@ -1,0 +1,36 @@
+# Встроенная тема wb-svg-panel: спрут (с 1.56).
+#
+# Простая плоская, в духе приложения Sprut.hub: серые плитки без теней и
+# без контура на светлом поле, разделы - светлые подложки, значки
+# графитовые, включённое - оранжевая рамка.
+name: sprut
+title: "спрут"
+extends: light
+derive: true
+mode: light
+on_style: rim
+sheen: false
+shadow: null
+depth: flat
+edge: smooth
+bevel: none
+radius: 22
+glow: false
+vars:
+  bg-top: "#ECECEE"
+  bg-bottom: "#EFEFF1"
+  tile: "#D9D9DB"
+  tile-on: "#D9D9DB"
+  edge: "rgba(0,0,0,0)"
+  edge-w: "0"
+  active: "#E39B17"
+  active-w: "3"
+  active-soft: "#F3E3C2"
+  active-soft-edge: "rgba(227,155,23,.35)"
+  active-ink: "#A86A06"
+  ink: "#1C1C1E"
+  ink-dim: "#6E6E73"
+  ink-faint: "rgba(60,60,67,.30)"
+  stroke: "#5D6576"
+  section: "#F6F6F7"
+  section-op: "1"

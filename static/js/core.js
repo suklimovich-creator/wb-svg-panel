@@ -425,6 +425,9 @@ function saveLite(mode){
 function readOpt(key){ try { return localStorage.getItem(key) || ''; } catch(e) { return ''; } }
 function saveOpt(key, v){ try { v ? localStorage.setItem(key, v) : localStorage.removeItem(key); } catch(e) {} }
 var LIVE_MODE = readOpt('wb-panel-live'), DRAG_MODE = readOpt('wb-panel-drag');
+/* Бездействие (1.57): выбор устройства, секунды; '' - как в конфиге. */
+var PADCLOSE_MODE = readOpt('wb-panel-padclose'), SAVER_MODE = readOpt('wb-panel-saver');
+function secTxt(s){ s = +s || 0; return !s ? 'нет' : s < 60 ? s + ' с' : Math.round(s / 60) + ' мин'; }
 function liveOn(){ return LIVE_MODE === '1' || (LIVE_MODE === '' && !!CONTROLS.live); }
 function dragOn(){ return !!INTERACTIVE && (DRAG_MODE === '1' || (DRAG_MODE === '' && !!CONTROLS.drag)); }
 /* Отклик сразу: пока ведут ручку, значение уходит не чаще раза в LIVE_MS и
@@ -521,9 +524,16 @@ function drawMenu(){
           + row('', [['', 'как в конфиге (' + (CONTROLS.drag ? 'есть' : 'нет') + ')'],
                      ['0', 'нет'], ['1', 'есть']], DRAG_MODE, 'data-drag');
   }
+  html += '<div class="mh">Окно на весь экран закрывается само</div>'
+        + row('', [['', 'как в конфиге (' + secTxt(CONTROLS.pad_close) + ')'], ['0', 'нет'],
+                   ['30', '30 с'], ['60', '1 мин'], ['180', '3 мин']], PADCLOSE_MODE, 'data-padclose')
+        + '<div class="mh">Заставка</div>'
+        + row('', [['', 'как в конфиге (' + secTxt(CONTROLS.saver) + ')'], ['0', 'нет'],
+                   ['60', '1 мин'], ['300', '5 мин'], ['900', '15 мин'], ['now', 'показать']],
+              SAVER_MODE, 'data-saver');
   html += '<a class="mlink" data-go="themes">все темы на витрине…</a>';
   m.innerHTML = html;
-  var btns = m.querySelectorAll('[data-v],[data-t],[data-m],[data-go],[data-lite],[data-live],[data-drag]');
+  var btns = m.querySelectorAll('[data-v],[data-t],[data-m],[data-go],[data-lite],[data-live],[data-drag],[data-padclose],[data-saver]');
   for (var i = 0; i < btns.length; i++) btns[i].onclick = function(e){
     e.stopPropagation();
     if (this.hasAttribute('data-go')) { location.href = 'themes' + (THEME ? '?theme=' + THEME : ''); return; }
@@ -532,6 +542,11 @@ function drawMenu(){
     else if (this.hasAttribute('data-lite')) saveLite(this.getAttribute('data-lite'));
     else if (this.hasAttribute('data-live')) { LIVE_MODE = this.getAttribute('data-live'); saveOpt('wb-panel-live', LIVE_MODE); drawMenu(); return; }
     else if (this.hasAttribute('data-drag')) { DRAG_MODE = this.getAttribute('data-drag'); saveOpt('wb-panel-drag', DRAG_MODE); tdMarks(); drawMenu(); return; }
+    else if (this.hasAttribute('data-padclose')) { PADCLOSE_MODE = this.getAttribute('data-padclose'); saveOpt('wb-panel-padclose', PADCLOSE_MODE); drawMenu(); return; }
+    else if (this.hasAttribute('data-saver')) {
+      if (this.getAttribute('data-saver') === 'now') { closeMenu(); saverShow(); return; }
+      SAVER_MODE = this.getAttribute('data-saver'); saveOpt('wb-panel-saver', SAVER_MODE); drawMenu(); return;
+    }
     else saveCols(this.getAttribute('data-v'));
     drawCols();
     drawMenu();

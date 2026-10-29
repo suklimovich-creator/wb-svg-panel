@@ -76,7 +76,7 @@
     {% endif %}
   </g>
   {# рамку рисуем поверх заливки, чтобы она осталась чёткой #}
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" class="rim"/>
 
   {{ base.icon_c(t, t.icon or 'thermo', 24) }}
   {% for s in t.series %}

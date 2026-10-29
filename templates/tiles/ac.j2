@@ -338,7 +338,7 @@
     перетаскивании, не перерисовывая плитку. -#}
 {% macro disk(t) %}
   {% set d = t.disk %}
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="plate"/>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" class="plate"/>
   {{ base.sheen(t, False) }}
   <g clip-path="url(#{{ uid }}clip{{ t.i }})">
   <g class="acd {{ d.kind }}{{ ' off' if not t.on }}" data-cx="{{ d.cx }}" data-cy="{{ d.cy }}"
@@ -387,7 +387,7 @@
     {% endif %}
   </g>
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" class="rim"/>
   {% for ic in d.icons %}
   <g class="acl{{ ' swing' if ic.swing and t.on }}">
     <circle cx="{{ ic.cx }}" cy="{{ ic.cy }}" r="{{ ic.r }}" class="acl-bg"/>

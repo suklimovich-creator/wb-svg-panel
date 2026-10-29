@@ -250,7 +250,7 @@
     {% set hd = t.drape.handle %}
     <rect x="{{ hd.x }}" y="{{ hd.y }}" width="{{ hd.w }}" height="{{ hd.h }}" rx="{{ hd.w / 2 }}" class="handle"/>
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="rim {{ 'on' if t.on }}"/>
   {{ sky_caption(t) }}
   {% else %}
@@ -295,7 +295,7 @@
     {# гашение к низу под подписи #}
     <rect width="{{ t.w }}" height="{{ t.h }}" fill="url(#{{ uid }}scrim)"/>
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="rim {{ 'on' if t.on }}"/>
   {{ base.icon_c(t, t.icon or 'blind', 22) }}
   {{ base.value_tr(t) }}
@@ -334,7 +334,7 @@
     {% set hd = t.roman.handle %}
     <rect x="{{ hd.x }}" y="{{ hd.y }}" width="{{ hd.w }}" height="{{ hd.h }}" rx="{{ hd.h / 2 }}" class="handle"/>
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="rim {{ 'on' if t.on }}"/>
   {{ sky_caption(t) }}
   {% else %}
@@ -396,7 +396,7 @@
           x2="{{ t.w }}" y2="{{ '%.1f'|format(t.h * (1 - t.goal)) }}"/>
     {% endif %}
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="rim {{ 'on' if t.on }}"/>
   {{ base.icon_c(t, t.icon or 'blind', 22) }}
   {{ base.value_tr(t) }}
@@ -452,7 +452,7 @@
       </g>
     {% endif %}
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="rim {{ 'on' if t.on }}"/>
   <g class="{{ 'onlight' if t.on }}">
     {{ base.icon_c(t, t.icon or 'strip', 25) }}
@@ -495,7 +495,7 @@
     <rect x="0" y="{{ '%.1f'|format(t.h * (1 - t.fill) - 1) }}"
           width="{{ t.w }}" height="2" fill="{{ t.color }}" opacity=".9"/>
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="rim {{ 'on' if t.on }}"/>
   {{ base.icon_c(t, t.icon or 'bulb', 24) }}
   {{ base.value_tr(t) }}

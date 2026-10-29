@@ -116,7 +116,8 @@ def cached_panel(name, cols):
     # nav и lite - выбор устройства (1.44, 1.45): без них в ключе планшет
     # «облегчённо» и телефон получали картинки друг друга (до 1.50).
     base = (name, cols, closed, opened, mode, flat, theme, getattr(web.config, "_mtime", 0),
-            palette.version(), request.args.get("nav") or "", request.args.get("lite") == "1")
+            palette.version(), request.args.get("nav") or "", request.args.get("lite") == "1",
+            request.args.get("inline") == "1")
     bucket = int(time.time() // _refresh_every())
     with _RENDER_LOCK:
         now = time.time()
@@ -261,7 +262,7 @@ def panel_svg(name):
     if cols:
         cols = max(1, min(cols, 12))
     if showcase.is_demo(name):
-        return demo_svg(cols)
+        return demo_svg(cols, name)
     if name not in web.config.panels:
         abort(404, "панель %r не найдена в конфиге" % name)
 
@@ -369,7 +370,7 @@ def lean_head(svg, have, headers):
 ROOT_SIZE = re.compile(r'( width="[^"]*") height="([^"]*)" viewBox="[^"]*"([^>]*>)')
 
 
-def demo_svg(cols):
+def demo_svg(cols, name=None):
     """Витрина тем картинкой. Как обычная панель, только своё состояние:
     ждущий запрос просыпается от нажатий на витрине, а не от приборов."""
     st = showcase.state
@@ -390,8 +391,13 @@ def demo_svg(cols):
         finally:
             sem.release()
     version = st.version
-    svg = render_panel(showcase.NAME, cols=cols)
+    svg = render_panel(name or showcase.NAME, cols=cols)
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(svg, panel_theme(), 1.0)
     headers["X-Panel-Version"] = str(version)
+    # демо своей панели - как обычная: без повторной головы (1.45)
+    if name and name != showcase.NAME:
+        headers["Access-Control-Expose-Headers"] = ("X-Panel-Version, X-Panel-App, X-Panel-Head, "
+                                                    "X-Panel-Lean, X-Panel-Height")
+        svg = lean_head(svg, request.args.get("have"), headers)
     return Response(svg, mimetype="image/svg+xml", headers=headers)

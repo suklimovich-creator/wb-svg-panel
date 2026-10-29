@@ -238,7 +238,7 @@
     <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}"
           fill="url(#{{ uid }}scrim)"/>
   </g>
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}" class="rim"/>
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}" class="rim"/>
   {% if not t.src %}
   {{ base.icon_c(t, t.icon or 'camera', 24) }}
   {% endif %}
@@ -410,7 +410,7 @@
     ленты), значок мигает. Мигание - анимацией SVG, а не CSS: librsvg её
     просто не проигрывает, а разбор палитры к ней не прикасается. -#}
 {% macro tile_leak(t) %}
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="plate {{ 'alarm' if t.alarm }}"/>
   {% if not t.alarm %}{{ base.sheen(t) }}{% endif %}
   <g class="{{ 'onlight' if t.alarm }}">
@@ -530,7 +530,7 @@
 {% endmacro %}
 
 {% macro tile_valve(t) %}
-  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ rx }}"
+  <rect x="1" y="1" width="{{ t.w - 2 }}" height="{{ t.h - 2 }}" rx="{{ (t.rx|default(rx)) }}"
         class="plate {{ 'closed' if t.closed }}"/>
   {{ base.sheen(t) }}
   {#- Шаровой кран рисунком - только по look: ball (с 1.41); по умолчанию

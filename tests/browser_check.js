@@ -144,7 +144,7 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       await p.click('#navmenu [data-v="3"]');
       await p.waitForTimeout(1200);
       const cols = await p.evaluate(() => COLS);
-      await p.mouse.click(200, 830);   // ниже меню: с 1.51 оно выше
+      await p.mouse.click(200, 842);   // ниже меню: с 1.57 оно до самого низа
       await p.waitForTimeout(300);
       const closed = await p.evaluate(() => !document.getElementById('navmenu').classList.contains('open'));
       ok('шестерёнка', opened && cols === '3' && closed, 'cols=' + cols);
@@ -332,6 +332,38 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       await p.waitForTimeout(800);
       const txt = await p.evaluate(() => (document.getElementById('perf') || {}).textContent || '');
       ok('замер ?perf=1', /обновление/.test(txt) && /прокрутка/.test(txt));
+      await p.context().close();
+    }
+
+    // 9. бездействие (1.57): окно закрывается само, заставка с обоями;
+    // касание заставки только снимает её - плитка под ней не нажимается
+    {
+      const p = await page('gal.html', () => {
+        try { localStorage.setItem('wb-panel-padclose', '2'); localStorage.setItem('wb-panel-saver', '0'); } catch(e) {}
+      });
+      const sw = await p.evaluate(() => {
+        const n = document.querySelector('#host [data-kind="switch"]'), r = n.getBoundingClientRect();
+        return [r.x + r.width / 2, r.y + r.height / 2, n.getAttribute('data-state')];
+      });
+      await tap(p, '#host [data-kind="thermostat"]');
+      await p.waitForTimeout(600);
+      const opened = await p.evaluate(() => ov.classList.contains('open'));
+      await p.waitForTimeout(3200);
+      const closed = await p.evaluate(() => !ov.classList.contains('open'));
+      await p.evaluate(() => saverShow());
+      await p.waitForTimeout(500);
+      await p.waitForTimeout(1200);
+      const sv = await p.evaluate(() => {
+        const s = document.getElementById('saver'), i = s.querySelector('.sv-panel');
+        return {on: s.className, bg: getComputedStyle(s).backgroundImage, img: i ? i.naturalWidth : 0};
+      });
+      await p.mouse.click(sw[0], sw[1]);
+      await p.waitForTimeout(900);
+      const after = await p.evaluate(() => ({on: document.getElementById('saver').className,
+        st: document.querySelector('#host [data-kind="switch"]').getAttribute('data-state')}));
+      ok('бездействие: окно и заставка', opened && closed && /shown/.test(sv.on) && /wall\/[0-9a-f]{12}-s\.jpg/.test(sv.bg)
+         && sv.img > 100 && !/on/.test(after.on) && after.st === sw[2],
+         JSON.stringify({opened, closed, sv, after, before: sw[2]}));
       await p.context().close();
     }
   } catch (e) {

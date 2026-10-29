@@ -7,9 +7,13 @@
 #
 # Конфиг перечитывается сам, как только меняется файл: правите — жмёте F5.
 
-theme: light           # light | autumn | retro | noir | neumo | glass-day | dark | graphite | noir-dark | glass | auto
+theme: light           # light | sprut | autumn | retro | noir | neumo | glass-day | cloud | dark | sprut-dark | graphite | noir-dark | glass | auto
 # Свои темы (с 1.25) - файлы в папке themes/ рядом с этим файлом, см.
 # themes/_example.yaml. Другая папка: themes_dir: my-themes
+# Демо своих панелей (с 1.54): /panel/_demo-<панель>.html - те же плитки и
+# жесты на выдуманных приборах, команды в MQTT не уходят.
+# demo_panels: [livingroom]
+
 # Стеклянные темы (glass, glass-day): своя картинка вместо цветных пятен
 # (с 1.50). Сервер размоет её сам; нужен python3-pil. У панели - свой
 # wallpaper: или wallpaper: none.
@@ -44,6 +48,16 @@ interactive: false
 # live_controls: true
 # tile_gestures: true
 # live_interval: 300     # шаг отправки «сразу», мс; рывки света - см. /docs
+
+# Бездействие (с 1.57): окно на весь экран закрывается само, а совсем
+# долго без касаний - заставка: картинка во весь экран и часы. Касание
+# возвращает панель как была. Можно у панели; устройство - в шестерёнке.
+# pad_close: 1m
+# screensaver:
+#   after: 10m
+#   panel: saver            # своя панель заставки (графики, дела, термостаты)
+#   image: data/saver.jpg   # фон; иначе wallpaper:, иначе тёмный экран
+#   clock: true             # без panel - да, с panel - нет
 
 # Строка «Включено / Выключено» под названием плитки. По умолчанию скрыта:
 # состояние видно по оранжевой рамке и по тумблеру.

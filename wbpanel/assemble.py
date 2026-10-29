@@ -8,7 +8,7 @@ import time
 from .commands import cmd_attrs, xml_escape
 from .commands import build as build_command
 from .const import BAND, CELL, GAP, HEADER, PAD, RX, SECTION, TILE, font_scale, log
-from .const import INV_SKIP, STALE_AFTER
+from .const import GLOW_KINDS, INV_SKIP, RX_SHARE, STALE_AFTER
 from . import form, palette
 from .geometry import _fmt, cells, clock_width, layout, text_width
 from .status import build_status, place_chips
@@ -206,6 +206,11 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     style = palette.info(conf["theme"])
     form.use(style)                 # край колёс - для геометрии (form.py)
     inv_kind = conf.get("type") in style["inv_kinds"]
+    # Углы плитки (1.55): радиус темы - у крупных, у мелких меньше, в долю
+    # короткой стороны: на плитке 80 точек угол 24 съедал её до кружка.
+    # Пульт на весь экран - без скругления.
+    tile["rx"] = 0 if conf.get("view") == "pad" else round(
+        min(style["radius"], max(6.0, min(pw, ph) * RX_SHARE)), 1)
     # Свой цвет карточки (с 1.43): color: sage и т. п. Шестнадцатеричный
     # color у лампы - цвет света, не карточки: его не трогаем.
     tint = conf.get("color")
@@ -231,6 +236,11 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # если тема так делает.
     tile["inv"] = tile["kind"] not in INV_SKIP and (
         inv_kind or bool(style["card"] and tile.get("on")))
+    # Свет за край плитки (1.55): горящий свет - цветная карточка со
+    # светлыми подписями (inv) и свечением под ней (panel.svg.j2).
+    tile["glow"] = bool(style.get("glow") and tile.get("on") and tile["kind"] in GLOW_KINDS)
+    if tile["glow"]:
+        tile["inv"] = True
     tile["tint"] = tint
 
     # Служебные поля реестра до шаблона доходить не должны.

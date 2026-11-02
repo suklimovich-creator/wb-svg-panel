@@ -89,11 +89,21 @@ def resolve_sections(panel_conf, all_panels):
             if not section.get("status"):
                 src = source
         elif names:
+            # Первая комната - под заголовком раздела (вкладки), её статусы
+            # в шапке. Каждая следующая - с новой строки под своим
+            # заголовком со своими статусами (1.64): иначе плитки кухни
+            # шли вперемешку с гостиной без подписи.
             got, status = [], []
-            for name in names:
+            for i, name in enumerate(names):
                 t, st = _panel_tiles(name, all_panels)
+                if i == 0:
+                    status = st
+                elif t:
+                    sub = (all_panels or {}).get(name) or {}
+                    got.append({"type": "header", "title": sub.get("title", name),
+                                "status": st, "w": 99, "h": 0.5, "new_row": True,
+                                "auto_header": True})
                 got += t
-                status += st
             tiles = got + tiles
             first = (all_panels or {}).get(names[0]) or {}
             title = section.get("title", first.get("title", names[0]))

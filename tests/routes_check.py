@@ -151,7 +151,7 @@ def main():
            "ab": {"sections": [{"from": ["a", "b"]}]}}
     _r1 = _rs({"sections": [{"from": ["a", "b"], "title": "Т"}]}, _ps)
     _r2 = _rs({"sections": [{"from": "ab", "title": "Т"}]}, _ps)
-    if [len(_r1[0][1]), _r1[0][3], len(_r1[0][2].get("status") or [])] != [3, "a-b", 1] or len(_r2[0][1]) != 3:
+    if [len(_r1[0][1]), _r1[0][1][1].get("type"), _r1[0][3], len(_r1[0][2].get("status") or [])] != [4, "header", "a-b", 1] or len(_r2[0][1]) != 3:
         print("FAIL from списком:", _r1, _r2)
         bad += 1
     # 1.61: !secret и !include, перечитывание по правке secrets.yaml

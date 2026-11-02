@@ -407,7 +407,7 @@ _LAYOUTS_MAX = 64
 
 def layout(tiles, cols):
     key = (cols, tuple((id(t), t.get("w"), t.get("h"),
-                        t.get("col"), t.get("row")) for t in tiles))
+                        t.get("col"), t.get("row"), t.get("new_row")) for t in tiles))
     hit = _LAYOUTS.get(key)
     if hit is not None:
         placed, rows = hit
@@ -465,11 +465,16 @@ def _layout(tiles, cols):
                 continue
             take(tile, row, col, w, h)
 
-        # 2. остальные - в свободные места
+        # 2. остальные - в свободные места. new_row: true (1.64) - плитка и
+        # всё после неё ниже уже стоящих: «новая строка», дальше панель
+        # строится как с начала (заголовок второй комнаты во вкладке).
+        floor = 0
         for tile in flow:
             w = min(cells(tile.get("w"), 1.0), cols)
             h = cells(tile.get("h"), 1.0)
-            row = 0
+            if tile.get("new_row"):
+                floor = max([floor] + [r + hh for _t, r, _c, _w, hh in placed])
+            row = floor
             while True:
                 spot = None
                 for col in range(cols - w + 1):

@@ -16,7 +16,7 @@ var reqSeq = 0, shownSeq = 0, pendingSvg = null, inflight = 0, lastReqAt = 0;
 /* Последние картинки по состоянию свёртки: повторно раскрытый раздел
    показывается из памяти мгновенно, а свежие данные догоняют. Держим
    немного - это по одной на раздел гармошки плюс пара вариантов колонок. */
-var svgCache = {}, cacheKeys = [], CACHE_MAX = 12;
+var svgCache = {}, cacheKeys = [], CACHE_MAX = 16;
 function remember(q, svg){
   if (!svgCache[q]) {
     cacheKeys.push(q);
@@ -572,3 +572,39 @@ refresh();
 // Ждущий запрос - чуть позже первой картинки: она приходит без версии, а
 // с версией он и ждёт по-настоящему.
 schedule(800);
+
+/* ---------- вкладки заранее (1.68) ----------
+   На старом планшете вкладка открывалась за полсекунды-секунду, и почти
+   всё это время уходило на ожидание ответа сервера (замер ?perf=1): панель
+   стоит, кажется, что нажатие не прошло, - нажимают второй раз. Теперь
+   страница сама, по одной и не спеша, запрашивает закрытые вкладки и
+   держит их в svgCache: нажатие показывает вкладку сразу, свежие данные
+   догоняют. Только текст ответа, без разбора, - слабому планшету это
+   ничего не стоит; раз в PREFETCH_MS, пока страница на экране. */
+var PREFETCH_MS = 90000, prefetchBusy = false;
+function prefetchTabs(){
+  if (prefetchBusy || SECT_MODE !== 'tabs' || STILL) return;
+  if (typeof saverOn !== 'undefined' && saverOn) return;
+  if (document.hidden || ov.classList.contains('open')) return;
+  var nodes = host.querySelectorAll('[data-tab="1"][data-section]'), keys = [];
+  for (var i = 0; i < nodes.length; i++) {
+    var k = nodes[i].getAttribute('data-section');
+    if (k && k !== OPENED && keys.indexOf(k) < 0) keys.push(k);
+  }
+  prefetchBusy = true;
+  (function next(){
+    var key = keys.shift();
+    if (!key || SECT_MODE !== 'tabs') { prefetchBusy = false; return; }
+    var keep = OPENED;
+    OPENED = key; var q = Q(); OPENED = keep;
+    var hit = svgCache[q];
+    if (hit && Date.now() - hit.at < PREFETCH_MS / 2) { next(); return; }
+    fetch(svgUrl(q), {cache: 'no-store'})
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return takeSvg(r); })
+      .then(function(svg){ if (svg.indexOf('<svg') >= 0) remember(q, svg); })
+      .then(null, function(){})
+      .then(function(){ setTimeout(next, 400); });
+  })();
+}
+setTimeout(prefetchTabs, 4000);
+setInterval(prefetchTabs, PREFETCH_MS);

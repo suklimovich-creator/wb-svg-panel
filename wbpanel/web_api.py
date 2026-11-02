@@ -155,6 +155,9 @@ def cam_jpg(name):
         cache = "no-store"
     else:
         cache = "max-age=%d" % int(cam.refresh)
+    # HiWatch отдаёт `image/jpeg; charset="UTF-8"` - кавычки в типе ломали
+    # data:-адрес кадра в заставке (1.68); параметры типа кадру не нужны
+    ctype = (str(ctype or "").split(";")[0].strip() or "image/jpeg")
     return Response(data, mimetype=ctype, headers={"Cache-Control": cache})
 
 

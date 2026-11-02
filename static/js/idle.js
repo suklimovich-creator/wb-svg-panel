@@ -103,7 +103,12 @@ function saverInline(svg){
         if (!b) return '';
         return new Promise(function(ok){
           var fr = new FileReader();
-          fr.onload = function(){ ok(String(fr.result || '')); };
+          // Тип - только «image/jpeg»: камера присылает и параметры с
+          // кавычками (charset="UTF-8"), они рвали атрибут href (1.68).
+          fr.onload = function(){
+            var mime = String(b.type || '').split(';')[0].replace(/[^a-z0-9\/+.-]/gi, '') || 'image/jpeg';
+            ok(String(fr.result || '').replace(/^data:[^,]*;base64,/, 'data:' + mime + ';base64,').replace(/"/g, ''));
+          };
           fr.onerror = function(){ ok(''); };
           fr.readAsDataURL(b);
         });

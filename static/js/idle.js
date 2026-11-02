@@ -141,14 +141,50 @@ function saverPanel(){
       var url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'}));
       img.onload = function(){
         if (saverUrl && saverUrl !== url) URL.revokeObjectURL(saverUrl);
-        saverUrl = url; img.style.display = ''; saverFail(null);
+        saverUrl = url; img.style.display = ''; saverMarkup(null); saverFail(null);
       };
-      // картинка не разобралась - не значок «нет картинки», а часы (1.65)
-      img.onerror = function(){ URL.revokeObjectURL(url); saverFail('картинка не разобралась'); };
+      // Картинкой не разобралась (1.67): показываем ту же панель разметкой
+      // (как сама страница - там она открывается), а причину - в подсказке
+      // и в консоли: что сказал разборщик XML, если он вообще возражает.
+      img.onerror = function(){
+        URL.revokeObjectURL(url);
+        var why = '';
+        try {
+          var pe = new DOMParser().parseFromString(svg, 'image/svg+xml').getElementsByTagName('parsererror')[0];
+          if (pe) why = (pe.textContent || '').replace(/\s+/g, ' ').slice(0, 140);
+        } catch (e) {}
+        if (window.console && console.warn) console.warn('заставка: картинка не разобралась', why);
+        if (saverMarkup(svg)) {
+          SAVER_ERR = 'картинкой не разобралась' + (why ? ': ' + why : '') + ' - показана разметкой';
+          var h = saverEl.querySelector('.sv-hint');
+          if (h) h.textContent = 'коснитесь, чтобы вернуться · разметкой' + (why ? ': ' + why : '');
+          img.style.display = 'none';
+        } else saverFail('картинка не разобралась' + (why ? ': ' + why : ''));
+      };
       img.src = url;
     })
     .catch(function(e){ saverFail('ошибка ' + (e && e.message || e)); })
     .then(function(){ if (saverOn) saverTimer = setTimeout(saverPanel, 30000); });
+}
+/* Запасной путь (1.67): панель заставки разметкой поверх фона, без
+   обработчиков (pointer-events: none - касание всё равно снимает заставку).
+   Стили её <style> действуют на весь документ, пока она показана, - тема
+   та же, что у панели под ней, так что это незаметно; уходит вместе с
+   заставкой. null - убрать. */
+function saverMarkup(svg){
+  if (!saverEl) return false;
+  var box = saverEl.querySelector('.sv-inline');
+  if (svg === null) { if (box) box.parentNode.removeChild(box); return true; }
+  try {
+    if (!box) {
+      box = document.createElement('div'); box.className = 'sv-inline';
+      saverEl.insertBefore(box, saverEl.firstChild);
+    }
+    box.innerHTML = svg.replace(/^[\s\S]*?(<svg\b)/, '$1').replace(/<script\b[\s\S]*?<\/script>/gi, '');
+    var clock = saverEl.querySelector('.sv-clock');
+    if (clock && !CONTROLS.saver_clock) clock.parentNode.removeChild(clock);
+    return !!box.querySelector('svg');
+  } catch (e) { return false; }
 }
 /* Панель заставки не пришла или не разобралась: вместо пустоты и значка
    битой картинки - часы с датой, причина - в window.SAVER_ERR (и в
@@ -174,6 +210,7 @@ function saverFail(why){
 function saverHide(){
   if (!saverOn) return;
   saverOn = false;
+  saverMarkup(null);              // её стили - только пока она на экране
   clearTimeout(saverTimer);
   saverGone = Date.now();
   idleTouch();

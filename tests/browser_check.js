@@ -400,7 +400,12 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
         const svg = await saverInline('<svg><image href="' + src + '" x="0"/></svg>');
         const keep = CONTROLS.saver; CONTROLS.saver = 0; SAVER_MODE = '60';
         const off = saverSec(); CONTROLS.saver = keep; SAVER_MODE = '0';
-        return {data: /href="data:image\/jpeg;base64,/.test(svg), cols: saverCols(), off: off};
+        // 1.67: запасной путь - та же панель разметкой
+        const r = await fetch(encodeURIComponent(CONTROLS.saver_panel) + '.svg?inline=1');
+        const shown = saverMarkup(await r.text()), n = document.querySelectorAll('#saver .sv-inline svg').length;
+        saverMarkup(null);
+        return {data: /href="data:image\/jpeg;base64,/.test(svg), cols: saverCols(), off: off,
+                markup: shown && n === 1 && !document.querySelector('#saver .sv-inline')};
       });
       sv.extra = extra;
       await p.mouse.click(sw[0], sw[1]);
@@ -409,7 +414,7 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
         st: document.querySelector('#host [data-kind="switch"]').getAttribute('data-state')}));
       ok('бездействие: окно и заставка', opened && closed && /shown/.test(sv.on) && /wall\/[0-9a-f]{12}-s\.jpg/.test(sv.bg)
          && sv.img > 100 && !/on/.test(after.on) && after.st === sw[2]
-         && extra.data && +extra.cols > 0 && extra.off === 0,
+         && extra.data && +extra.cols > 0 && extra.off === 0 && extra.markup,
          JSON.stringify({opened, closed, sv, after, before: sw[2]}));
       await p.context().close();
     }

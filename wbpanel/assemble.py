@@ -100,9 +100,10 @@ def resolve_sections(panel_conf, all_panels):
                     status = st
                 elif t:
                     sub = (all_panels or {}).get(name) or {}
+                    # не плитка, а метка: assemble рисует тонкую строку
+                    # заголовка, как у раздела в списке (1.66)
                     got.append({"type": "header", "title": sub.get("title", name),
-                                "status": st, "w": 99, "h": 0.5, "new_row": True,
-                                "auto_header": True})
+                                "status": st, "auto_header": True})
                 got += t
             tiles = got + tiles
             first = (all_panels or {}).get(names[0]) or {}
@@ -663,25 +664,45 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             index += len(tiles_conf)
             continue
 
-        placed, rows = layout(tiles_conf, cols)
-
         # layout переставляет плитки: закреплённые по col/row встают
         # первыми. Номер должен считаться по порядку в конфиге, а не по
         # порядку размещения - полноэкранный вид ищет в неразложенном
         # списке.
         order = {id(conf): n for n, conf in enumerate(tiles_conf)}
 
-        for conf, row, col, w, h in placed:
-            out.append(build_tile(
-                conf, index + order.get(id(conf), 0),
-                PAD + col * (CELL + GAP), y_cursor + row * (CELL + GAP),
-                w * CELL + (w - 1) * GAP, h * CELL + (h - 1) * GAP,
-                panel_conf, state, history, interactive))
+        # Вкладка из нескольких комнат (1.66): каждая следующая комната -
+        # своим блоком под тонкой строкой заголовка с её чипами, как
+        # заголовок раздела в списке (без стрелки: не сворачивается).
+        blocks, subs = [[]], [None]
+        for conf in tiles_conf:
+            if isinstance(conf, dict) and conf.get("auto_header"):
+                blocks.append([])
+                subs.append(conf)
+            else:
+                blocks[-1].append(conf)
+
+        for block, sub in zip(blocks, subs):
+            if sub is not None:
+                y_cursor += 14
+                stitle = str(sub.get("title") or "")
+                headers.append({
+                    "title": stitle, "x": PAD, "y": y_cursor + 22, "key": "",
+                    "chips": place_chips(build_status(sub, state), right_edge, y_cursor - 2,
+                                         left=PAD + text_width(stitle, 18) * 1.08 + 24)})
+                y_cursor += SECTION
+            if not block:
+                continue
+            placed, rows = layout(block, cols)
+            for conf, row, col, w, h in placed:
+                out.append(build_tile(
+                    conf, index + order.get(id(conf), 0),
+                    PAD + col * (CELL + GAP), y_cursor + row * (CELL + GAP),
+                    w * CELL + (w - 1) * GAP, h * CELL + (h - 1) * GAP,
+                    panel_conf, state, history, interactive))
+            if rows:
+                y_cursor += rows * CELL + (rows - 1) * GAP + GAP
 
         index += len(tiles_conf)
-
-        if rows:
-            y_cursor += rows * CELL + (rows - 1) * GAP + GAP
 
     width = PAD * 2 + cols * CELL + (cols - 1) * GAP
     height = max(y_cursor - GAP + PAD, PAD * 2 + HEADER)

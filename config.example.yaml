@@ -17,6 +17,9 @@
 #   # config.yaml
 #   cameras:
 #     hall: {url: !secret hall_camera_url}
+#
+# Часть значения (с 1.62) - ${имя} внутри строки:
+#   topic: /sprut/${sprut_id}/accessories/341/13/state
 
 theme: light           # light | sprut | autumn | retro | noir | neumo | glass-day | cloud | dark | sprut-dark | graphite | noir-dark | glass | auto
 # Свои темы (с 1.25) - файлы в папке themes/ рядом с этим файлом, см.

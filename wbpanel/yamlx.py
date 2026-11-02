@@ -16,6 +16,10 @@
 конфига из отдельного файла (путь относительно того, где написан тег);
 внутри него тоже можно `!secret` и `!include`.
 
+Часть значения (1.62) - `${имя}` внутри строки, имя из secrets.yaml:
+
+    topic: /sprut/${sprut_id}/accessories/341/13/state
+
 Так config.yaml можно отдавать кому угодно (и присылать на правку):
 пароли и закрытые ссылки остаются в secrets.yaml.
 
@@ -25,6 +29,7 @@
 """
 
 import os
+import re
 import logging
 
 import yaml
@@ -106,15 +111,50 @@ yaml.SafeLoader.add_constructor("!secret", _secret)
 yaml.SafeLoader.add_constructor("!include", _include)
 
 
+_SUB = re.compile(r"\$\{([A-Za-z0-9_.-]+)\}")
+
+
+def expand(data, folder=None):
+    """`${имя}` в строках - значение из secrets.yaml (1.62). Неизвестное
+    имя остаётся как есть (и ошибка в журнале): `${` в обычном тексте
+    ничего не ломает. Без секретов (демо) - тоже как есть."""
+    if not use_secrets:
+        return data
+    _p, secrets = _secrets(folder or default_dir or os.getcwd())
+    secrets = secrets or {}
+    missing = set()
+
+    def one(m):
+        key = m.group(1)
+        if key in secrets:
+            return str(secrets[key])
+        missing.add(key)
+        return m.group(0)
+
+    def walk(v):
+        if isinstance(v, str):
+            return _SUB.sub(one, v) if "${" in v else v
+        if isinstance(v, dict):
+            return {k: walk(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        return v
+    out = walk(data)
+    for key in sorted(missing):
+        log.error("${%s}: нет такого имени в %s", key, SECRETS_NAME)
+    return out
+
+
 def load(path):
-    """Прочитать YAML-файл с тегами; вернуть данные. Список прочитанных
-    рядом файлов - в touched."""
+    """Прочитать YAML-файл с тегами и ${имя}; вернуть данные. Список
+    прочитанных рядом файлов - в touched."""
     global default_dir
     touched.clear()
     if default_dir is None:
         default_dir = os.path.dirname(os.path.abspath(path))
     with open(path, "r", encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+        data = yaml.safe_load(fh)
+    return expand(data, os.path.dirname(os.path.abspath(path)))
 
 
 def stamp(path):

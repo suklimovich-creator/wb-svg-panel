@@ -593,7 +593,9 @@ PointerEvent (`lastTouchAt`) считается от конца открытия
 пакета — его импортируют и утилиты). `Config.reload` берёт `yamlx.load` и
 `yamlx.stamp` — время изменения конфига вместе с `secrets.yaml` и кусками
 `!include` (`yamlx.touched`). Демо-сайт: `use_secrets = False`,
-`extra_dir` — папка настоящего конфига для `!include`.
+`extra_dir` — папка настоящего конфига для `!include`. С 1.62
+`yamlx.expand` после загрузки заменяет `${имя}` в строках значениями из
+`secrets.yaml` (неизвестное — как есть; в демо не трогает).
 
 **Демо-сайт (с 1.55)** — `tools/demo-site`: `build.py` собирает папку
 (страница + static + Pyodide + `py/files.json` — исходники текстом),

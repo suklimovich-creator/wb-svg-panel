@@ -215,6 +215,13 @@ Assistant; <code>!include файл.yaml</code> — кусок конфига и�
 <code>config.yaml</code>. Нет имени или файла — в журнале ошибка, значение
 пустое. Так <code>config.yaml</code> можно показывать и пересылать: пароли
 остаются в <code>secrets.yaml</code>. На демо-странице секретов нет вовсе.</p>
+<p><b>Часть значения</b> (с 1.62) — <code>${имя}</code> внутри строки, имя из
+<code>secrets.yaml</code>:</p>
+<pre><code># secrets.yaml
+sprut_id: 1a2b3c
+# config.yaml
+topic: /sprut/${sprut_id}/accessories/341/13/state</code></pre>
+<p>Неизвестное имя остаётся в строке как есть, в журнале — ошибка.</p>
 
 <h2 id="idle">Бездействие: окно закрывается само, заставка (с 1.57)</h2>
 <pre><code>pad_close: 1m          # окно на весь экран - назад к панели через минуту без касаний

@@ -149,17 +149,20 @@ def main():
     from wbpanel.config import Config as _C
     _d = tempfile.mkdtemp()
     with open(os.path.join(_d, "config.yaml"), "w") as _f:
-        _f.write("cams: {hall: !secret cam}\ncal: !include cal.yaml\npanels: {}\n")
+        _f.write("cams: {hall: !secret cam}\ncal: !include cal.yaml\nt: /sprut/${sid}/x\nu: a ${nope} b\npanels: {}\n")
     with open(os.path.join(_d, "secrets.yaml"), "w") as _f:
-        _f.write("cam: A\nics: B\n")
+        _f.write("cam: A\nics: B\nsid: 77\n")
     with open(os.path.join(_d, "cal.yaml"), "w") as _f:
         _f.write("home: !secret ics\n")
     _c = _C(os.path.join(_d, "config.yaml"))
     _a = (_c.data["cams"]["hall"], _c.data["cal"]["home"])
     _t.sleep(1.1)
     with open(os.path.join(_d, "secrets.yaml"), "w") as _f:
-        _f.write("cam: C\nics: D\n")
+        _f.write("cam: C\nics: D\nsid: 77\n")
     _c.reload()
+    if (_c.data["t"], _c.data["u"]) != ("/sprut/77/x", "a ${nope} b"):
+        print("FAIL ${имя}:", _c.data["t"], _c.data["u"])
+        bad += 1
     if _a != ("A", "B") or (_c.data["cams"]["hall"], _c.data["cal"]["home"]) != ("C", "D"):
         print("FAIL секреты:", _a, _c.data)
         bad += 1

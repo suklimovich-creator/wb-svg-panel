@@ -105,9 +105,14 @@ def _prop(line):
     return parts[0].upper(), params, value
 
 
+#: Управляющие символы недопустимы в XML (1.65): одно такое в названии
+#: события - и картинка панели (заставка - <img>) не разбирается вовсе.
+_CTRL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
 def _text(value):
-    return (value.replace("\\n", " ").replace("\\N", " ").replace("\\,", ",")
-            .replace("\\;", ";").replace("\\\\", "\\")).strip()
+    return _CTRL.sub("", value.replace("\\n", " ").replace("\\N", " ").replace("\\,", ",")
+                     .replace("\\;", ";").replace("\\\\", "\\")).strip()
 
 
 def _zone(name, fallback):

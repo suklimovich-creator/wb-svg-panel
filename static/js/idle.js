@@ -123,9 +123,12 @@ function saverPanel(){
         (THEME && !CONTROLS.saver_theme ? '&theme=' + THEME : '') +
         (cols ? '&cols=' + cols : '') + '&t=' + Date.now(), {cache: 'no-store'})
     .then(function(r){ return r.ok ? r.text() : ''; })
+    // управляющие символы (из календаря, списков) XML не разберёт - и
+    // картинки не будет вовсе (1.65)
+    .then(function(svg){ return svg.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); })
     .then(saverInline)
     .then(function(svg){
-      if (!saverOn || seq !== saverSeq || svg.indexOf('<svg') < 0) return;
+      if (!saverOn || seq !== saverSeq || svg.indexOf('<svg') < 0) { saverFail(svg ? 'нет картинки' : 'нет ответа'); return; }
       var img = saverEl.querySelector('.sv-panel');
       if (!img) return;
       // фон вокруг - поле темы панели, если своей картинки нет
@@ -136,11 +139,37 @@ function saverPanel(){
         }
       }
       var url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'}));
-      img.onload = function(){ if (saverUrl && saverUrl !== url) URL.revokeObjectURL(saverUrl); saverUrl = url; };
+      img.onload = function(){
+        if (saverUrl && saverUrl !== url) URL.revokeObjectURL(saverUrl);
+        saverUrl = url; img.style.display = ''; saverFail(null);
+      };
+      // картинка не разобралась - не значок «нет картинки», а часы (1.65)
+      img.onerror = function(){ URL.revokeObjectURL(url); saverFail('картинка не разобралась'); };
       img.src = url;
     })
-    .catch(function(){})
+    .catch(function(e){ saverFail('ошибка ' + (e && e.message || e)); })
     .then(function(){ if (saverOn) saverTimer = setTimeout(saverPanel, 30000); });
+}
+/* Панель заставки не пришла или не разобралась: вместо пустоты и значка
+   битой картинки - часы с датой, причина - в window.SAVER_ERR (и в
+   подсказке внизу). Следующая удачная картинка возвращает панель. */
+var SAVER_ERR = null;
+function saverFail(why){
+  SAVER_ERR = why;
+  if (!saverEl) return;
+  var img = saverEl.querySelector('.sv-panel'), clock = saverEl.querySelector('.sv-clock');
+  var hint = saverEl.querySelector('.sv-hint');
+  if (why) {
+    if (img) img.style.display = 'none';
+    if (!clock) {
+      clock = document.createElement('div'); clock.className = 'sv-clock';
+      saverEl.insertBefore(clock, hint); saverMin = -1; saverTick();
+    }
+    if (hint) hint.textContent = 'коснитесь, чтобы вернуться · заставка: ' + why;
+  } else {
+    if (clock && !CONTROLS.saver_clock) clock.parentNode.removeChild(clock);
+    if (hint) hint.textContent = 'коснитесь, чтобы вернуться';
+  }
 }
 function saverHide(){
   if (!saverOn) return;

@@ -22,13 +22,51 @@ from .tiles import from_registry
 config = None
 
 
+def _from_names(value):
+    """`from:` - имя панели или список имён (1.63)."""
+    if not value:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value if v]
+    return [str(value)]
+
+
+def _panel_tiles(name, all_panels, seen=()):
+    """
+    Плитки и статусы панели для `from:`. Панель из разделов (сама собрана
+    через `from:`) отдаёт плитки всех своих разделов - так сборные панели
+    вкладываются друг в друга на любую глубину (1.63). Петля (A из B, B
+    из A) обрывается.
+    """
+    if name in seen:
+        return [], []
+    seen = tuple(seen) + (name,)
+    panel = (all_panels or {}).get(name) or {}
+    tiles = list(panel.get("tiles", []) or [])
+    status = list(panel.get("status", []) or [])
+    for section in panel.get("sections", []) or []:
+        if not isinstance(section, dict):
+            continue
+        for sub in _from_names(section.get("from")):
+            t, st = _panel_tiles(sub, all_panels, seen)
+            tiles += t
+            if not section.get("status"):
+                status += st
+        tiles += list(section.get("tiles", []) or [])
+        status += list(section.get("status", []) or [])
+    return tiles, status
+
+
 def resolve_sections(panel_conf, all_panels):
     """
     Разделы панели -> [(заголовок или None, список плиток)].
 
     Раздел можно задать своими плитками либо ссылкой `from:` на другую
     панель - тогда её плитки подтягиваются целиком и не дублируются в
-    конфиге. Панель без `sections` - это один безымянный раздел.
+    конфиге. С 1.63 `from:` - и список панелей (`from: [livingroom,
+    kitchen]` - одна вкладка из двух комнат, статусы обеих), и панель,
+    которая сама собрана из разделов. Панель без `sections` - это один
+    безымянный раздел.
     """
     sections = panel_conf.get("sections")
     if not sections:
@@ -39,17 +77,28 @@ def resolve_sections(panel_conf, all_panels):
         if not isinstance(section, dict):
             continue
         tiles = list(section.get("tiles", []) or [])
-        src_name = section.get("from")
+        names = _from_names(section.get("from"))
         # Откуда брать статусы раздела: свои, либо от панели-источника.
         # Комната описывает статусы один раз у себя, а сводные панели
         # подхватывают их вместе с плитками.
         src = section
-        if src_name:
-            source = (all_panels or {}).get(src_name) or {}
+        if len(names) == 1 and not ((all_panels or {}).get(names[0]) or {}).get("sections"):
+            source = (all_panels or {}).get(names[0]) or {}
             tiles = list(source.get("tiles", []) or []) + tiles
-            title = section.get("title", source.get("title", src_name))
+            title = section.get("title", source.get("title", names[0]))
             if not section.get("status"):
                 src = source
+        elif names:
+            got, status = [], []
+            for name in names:
+                t, st = _panel_tiles(name, all_panels)
+                got += t
+                status += st
+            tiles = got + tiles
+            first = (all_panels or {}).get(names[0]) or {}
+            title = section.get("title", first.get("title", names[0]))
+            if not section.get("status"):
+                src = dict(section, status=status)
         else:
             title = section.get("title")
         if tiles:
@@ -57,7 +106,7 @@ def resolve_sections(panel_conf, all_panels):
             # панели-источника, иначе заголовок. Порядковый номер не
             # годится: добавили раздел в середину - и свёрнутым оказался
             # чужой.
-            key = section.get("key") or src_name or title or ""
+            key = section.get("key") or "-".join(names) or title or ""
             out.append((title, tiles, src, key))
     return out or [(None, [], panel_conf, "")]
 
@@ -532,7 +581,7 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
         icons = {}
         for sec in panel_conf.get("sections") or []:
             if isinstance(sec, dict) and sec.get("icon"):
-                icons[sec.get("key") or sec.get("from") or sec.get("title") or ""] = sec["icon"]
+                icons[sec.get("key") or "-".join(_from_names(sec.get("from"))) or sec.get("title") or ""] = sec["icon"]
         width_full = PAD * 2 + cols * CELL + (cols - 1) * GAP
         tab_nav = bool(nav) and dock == "top"
         tabs, tab_plate, tab_open, tab_h = tab_bar(

@@ -144,6 +144,16 @@ def main():
         print("FAIL заставка по панелям:", _i, _own)
         bad += 1
 
+    # 1.63: from: списком и сборная панель внутри сборной
+    from wbpanel.assemble import resolve_sections as _rs
+    _ps = {"a": {"tiles": [{"type": "switch"}], "status": [{"leak": "all"}]},
+           "b": {"tiles": [{"type": "dimmer"}, {"type": "light"}]},
+           "ab": {"sections": [{"from": ["a", "b"]}]}}
+    _r1 = _rs({"sections": [{"from": ["a", "b"], "title": "Т"}]}, _ps)
+    _r2 = _rs({"sections": [{"from": "ab", "title": "Т"}]}, _ps)
+    if [len(_r1[0][1]), _r1[0][3], len(_r1[0][2].get("status") or [])] != [3, "a-b", 1] or len(_r2[0][1]) != 3:
+        print("FAIL from списком:", _r1, _r2)
+        bad += 1
     # 1.61: !secret и !include, перечитывание по правке secrets.yaml
     import tempfile, time as _t
     from wbpanel.config import Config as _C

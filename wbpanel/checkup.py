@@ -141,11 +141,12 @@ def check_config(config, state, history=None):
 
         for section in ((panel or {}).get("sections") or []):
             src = section.get("from") if isinstance(section, dict) else None
-            if src and src not in (config.panels or {}):
-                out.append({"level": ERROR, "panel": title, "tile": "раздел",
-                            "kind": "section",
-                            "text": "ссылается на панель %r, которой нет" % src,
-                            "hint": "проверьте имя в from:"})
+            for one in (src if isinstance(src, list) else [src] if src else []):
+                if one not in (config.panels or {}):
+                    out.append({"level": ERROR, "panel": title, "tile": "раздел",
+                                "kind": "section",
+                                "text": "ссылается на панель %r, которой нет" % one,
+                                "hint": "проверьте имя в from:"})
 
         for _t, tiles, _s, _k in resolve_sections(panel, config.panels):
             for tile in tiles:

@@ -15,6 +15,7 @@ freeze=True останавливает часы: time.time, localtime и datetim
 import datetime as _dt
 import json
 import os
+import shutil
 import sys
 import tempfile
 import time as _time
@@ -90,6 +91,13 @@ def setup(config=None, freeze_time=True, history=False):
     with open(cfg_path, "w", encoding="utf-8") as fh:
         fh.write(src + "\nlists_file: %s\n" % json.dumps(os.path.join(tmp, "lists.json")))
     os.environ["WB_PANEL_CONFIG"] = cfg_path
+    # secrets.yaml и куски !include рядом с настоящим конфигом (1.61)
+    if config:
+        from wbpanel import yamlx
+        yamlx.extra_dir = os.path.dirname(os.path.abspath(config))
+        sec = os.path.join(yamlx.extra_dir, "secrets.yaml")
+        if os.path.exists(sec):
+            shutil.copy(sec, os.path.join(tmp, "secrets.yaml"))
 
     from jinja2 import Environment, FileSystemLoader
     from wbpanel import assemble, cameras, palette, web

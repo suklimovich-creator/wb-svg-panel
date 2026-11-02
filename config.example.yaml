@@ -369,6 +369,53 @@ panels:
       - from: kitchen
         title: "Кухня"
 
+  # =========================================================================
+  # Планшет на стене и телефон из одних и тех же комнат (с 1.63).
+  #
+  # from: - одна панель или список: вкладка «Гостиная» из гостиной и кухни,
+  # статусы обеих комнат - в её шапке. Источником может быть и сборная
+  # панель (с sections) - вложенность любая. Значок вкладки - icon: у
+  # раздела, иначе icon: панели-источника, иначе по названию: «Гостиная» -
+  # диван, «Кухня» - тарелка, «Спальня» - кровать, «Ванная» - ванна,
+  # «Душ…» - душ, «Детская», «Прихожая» - дверь, «Дом» - домик.
+  #
+  # &имя ... *имя - якорь YAML: список разделов написан один раз, обе панели
+  # берут его. Так же можно заготовить плитку и брать её в нескольких
+  # панелях: {<<: *имя, w: 2} - всё из заготовки плюс своё (своё важнее).
+  # Заготовки удобно держать в отдельном ключе верхнего уровня, например
+  # x-tiles: - демон его не читает.
+  #
+  #   x-tiles:
+  #     chart: &chart {type: chart, range: 12h, points: 90, grid_labels: true}
+  #     t_living: &t_living
+  #       <<: *chart
+  #       title: "Гостиная"
+  #       icon: thermo
+  #       series:
+  #         - {channel: "wb-msw-v4_149/Temperature", unit: "°C"}
+  #         - {channel: "wb-msw-v4_149/Humidity", unit: "%", digits: 0}
+  #   panels:
+  #     livingroom:
+  #       tiles:
+  #         - {<<: *t_living, w: 2}
+  #     saver:
+  #       tiles:
+  #         - *t_living
+  tablet:
+    title: "Дом"
+    cols: 4
+    tabs: true
+    screensaver: {after: 5m, panel: saver}   # заставка только на этой панели
+    sections: &rooms
+      - {from: livingroom, title: "Гостиная"}
+      - {from: [kitchen, livingroom], title: "Кухня-гостиная", icon: sofa}
+
+  phone:
+    title: "Дом на телефоне"
+    cols: 3
+    accordion: true
+    sections: *rooms
+
 # Доступные иконки:
 #   blind bulb cloud co2 curtain door drop fan heat leaf moon motion next
 #   power snow socket strip sun swing tap thermo tv voc wind window

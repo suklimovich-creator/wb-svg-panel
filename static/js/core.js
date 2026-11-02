@@ -227,7 +227,7 @@ function dockBar(){
   dock.appendChild(copy);
   var btns = dock.querySelectorAll('[data-tab]');
   for (var n = 0; n < btns.length; n++)
-    btns[n].onclick = function(){ if (tapOk()) toggleSection(this); };
+    btns[n].onclick = function(){ var t0 = lastDown, ok = tapOk(); perfTap(ok, t0); if (ok) toggleSection(this); };
   document.documentElement.style.setProperty('--dock-h', dock.style.height);
 }
 var chromeTimer = null;
@@ -277,6 +277,7 @@ function toggleSection(node){
   // данные догонят через долю секунды. Нет - притушиваем панель, чтобы
   // было видно, что нажатие принято, и ждём сервер.
   var hit = svgCache[Q()];
+  perfTabStart(!!hit);
   if (hit) {
     applySvg(hit.svg, ++reqSeq);
     // Картинка могла пролежать долго - пусть остаётся притушенной, пока
@@ -527,10 +528,12 @@ function drawMenu(){
   html += '<div class="mh">Окно на весь экран закрывается само</div>'
         + row('', [['', 'как в конфиге (' + secTxt(CONTROLS.pad_close) + ')'], ['0', 'нет'],
                    ['30', '30 с'], ['60', '1 мин'], ['180', '3 мин']], PADCLOSE_MODE, 'data-padclose')
-        + '<div class="mh">Заставка</div>'
-        + row('', [['', 'как в конфиге (' + secTxt(CONTROLS.saver) + ')'], ['0', 'нет'],
-                   ['60', '1 мин'], ['300', '5 мин'], ['900', '15 мин'], ['now', 'показать']],
-              SAVER_MODE, 'data-saver');
+        + '<div class="mh">Заставка' + (+CONTROLS.saver > 0 ? '' : ': у этой панели нет') + '</div>'
+        + (+CONTROLS.saver > 0
+           ? row('', [['', 'как в конфиге (' + secTxt(CONTROLS.saver) + ')'], ['0', 'нет'],
+                      ['60', '1 мин'], ['300', '5 мин'], ['900', '15 мин'], ['now', 'показать']],
+                 SAVER_MODE, 'data-saver')
+           : '');
   html += '<a class="mlink" data-go="themes">все темы на витрине…</a>';
   m.innerHTML = html;
   var btns = m.querySelectorAll('[data-v],[data-t],[data-m],[data-go],[data-lite],[data-live],[data-drag],[data-padclose],[data-saver]');
@@ -575,7 +578,29 @@ function menuOutside(e){
    сколько миллисекунд уходит на его разбор и вставку и как идёт прокрутка.
    Снимок экрана с этой плашкой - всё, что нужно для разбора. */
 var PERF = /[?&]perf=1/.test(location.search);
-var perfS = {apply: [], patched: 0, full: 0, bytes: 0, lean: 0, frames: [], why: {}};
+var perfS = {apply: [], patched: 0, full: 0, bytes: 0, lean: 0, frames: [], why: {},
+             tabs: [], tabWait: [], taps: 0, missed: {}};
+/* Вкладки (1.60, для п.9 и 20 бэклога): от нажатия до новой вкладки на
+   экране - всего и из них ожидание ответа; нажатия, которые панель не
+   приняла, и почему (защита после окна, прокрутка перед касанием). */
+var perfTab = null;
+function perfTabStart(cached){ if (PERF) perfTab = {t0: perfNow(), seq: reqSeq + 1, cached: cached}; }
+function perfTabDone(seq, applyMs){
+  if (!PERF || !perfTab || seq < perfTab.seq) return;
+  var all = perfNow() - perfTab.t0;
+  perfS.tabs.push(all); perfS.tabWait.push(Math.max(0, all - applyMs));
+  if (perfS.tabs.length > 30) { perfS.tabs.shift(); perfS.tabWait.shift(); }
+  perfTab = null; perfDraw();
+}
+function perfTap(ok, t0){
+  if (!PERF) return;
+  perfS.taps++;
+  if (!ok) {
+    var why = (Date.now() < shieldUntil || t0 < shieldUntil) ? 'защита' : 'прокрутка';
+    perfS.missed[why] = (perfS.missed[why] || 0) + 1;
+  }
+  perfDraw();
+}
 function perfNow(){ return window.performance && performance.now ? performance.now() : Date.now(); }
 function perfApply(ms, patched, len){
   perfS.apply.push(ms); if (perfS.apply.length > 30) perfS.apply.shift();
@@ -587,6 +612,11 @@ function perfWhyText(){
   var out = [];
   for (var k in perfS.why) if (perfS.why.hasOwnProperty(k)) out.push(k + ' ' + perfS.why[k]);
   return out.length ? ' (' + out.join(', ') + ')' : '';
+}
+function perfMissedText(){
+  var out = [], n = 0;
+  for (var k in perfS.missed) if (perfS.missed.hasOwnProperty(k)) { out.push(k + ' ' + perfS.missed[k]); n += perfS.missed[k]; }
+  return n + (out.length ? ' (' + out.join(', ') + ')' : '');
 }
 function perfNet(len, lean){ perfS.bytes = len; if (lean) perfS.lean++; }
 function perfStat(a){
@@ -628,7 +658,10 @@ function perfDraw(){
     + '\n  точечно ' + perfS.patched + ' (со сдвигом ' + perfMerged + (TEXT_PARTS ? (HTML_PARTS ? '' : ', части XML') : ', через разбор') + '), целиком ' + perfS.full + perfWhyText()
     + ', без головы ' + perfS.lean
     + ', последнее ' + Math.round(perfS.bytes / 1024) + ' КБ'
-    + '\nпрокрутка: кадр ' + perfStat(perfS.frames) + (perfS.frames.length ? '' : ' — полистайте панель');
+    + '\nпрокрутка: кадр ' + perfStat(perfS.frames) + (perfS.frames.length ? '' : ' — полистайте панель')
+    + '\nвкладка: ' + (perfS.tabs.length ? perfStat(perfS.tabs) + ', из них ждали ответ ' + perfStat(perfS.tabWait)
+                                           : '— переключите вкладки')
+    + '\nнажатий по заголовкам ' + perfS.taps + ', не принято ' + perfMissedText();
 }
 /* Кадры прокрутки: пока страницу листают, меряем промежутки между кадрами. */
 var perfLast = 0, perfUntil = 0, perfRaf = false;
@@ -728,8 +761,19 @@ if (window.PointerEvent) {
 }
 // Палец «на экране» дольше десяти секунд - значит, отпускание потерялось
 // (ушли из окна, переключили приложение). Обновления не должны встать
-// из-за этого навсегда.
-function fingerHeld(){ return fingerDown && Date.now() - lastDown < 10000; }
+// из-за этого навсегда. Но палец, который ещё двигается, - на месте: до
+// 1.59 уставку вели по плитке дольше 10 с, обновление подменяло плитку
+// серверной, и цифра слетала на прежнюю. Идущий жест держит тоже.
+var fingerMoveAt = 0;
+(window.PointerEvent ? ['pointermove'] : ['touchmove', 'mousemove']).forEach(function(n){
+  document.addEventListener(n, function(){ if (fingerDown) fingerMoveAt = Date.now(); },
+                            {capture: true, passive: true});
+});
+function fingerHeld(){
+  if (!fingerDown) return false;
+  if (typeof press !== 'undefined' && press && press.drag) return true;
+  return Date.now() - Math.max(lastDown, fingerMoveAt) < 10000;
+}
 
 /* Координаты события.
    ВАЖНО про touchend: у него список touches ПУСТОЙ - палец уже оторван.

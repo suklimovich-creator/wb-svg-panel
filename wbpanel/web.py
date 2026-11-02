@@ -233,7 +233,7 @@ def _seconds(value):
     return max(0, int(parse_duration(value)))
 
 
-def idle_of(panel_conf):
+def idle_of(panel_conf, name=None):
     """
     Бездействие (1.57): через сколько секунд без касаний закрывается окно
     на весь экран (pad_close) и включается заставка (screensaver), её
@@ -245,22 +245,45 @@ def idle_of(panel_conf):
           panel: saver         # своя панель заставки (графики, дела...)
           image: data/saver.jpg   # фон; иначе wallpaper:, иначе тёмный
           clock: true          # без панели - да, с панелью - нет
+          panels: [main, hall] # (1.58) общая заставка - только на этих
+
+    С 1.58 заставка - дело панели: у панели своя `screensaver:` (или
+    `screensaver: none` - нет), общая из конфига - только на панелях из
+    `panels:` (не задано - на всех, как было). Сама панель заставки
+    заставку не показывает. Ширина заставки - как у панели, на которой
+    она открылась (`cols`).
     """
     pc = panel_conf or {}
+    own = "screensaver" in pc
     saver = pc.get("screensaver", config.get("screensaver") if config else None)
     if not isinstance(saver, dict):
         saver = {"after": saver}
+    only = saver.get("panels")
+    if not own and name and only:
+        if isinstance(only, str):
+            only = [only]
+        if name not in [str(x) for x in only]:
+            saver = {"after": 0}
     raw = saver.get("image") or pc.get("wallpaper", config.get("wallpaper") if config else None)
     img = wallpaper.url_for(wallpaper.resolve(raw, BASE_DIR), sharp=True) if raw else None
     panel = str(saver.get("panel") or "")
     if panel and panel not in ((config.panels or {}) if config else {}):
         panel = ""
+    after = _seconds(saver.get("after"))
+    if name and panel and name == panel:
+        after = 0                           # заставка на самой заставке - ни к чему
+    try:
+        cols = int(pc.get("cols", 4))
+    except (TypeError, ValueError):
+        cols = 4
     return {"pad_close": _seconds(pc.get("pad_close", config.get("pad_close") if config else None)),
-            "saver": _seconds(saver.get("after")),
+            "saver": after,
             "saver_img": img or "",
             "saver_panel": panel,
             # своя тема у панели заставки - её; иначе - тема устройства
             "saver_theme": bool(panel and (config.panels.get(panel) or {}).get("theme")),
+            # плиток в ряд у этой панели: заставка - той же ширины (1.58)
+            "cols": cols,
             # часы поверх - если панели заставки нет: у панели свои в шапке
             "saver_clock": saver.get("clock", not panel) is not False and bool(saver.get("clock", not panel))}
 

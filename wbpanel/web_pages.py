@@ -319,7 +319,7 @@ def panel_html(name):
                 # шаг отправки «сразу», мс (1.52): под скорость диммера
                 "ms": panel_conf.get("live_interval", web.config.get("live_interval", 300)),
                 # бездействие (1.57): окно закрывается само, заставка
-                **web.idle_of(panel_conf)})),
+                **web.idle_of(panel_conf, name)})),
             ("__APP_JS__", json.dumps(__version__)),
             ("__APP__", html.escape(__version__)),
             # Список тем для меню и цвета полей страницы - из данных тем,

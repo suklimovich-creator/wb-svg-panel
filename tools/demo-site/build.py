@@ -59,6 +59,10 @@ def demo_config(config_path, panel, theme=None):
     import yaml
     from wbpanel import demo
     from wbpanel.config import Config
+    from wbpanel import yamlx
+    # в демо (публичная страница) секретов нет: !secret - пустая строка (1.61)
+    yamlx.use_secrets = False
+    yamlx.extra_dir = os.path.dirname(os.path.abspath(config_path))
     src = open(config_path, encoding="utf-8").read()
     tmp = tempfile.mkdtemp(prefix="wbdemo-")
     path = os.path.join(tmp, "config.yaml")

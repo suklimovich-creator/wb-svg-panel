@@ -44,11 +44,18 @@ document.addEventListener('click', function(e){
 /* Закрывает только касание, которое и началось на фоне. Иначе жест,
    начатый на пульте и отпущенный мимо карточки, - потянули дугу
    термостата за край - закрывал окно вместе с недоведённой уставкой. */
-var ovDownBg = false;
+/* Старый планшет (1.59): короткое касание термостата открывало окно, и оно
+   тут же закрывалось. Окно строится долго, и «мышиные» события, которые
+   браузер досылает после касания, приходили уже после 800 мс глушения
+   (core.js) - в фон нового окна: mousedown + click по фону = закрыть.
+   Теперь окно в первые SHIELD_MS после открытия фоном не закрывается, а
+   глушение мыши считается от конца открытия. */
+var ovDownBg = false, ovOpenAt = 0;
+function ovFresh(){ return Date.now() - ovOpenAt < SHIELD_MS; }
 (window.PointerEvent ? ['pointerdown'] : ['touchstart', 'mousedown']).forEach(function(n){
-  ov.addEventListener(n, function(e){ ovDownBg = e.target === ov; }, true);
+  ov.addEventListener(n, function(e){ ovDownBg = e.target === ov && !ovFresh(); }, true);
 });
-ov.addEventListener('click', function(e){ if(e.target===ov && ovDownBg) closeOv(); });
+ov.addEventListener('click', function(e){ if(e.target===ov && ovDownBg && !ovFresh()) closeOv(); });
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeOv(); });
 
 /* Тема панели по классу корня SVG - как у полей страницы (pageBg). */
@@ -204,6 +211,8 @@ function openOv(nodes){
   if(press){ clearTimeout(press.timer); press = null; }
   host.classList.add('shield');
   document.documentElement.classList.add('ovlock');
+  ovOpenAt = Date.now();
+  if (!window.PointerEvent) lastTouchAt = ovOpenAt;
 }
 function el(tag, cls, text){ var e=document.createElement(tag);
   if(cls) e.className=cls; if(text) e.textContent=text; return e; }

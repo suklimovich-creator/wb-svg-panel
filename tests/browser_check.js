@@ -239,7 +239,7 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       await p.context().close();
     }
 
-    // 13. жесты на плитках (с 1.53 - как в пульте, от точки касания):
+    // 13. жесты на плитках (с 1.53 - как в пульте; термостат с 1.59 - лучом):
     //     диммер вверх - ярче, термостат - поворот ручки по кругу,
     //     кондиционер - шкала за пальцем (влево - теплее), шар вбок - теплота
     {
@@ -278,6 +278,22 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
                  await swipe('[data-kind="thermostat"]', knob),
                  await swipe('[data-kind="ac"]', line(-70, 0)),
                  await swipe('[data-kind="light"]', line(60, 0))];
+      // 1.59: термостат - луч от оси к пальцу и есть уставка (18° при шкале
+      // 14..30 - четверть дуги от начала, 148° + 61°); колесо кондиционера
+      // под пальцем - плавно (raw не по шагу)
+      const ray = (k, b) => {
+        const cx = b.x + b.width / 2, cy = b.y + b.height * 0.585, r = 0.33 * b.width * k / 8;
+        const a = (148 + 244 * (18 - 14) / 16) * Math.PI / 180;
+        return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+      };
+      await swipe('[data-kind="thermostat"]', ray);
+      {
+        const el = await p.$('[data-kind="ac"]'), b = await el.boundingBox();
+        await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.mouse.down();
+        for (let k = 1; k <= 5; k++) { await p.mouse.move(b.x + b.width / 2 - 7 * k, b.y + b.height / 2); await p.waitForTimeout(30); }
+        st.acRaw = await p.evaluate(() => press && press.drag ? press.drag.m.raw : null);
+        await p.mouse.up(); await p.waitForTimeout(900);
+      }
       const sent = (await log()).slice(n0);
       const val = topic => sent.filter(s => s[0] === topic).map(s => +s[1]);
       const bright = sent.filter(s => /Channel 1\/on$/.test(s[0])).map(s => +s[1]);
@@ -285,9 +301,28 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
       st.toggled = sent.some(s => s[0] === '/devices/dm/controls/K1/on' && s[1] === '0');
       ok('жесты на плитках', /tdrag/.test(st.cls) && st.ta === 'none'
          && bright.length && bright[bright.length - 1] > st.lvl * 100
-         && st.tgt2.length === 1 && st.tgt2[0] > st.tgt
-         && st.ac2.length === 1 && st.ac2[0] > st.ac
+         && st.tgt2.length === 2 && st.tgt2[0] > st.tgt && st.tgt2[1] === 18
+         && st.ac2.length >= 1 && st.ac2[0] > st.ac
+         && typeof st.acRaw === 'number' && Math.abs(st.acRaw - Math.round(st.acRaw * 2) / 2) > 0.01
          && st.temp2.length === 1 && !st.toggled && st.live.every(Boolean), JSON.stringify(st));
+      // 1.59: окно не закрывается запоздалым касанием по фону сразу после
+      // открытия (старый планшет); идущий жест держит обновления и дольше 10 с
+      const guard = await p.evaluate(async () => {
+        openPad(document.querySelector('[data-kind="thermostat"]'));
+        ov.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+        ov.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+        const stays = ov.classList.contains('open');
+        await new Promise(r => setTimeout(r, 600));
+        ov.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+        ov.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+        const closes = !ov.classList.contains('open');
+        const keep = [fingerDown, lastDown, press, fingerMoveAt]; fingerMoveAt = 0;
+        fingerDown = true; lastDown = Date.now() - 20000; press = {drag: {}};
+        const held = fingerHeld(); press = null; const lost = !fingerHeld();
+        fingerDown = keep[0]; lastDown = keep[1]; press = keep[2]; fingerMoveAt = keep[3];
+        return {stays, closes, held, lost};
+      });
+      ok('окно и долгий жест', guard.stays && guard.closes && guard.held && guard.lost, JSON.stringify(guard));
       await p.context().close();
     }
 
@@ -357,12 +392,24 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
         const s = document.getElementById('saver'), i = s.querySelector('.sv-panel');
         return {on: s.className, bg: getComputedStyle(s).backgroundImage, img: i ? i.naturalWidth : 0};
       });
+      // 1.58: картинки внутри панели заставки (кадр камеры) - data:-адресом,
+      // ширина - как у панели (cols), выбор устройства не включает
+      // заставку там, где её нет в конфиге
+      const extra = await p.evaluate(async () => {
+        const src = getComputedStyle(document.getElementById('saver')).backgroundImage.replace(/^url\("?|"?\)$/g, '');
+        const svg = await saverInline('<svg><image href="' + src + '" x="0"/></svg>');
+        const keep = CONTROLS.saver; CONTROLS.saver = 0; SAVER_MODE = '60';
+        const off = saverSec(); CONTROLS.saver = keep; SAVER_MODE = '0';
+        return {data: /href="data:image\/jpeg;base64,/.test(svg), cols: saverCols(), off: off};
+      });
+      sv.extra = extra;
       await p.mouse.click(sw[0], sw[1]);
       await p.waitForTimeout(900);
       const after = await p.evaluate(() => ({on: document.getElementById('saver').className,
         st: document.querySelector('#host [data-kind="switch"]').getAttribute('data-state')}));
       ok('бездействие: окно и заставка', opened && closed && /shown/.test(sv.on) && /wall\/[0-9a-f]{12}-s\.jpg/.test(sv.bg)
-         && sv.img > 100 && !/on/.test(after.on) && after.st === sw[2],
+         && sv.img > 100 && !/on/.test(after.on) && after.st === sw[2]
+         && extra.data && +extra.cols > 0 && extra.off === 0,
          JSON.stringify({opened, closed, sv, after, before: sw[2]}));
       await p.context().close();
     }

@@ -6,6 +6,17 @@
 # контроллера с текущими значениями. Здесь показан каждый тип плитки по разу.
 #
 # Конфиг перечитывается сам, как только меняется файл: правите — жмёте F5.
+#
+# Пароли и закрытые ссылки (камеры, календари) - в secrets.yaml рядом с этим
+# файлом, а здесь - !secret имя (с 1.61, как в Home Assistant). Тогда
+# config.yaml можно показывать и присылать на правку. Кусок конфига можно
+# вынести в отдельный файл: calendars: !include calendars.yaml
+#
+#   # secrets.yaml
+#   hall_camera_url: rtsp://admin:пароль@192.168.1.64/Streaming/Channels/101
+#   # config.yaml
+#   cameras:
+#     hall: {url: !secret hall_camera_url}
 
 theme: light           # light | sprut | autumn | retro | noir | neumo | glass-day | cloud | dark | sprut-dark | graphite | noir-dark | glass | auto
 # Свои темы (с 1.25) - файлы в папке themes/ рядом с этим файлом, см.
@@ -58,6 +69,8 @@ interactive: false
 #   panel: saver            # своя панель заставки (графики, дела, термостаты)
 #   image: data/saver.jpg   # фон; иначе wallpaper:, иначе тёмный экран
 #   clock: true             # без panel - да, с panel - нет
+#   panels: [main]          # (1.58) общая - только на этих панелях; у панели
+#                           # может быть своя screensaver: (или none)
 
 # Строка «Включено / Выключено» под названием плитки. По умолчанию скрыта:
 # состояние видно по оранжевой рамке и по тумблеру.

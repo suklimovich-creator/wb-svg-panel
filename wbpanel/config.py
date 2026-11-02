@@ -13,6 +13,7 @@ import threading
 from .registry import channels_of
 from .status import status_channels, status_entries
 from . import tiles          # noqa: F401  наполняет реестр типами плиток
+from . import yamlx          # !secret и !include (1.61)
 
 
 # ==========================================================================
@@ -31,15 +32,15 @@ class Config:
 
     def reload(self, force=False):
         with self._lock:
-            try:
-                mtime = os.path.getmtime(self.path)
-            except OSError:
+            if not os.path.exists(self.path):
                 return
+            # вместе с secrets.yaml и кусками !include (1.61)
+            mtime = yamlx.stamp(self.path)
             if not force and mtime == self._mtime:
                 return
-            with open(self.path, "r", encoding="utf-8") as fh:
-                self.data = yaml.safe_load(fh) or {}
-            self._mtime = mtime
+            yamlx.default_dir = os.path.dirname(os.path.abspath(self.path))
+            self.data = yamlx.load(self.path) or {}
+            self._mtime = yamlx.stamp(self.path)
             log.info("конфиг загружен: %s", self.path)
 
     def get(self, key, default=None):

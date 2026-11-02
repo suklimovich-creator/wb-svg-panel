@@ -77,7 +77,7 @@ function bind(root, partOnly){
   for (var nv = 0; nv < navs.length; nv++) navs[nv].onclick = navTap;
   var folds = within(root, '[data-section]');
   for (var f = 0; f < folds.length; f++) {
-    folds[f].onclick = function(){ if (tapOk()) toggleSection(this); };
+    folds[f].onclick = function(){ var t0 = lastDown, ok = tapOk(); perfTap(ok, t0); if (ok) toggleSection(this); };
   }
   if (!partOnly) bindPanel();
 
@@ -447,7 +447,10 @@ function padThermostat(node){
     value = Math.max(tlo, Math.min(thi, Math.round(raw / step) * step));
     paint();
   }
-  function begin(ev){ dragging = true; at(ev); }
-  function done(){ dragging = false; send(); }
+  /* Своя цифра держится и во время жеста, и до отправки (1.59): между
+     отпусканием и send() (350 мс) sync() успевал вернуть серверную уставку,
+     и уходила она - прежняя. */
+  function begin(ev){ dragging = true; quietUntil = Date.now() + 3000; at(ev); }
+  function done(){ dragging = false; quietUntil = Date.now() + 3000; send(); }
   drag(wrap, at, done, begin);
 }

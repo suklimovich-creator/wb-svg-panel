@@ -220,6 +220,13 @@ def cmd_from_config(bus, path):
         import yaml
     except ImportError:
         sys.exit("Нет PyYAML:  apt install python3-yaml")
+    try:                                   # !secret и !include (1.61)
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
+        from wbpanel import yamlx  # noqa: F401
+    except ImportError:
+        pass
     try:
         cfg = yaml.safe_load(open(path, encoding="utf-8")) or {}
     except IOError as exc:

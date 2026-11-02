@@ -96,6 +96,15 @@ if [ -d .git ] && command -v git >/dev/null 2>&1; then
     else
         echo "ok   config.yaml не в индексе"
     fi
+    # secrets.yaml (1.61) - пароли и закрытые ссылки, только на контроллере
+    if [ -n "$(git ls-files 'secrets.*' '*/secrets.*' 2>/dev/null)" ]; then
+        FOUND=1
+        echo
+        echo "!! secrets.yaml под контролем git"
+        echo "   -> git rm --cached secrets.yaml"
+    else
+        echo "ok   secrets.yaml не в индексе"
+    fi
     # Списки - личное: покупки, дела. Лежат в data/, который в .gitignore.
     if [ -n "$(git ls-files data/ 2>/dev/null)" ]; then
         FOUND=1

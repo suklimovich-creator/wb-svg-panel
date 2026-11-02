@@ -88,6 +88,12 @@ print("=" * 72)
 wanted = set()
 try:
     import yaml
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(0, os.path.dirname(os.path.abspath(CONF)))
+        from wbpanel import yamlx  # noqa: F401  !secret и !include (1.61)
+    except ImportError:
+        pass
     with open(CONF, encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh) or {}
     panels = cfg.get("panels", {}) or {}

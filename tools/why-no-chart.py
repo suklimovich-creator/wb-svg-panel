@@ -33,6 +33,11 @@ except Exception as exc:                                 # noqa: BLE001
     sys.exit("не удалось загрузить panel.py: %s" % exc)
 
 import yaml                                              # noqa: E402
+try:                                                     # !secret и !include (1.61)
+    sys.path.insert(0, os.path.dirname(HERE))
+    from wbpanel import yamlx                            # noqa: E402,F401
+except ImportError:
+    pass
 
 
 

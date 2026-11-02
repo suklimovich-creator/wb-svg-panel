@@ -9,7 +9,12 @@
 var idleAt = Date.now(), saverOn = false, saverEl = null, saverMin = -1;
 var saverUrl = null, saverTimer = null, saverSeq = 0;
 function padCloseSec(){ return PADCLOSE_MODE === '' ? (+CONTROLS.pad_close || 0) : (+PADCLOSE_MODE || 0); }
-function saverSec(){ return SAVER_MODE === '' ? (+CONTROLS.saver || 0) : (+SAVER_MODE || 0); }
+/* Заставка - дело панели (1.58): где в конфиге её нет, выбор устройства
+   в шестерёнке её не включает - он только меняет срок там, где она есть. */
+function saverSec(){
+  if (!(+CONTROLS.saver > 0)) return 0;
+  return SAVER_MODE === '' ? +CONTROLS.saver : (+SAVER_MODE || 0);
+}
 function idleTouch(){ idleAt = Date.now(); }
 ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'wheel'].forEach(function(n){
   document.addEventListener(n, idleTouch, true);
@@ -80,17 +85,45 @@ function saverShow(){
 }
 /* Панель заставки - картинкой (<img>): своих стилей и обработчиков в
    документ она не приносит, с основной панелью не путается. Раз в 30 с
-   - свежая: графики и часы в шапке идут. */
+   - свежая: графики и часы в шапке идут.
+   Ширина (1.58) - как у панели, на которой заставка открылась: те же
+   плиток в ряд (выбор устройства, иначе cols панели), картинка во всю
+   ширину от верха, как сама панель; не влезла по высоте - вписана.
+   Внешние картинки внутри <img src=svg> браузер не грузит - кадр камеры
+   (1.58) страница берёт сама и вставляет в SVG как data:-адрес. */
+function saverCols(){ return COLS || CONTROLS.cols || ''; }
+function saverInline(svg){
+  var re = /(<image\b[^>]*?\shref=")([^"]+)(")/g, urls = [], m;
+  while ((m = re.exec(svg))) if (!/^data:/.test(m[2]) && urls.indexOf(m[2]) < 0) urls.push(m[2]);
+  if (!urls.length || typeof FileReader === 'undefined') return Promise.resolve(svg);
+  return Promise.all(urls.map(function(u){
+    return fetch(u.replace(/&amp;/g, '&'), {cache: 'no-store'})
+      .then(function(r){ return r.ok ? r.blob() : null; })
+      .then(function(b){
+        if (!b) return '';
+        return new Promise(function(ok){
+          var fr = new FileReader();
+          fr.onload = function(){ ok(String(fr.result || '')); };
+          fr.onerror = function(){ ok(''); };
+          fr.readAsDataURL(b);
+        });
+      })
+      .catch(function(){ return ''; });
+  })).then(function(data){
+    for (var i = 0; i < urls.length; i++) if (data[i]) svg = svg.split('"' + urls[i] + '"').join('"' + data[i] + '"');
+    return svg;
+  });
+}
 function saverPanel(){
   clearTimeout(saverTimer);
   if (!saverOn || !CONTROLS.saver_panel) return;
-  var seq = ++saverSeq;
-  // Тема - устройства, если у панели заставки нет своей; на телефоне в
-  // две колонки: плитки крупнее, панель всё равно вписана в экран.
+  var seq = ++saverSeq, cols = saverCols();
+  // Тема - устройства, если у панели заставки нет своей.
   fetch(encodeURIComponent(CONTROLS.saver_panel) + '.svg?inline=1' + (LITE ? '&lite=1' : '') +
         (THEME && !CONTROLS.saver_theme ? '&theme=' + THEME : '') +
-        (window.innerWidth < 600 ? '&cols=2' : '') + '&t=' + Date.now(), {cache: 'no-store'})
+        (cols ? '&cols=' + cols : '') + '&t=' + Date.now(), {cache: 'no-store'})
     .then(function(r){ return r.ok ? r.text() : ''; })
+    .then(saverInline)
     .then(function(svg){
       if (!saverOn || seq !== saverSeq || svg.indexOf('<svg') < 0) return;
       var img = saverEl.querySelector('.sv-panel');

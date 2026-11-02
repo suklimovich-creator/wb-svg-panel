@@ -173,8 +173,9 @@ LIVE_TILE.thermostat = function(node, m){
   // ручка поворачивается целиком: зубцы, блик и указатель
   var turn = kg.querySelectorAll('use, .kface');
   var a0 = deg(m.v0);
-  return {set: function(v){
-    var at = deg(v);
+  // raw - плавное положение под пальцем (1.59), v - уставка по шагу
+  return {set: function(v, _x, raw){
+    var at = deg(raw === undefined || raw === null ? v : raw);
     fill.setAttribute('d', ltArc(cx, cy, ra, START, at));
     if (dot) { var p = ltPt(cx, cy, ra, at); dot.setAttribute('cx', ltR(p[0])); dot.setAttribute('cy', ltR(p[1])); }
     if (ptr) {
@@ -205,8 +206,10 @@ LIVE_TILE.ac = function(node, m){
   var rim = g.querySelector('.acw-rim'), num = g.querySelector('.acw-num');
   var segs = g.querySelectorAll('.acw-glow, .acw-glow2, .acw-seg'), dotC = g.querySelector('.acw-dot');
   function pol(r, a){ return [cx + r * Math.sin(a), cy + r * Math.cos(a)]; }
-  return {set: function(v){
-    function ang(t){ return (t - v) * ad; }
+  // raw - плавное положение колеса под пальцем (1.59), v - уставка по шагу
+  return {set: function(v, _x, raw){
+    var pos = raw === undefined || raw === null ? v : raw;
+    function ang(t){ return (t - pos) * ad; }
     ltDrop(g.querySelectorAll('.acw-tk, .acw-lab'));
     var n = Math.round((hi - lo) * 2);
     for (var i = 0; i <= n; i++) {

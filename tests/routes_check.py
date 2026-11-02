@@ -133,6 +133,36 @@ def main():
     if not any(t == "/devices/sw/controls/K1/on" for t, _v in sent):
         bad += 1
         print("FAIL публикация не дошла до брокера")
+    # 1.58: заставка - дело панели: общая только на panels:, своя у панели
+    # важнее, на самой панели заставки её нет, ширина - cols панели
+    _keep = cfg.get("screensaver")
+    cfg.data["screensaver"] = {"after": "5m", "panel": "obj", "panels": ["gal"]}
+    _i = [web.idle_of(cfg.panels.get(n) or {}, n)["saver"] for n in ("gal", "ac_light", "obj")]
+    _own = web.idle_of({"screensaver": "1m", "cols": 6}, "ac_light")
+    cfg.data["screensaver"] = _keep
+    if _i != [300, 0, 0] or _own["saver"] != 60 or _own["cols"] != 6:
+        print("FAIL заставка по панелям:", _i, _own)
+        bad += 1
+
+    # 1.61: !secret и !include, перечитывание по правке secrets.yaml
+    import tempfile, time as _t
+    from wbpanel.config import Config as _C
+    _d = tempfile.mkdtemp()
+    with open(os.path.join(_d, "config.yaml"), "w") as _f:
+        _f.write("cams: {hall: !secret cam}\ncal: !include cal.yaml\npanels: {}\n")
+    with open(os.path.join(_d, "secrets.yaml"), "w") as _f:
+        _f.write("cam: A\nics: B\n")
+    with open(os.path.join(_d, "cal.yaml"), "w") as _f:
+        _f.write("home: !secret ics\n")
+    _c = _C(os.path.join(_d, "config.yaml"))
+    _a = (_c.data["cams"]["hall"], _c.data["cal"]["home"])
+    _t.sleep(1.1)
+    with open(os.path.join(_d, "secrets.yaml"), "w") as _f:
+        _f.write("cam: C\nics: D\n")
+    _c.reload()
+    if _a != ("A", "B") or (_c.data["cams"]["hall"], _c.data["cal"]["home"]) != ("C", "D"):
+        print("FAIL секреты:", _a, _c.data)
+        bad += 1
     print("адресов: %d, проверок: %d%s" % (len(rules), len(CASES),
                                             ", ошибок: %d" % bad if bad else " - всё отвечает"))
     return 1 if bad else 0

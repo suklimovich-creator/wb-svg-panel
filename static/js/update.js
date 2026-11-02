@@ -335,7 +335,7 @@ function applySvg(svg, seq){
   // Облегчённо: вращение вентиляторов и круги на воде стоят на месте.
   var shown = host.querySelector('svg');
   if (LITE && shown && shown.pauseAnimations) shown.pauseAnimations();
-  if (PERF) perfApply(perfNow() - t0, patched, svg.length);
+  if (PERF) { perfApply(perfNow() - t0, patched, svg.length); perfTabDone(seq, perfNow() - t0); }
   pageBg(root);
   dockBar();
   glassScroll();

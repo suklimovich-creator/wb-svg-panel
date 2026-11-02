@@ -97,30 +97,25 @@ function tdModel(node){
     if (isNaN(t)) return null;
     var m = tdSetpoint(t, tdNum(node, 'data-step', .5), tdNum(node, 'data-min', 5),
                        tdNum(node, 'data-max', 35), node.getAttribute('data-topic'));
-    // Ручку поворачивают по кругу, как в пульте: угол пальца вокруг её оси
-    // (геометрия skeuo.knob_dial: центр на 0,585 высоты). Поворот считается
-    // от точки касания, а не прыжком в неё.
+    // С 1.59 - как в пульте: луч от оси ручки к пальцу и есть уставка
+    // (геометрия skeuo.knob_dial: центр на 0,585 высоты, дуга от START на
+    // SWEEP градусов). Ручка и дуга идут за пальцем плавно (m.raw), цифра -
+    // по шагу уставки. У самой оси угол скачет - там уставка стоит.
     var lo = tdNum(node, 'data-scale-min', 14), hi = tdNum(node, 'data-scale-max', 30);
-    var sweep = tdNum(node, 'data-dial-sweep', 244);
+    var start = tdNum(node, 'data-dial-start', 148), sweep = tdNum(node, 'data-dial-sweep', 244);
     var cx = G.left + G.w / 2 * G.k, cy = G.top + G.h * 0.585 * G.k;
     var rad = 0.33 * Math.min(G.w, G.h) * G.k;
-    var turn = 0, last = null;
     m.axis = 'r';
     m.at = function(dx, dy, pt){
       var ax = pt.clientX - cx, ay = pt.clientY - cy;
-      if (Math.sqrt(ax * ax + ay * ay) < rad * 0.25) {
-        // у самой оси угол скачет - там ведём вверх-вниз
-        this.v = tdClamp(tdSnap(t - dy / 22 * this.step, this.step), this.min, this.max);
-        last = null; return;
-      }
-      var a = Math.atan2(ay, ax) * 180 / Math.PI;
-      if (last !== null) {
-        var d = a - last;
-        if (d > 180) d -= 360; else if (d < -180) d += 360;
-        turn += d;
-      }
-      last = a;
-      this.v = tdClamp(tdSnap(t + turn / sweep * (hi - lo), this.step), this.min, this.max);
+      if (Math.sqrt(ax * ax + ay * ay) < rad * 0.25) return;
+      var rel = Math.atan2(ay, ax) * 180 / Math.PI - start;
+      while (rel < 0) rel += 360;
+      while (rel >= 360) rel -= 360;
+      // палец в нижнем разрыве дуги - к ближнему концу, а не прыжком
+      if (rel > sweep) rel = (rel - sweep < 360 - rel) ? sweep : 0;
+      this.raw = tdClamp(lo + (hi - lo) * rel / sweep, this.min, this.max);
+      this.v = tdClamp(tdSnap(this.raw, this.step), this.min, this.max);
     };
     return m;
   }
@@ -135,7 +130,12 @@ function tdModel(node){
     var fs = lab ? parseFloat(lab.getAttribute('font-size')) / (lab.classList.contains('sel') ? 13 : 11) : 1;
     var pxdeg = Math.max(18, 34 * (fs || 1) * G.k);
     ma.axis = 'x';
-    ma.at = function(dx){ this.v = tdClamp(tdSnap(a0 - dx / pxdeg, this.step), this.min, this.max); };
+    // Колесо едет за пальцем плавно (m.raw, 1.59), цифра - по шагу: раньше
+    // и колесо прыгало с деления на деление.
+    ma.at = function(dx){
+      this.raw = tdClamp(a0 - dx / pxdeg, this.min, this.max);
+      this.v = tdClamp(tdSnap(this.raw, this.step), this.min, this.max);
+    };
     return ma;
   }
   if (kind === 'fancoil') {
@@ -243,6 +243,7 @@ function tdEnd(p, node){
   var g = p && p.drag;
   if (!g) return false;
   var m = g.m;
+  m.raw = undefined;            // отпустили - рисунок встаёт на шаг уставки
   tdPaint(g, node, true);
   if (tdChanged(m)) {
     // Живая плитка остаётся такой, какой её довели, пока прибор не
@@ -273,7 +274,7 @@ function tdAbort(p, node){
 function tdPaint(g, node, now){
   function paint(){
     g.raf = 0;
-    if (g.lt) { try { g.lt.set(g.m.v, g.m.x); return; } catch (e) { g.lt = null; } }
+    if (g.lt) { try { g.lt.set(g.m.v, g.m.x, g.m.raw); return; } catch (e) { g.lt = null; } }
     tdShow(g, node);
   }
   if (now) { if (g.raf) { (window.cancelAnimationFrame || clearTimeout)(g.raf); } paint(); return; }

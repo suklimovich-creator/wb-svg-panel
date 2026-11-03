@@ -299,6 +299,9 @@ class Camera(Tile):
             # чем переподключиться: сервер закрывает соединение сам, и без
             # переподключения картинка тихо застывает.
             "life": int(cam.stream_limit * 1000) if cam.stream_limit else 0,
+            # refresh камеры (1.69): чаще обновления панели кадр на плитке
+            # и в заставке меняет сама страница
+            "every": cam.refresh,
             "icon": ctx.opt("icon", "camera"),
             "status": ctx.opt("subtitle", ""),
             # Подпись поверх кадра, а не под ним: плитка занята картинкой.
@@ -316,7 +319,8 @@ class Camera(Tile):
         return {"cam": data.get("stream") or data.get("poll"),
                 "cam_poll": data.get("poll"),
                 "cam_live": "1" if data.get("stream") else "0",
-                "cam_life": str(data.get("life") or 0)}
+                "cam_life": str(data.get("life") or 0),
+                "cam_every": ("%g" % data["every"]) if data.get("every") else ""}
 
 
 @tile("link")

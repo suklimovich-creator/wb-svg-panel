@@ -80,6 +80,7 @@ function saverShow(){
   saverOn = true;
   saverEl.className = 'on';
   saverTick();
+  saverVer = null; saverLast = '';
   saverPanel();
   setTimeout(function(){ if (saverOn) saverEl.className = 'on shown'; }, 30);
 }
@@ -119,21 +120,44 @@ function saverInline(svg){
     return svg;
   });
 }
+/* С 1.69 заставка обновляется, как панель: ждущий запрос с since=версия -
+   сервер отвечает, как только поменялось что-то на панели заставки (или
+   раз в refresh секунд); раньше - раз в 30 с вслепую. Та же картинка -
+   не перерисовываем. */
+var saverVer = null, saverLast = '', saverAbort = null;
 function saverPanel(){
   clearTimeout(saverTimer);
   if (!saverOn || !CONTROLS.saver_panel) return;
-  var seq = ++saverSeq, cols = saverCols();
+  var seq = ++saverSeq, cols = saverCols(), again = 300;
+  saverAbort = window.AbortController ? new AbortController() : null;
   // Тема - устройства, если у панели заставки нет своей.
   fetch(encodeURIComponent(CONTROLS.saver_panel) + '.svg?inline=1' + (LITE ? '&lite=1' : '') +
         (THEME && !CONTROLS.saver_theme ? '&theme=' + THEME : '') +
-        (cols ? '&cols=' + cols : '') + '&t=' + Date.now(), {cache: 'no-store'})
-    .then(function(r){ return r.ok ? r.text() : ''; })
+        (cols ? '&cols=' + cols : '') + (saverVer !== null ? '&since=' + saverVer : '') +
+        '&t=' + Date.now(), saverAbort ? {cache: 'no-store', signal: saverAbort.signal} : {cache: 'no-store'})
+    .then(function(r){
+      var v = r.headers && r.headers.get ? r.headers.get('X-Panel-Version') : null;
+      if (v !== null && v !== '') saverVer = parseInt(v, 10);
+      if (r.status === 204) { again = 2000; return null; }   // мест для ждущих нет
+      if (!r.ok) { again = 5000; return ''; }
+      return r.text();
+    })
+    .then(function(svg){
+      if (svg === null || seq !== saverSeq || !saverOn) return null;
+      if (svg && svg === saverLast) return null;          // ничего не поменялось
+      saverLast = svg;
+      return svg;
+    })
     // управляющие символы (из календаря, списков) XML не разберёт - и
     // картинки не будет вовсе (1.65)
-    .then(function(svg){ return svg.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); })
-    .then(saverInline)
     .then(function(svg){
-      if (!saverOn || seq !== saverSeq || svg.indexOf('<svg') < 0) { saverFail(svg ? 'нет картинки' : 'нет ответа'); return; }
+      if (svg === null) return null;
+      svg = svg.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); saverCamsFrom(svg); return svg;
+    })
+    .then(function(svg){ return svg === null ? null : saverInline(svg); })
+    .then(function(svg){
+      if (svg === null || !saverOn || seq !== saverSeq) return;
+      if (svg.indexOf('<svg') < 0) { saverFail(svg ? 'нет картинки' : 'нет ответа'); again = 5000; return; }
       var img = saverEl.querySelector('.sv-panel');
       if (!img) return;
       // фон вокруг - поле темы панели, если своей картинки нет
@@ -147,6 +171,7 @@ function saverPanel(){
       img.onload = function(){
         if (saverUrl && saverUrl !== url) URL.revokeObjectURL(saverUrl);
         saverUrl = url; img.style.display = ''; saverMarkup(null); saverFail(null);
+        saverCamLayout();
       };
       // Картинкой не разобралась (1.67): показываем ту же панель разметкой
       // (как сама страница - там она открывается), а причину - в подсказке
@@ -168,8 +193,11 @@ function saverPanel(){
       };
       img.src = url;
     })
-    .catch(function(e){ saverFail('ошибка ' + (e && e.message || e)); })
-    .then(function(){ if (saverOn) saverTimer = setTimeout(saverPanel, 30000); });
+    .catch(function(e){
+      if (!saverOn || seq !== saverSeq) return;
+      saverFail('ошибка ' + (e && e.message || e)); again = 5000;
+    })
+    .then(function(){ if (saverOn && seq === saverSeq) saverTimer = setTimeout(saverPanel, again); });
 }
 /* Запасной путь (1.67): панель заставки разметкой поверх фона, без
    обработчиков (pointer-events: none - касание всё равно снимает заставку).
@@ -212,10 +240,86 @@ function saverFail(why){
     if (hint) hint.textContent = 'коснитесь, чтобы вернуться';
   }
 }
+/* ---------- кадр камеры чаще панели (1.69) ----------
+   refresh камеры меньше, чем панель обновляется (10 с) или заставка
+   (30 с), - кадр меняет сама страница: на панели - адрес <image> плитки,
+   в заставке - картинка поверх кадра на месте плитки (заставка - одна
+   картинка, менять в ней кусок нельзя). Новый кадр сначала грузится
+   целиком, потом подменяет старый: без моргания. */
+var saverCams = [], saverVB = null, camLast = {};
+function saverCamsFrom(svg){
+  saverCams = [];
+  var vb = /<svg\b[^>]*viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/.exec(svg);
+  saverVB = vb ? {w: +vb[3], h: +vb[4]} : null;
+  var re = /<g transform="translate\(([-\d.]+),([-\d.]+)\)"[^>]*?data-cam-poll="([^"]+)"[^>]*?data-cam-every="([^"]+)"[^>]*>/g, m;
+  while ((m = re.exec(svg))) {
+    var tail = svg.slice(re.lastIndex, re.lastIndex + 4000);
+    var im = /<image\b[^>]*?\sx="([-\d.]+)"\s+y="([-\d.]+)"\s+width="([\d.]+)"\s+height="([\d.]+)"/.exec(tail);
+    var rim = /rx="([\d.]+)" class="rim"/.exec(tail);
+    if (!im || !(+m[4] < 30)) continue;
+    saverCams.push({poll: m[3].replace(/&amp;/g, '&'), every: +m[4],
+                    x: +m[1] + +im[1], y: +m[2] + +im[2], w: +im[3], h: +im[4], rx: rim ? +rim[1] : 0});
+  }
+}
+function saverCamLayout(){
+  if (!saverEl) return;
+  var old = saverEl.querySelectorAll('.sv-cam'), img = saverEl.querySelector('.sv-panel');
+  var keep = {};
+  for (var i = 0; i < old.length; i++) keep[old[i].getAttribute('data-poll')] = old[i];
+  if (!img || !saverVB || img.style.display === 'none') saverCams = [];
+  var cw = img ? img.clientWidth : 0, ch = img ? img.clientHeight : 0;
+  var k = Math.min(cw / saverVB.w || 0, ch / saverVB.h || 0), ox = (img ? img.offsetLeft : 0) + (cw - saverVB.w * k) / 2,
+      oy = img ? img.offsetTop : 0;
+  for (var j = 0; j < saverCams.length; j++) {
+    var c = saverCams[j], el = keep[c.poll];
+    if (!el) {
+      el = document.createElement('img'); el.className = 'sv-cam'; el.alt = '';
+      el.setAttribute('data-poll', c.poll);
+      saverEl.insertBefore(el, saverEl.querySelector('.sv-hint'));
+    }
+    delete keep[c.poll];
+    el.style.left = Math.round(ox + c.x * k) + 'px'; el.style.top = Math.round(oy + c.y * k) + 'px';
+    el.style.width = Math.round(c.w * k) + 'px'; el.style.height = Math.round(c.h * k) + 'px';
+    el.style.borderRadius = Math.round(c.rx * k) + 'px';
+  }
+  for (var p in keep) if (keep.hasOwnProperty(p)) keep[p].parentNode.removeChild(keep[p]);
+}
+function camFrame(poll, every, put){
+  var now = Date.now();
+  if (camLast[poll] && now - camLast[poll] < every * 1000 - 100) return;
+  camLast[poll] = now;
+  var pre = new Image(), src = poll + (poll.indexOf('?') < 0 ? '?' : '&') + 'live=1&t=' + now;
+  pre.onload = function(){ put(src); };
+  pre.src = src;
+}
+setInterval(function(){
+  if (document.hidden) return;
+  if (saverOn) {
+    for (var i = 0; i < saverCams.length; i++) (function(c){
+      var el = saverEl && saverEl.querySelector('.sv-cam[data-poll="' + c.poll + '"]');
+      if (el) camFrame(c.poll, c.every, function(src){ el.src = src; });
+    })(saverCams[i]);
+    return;
+  }
+  if (ov.classList.contains('open')) return;
+  var tiles = host.querySelectorAll('[data-cam-poll][data-cam-every]');
+  for (var j = 0; j < tiles.length; j++) (function(t){
+    var every = +t.getAttribute('data-cam-every');
+    if (!(every > 0 && every < 10)) return;
+    var image = t.querySelector('image');
+    if (image) camFrame(t.getAttribute('data-cam-poll'), every, function(src){
+      image.setAttribute('href', src);
+      image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', src);
+    });
+  })(tiles[j]);
+}, 250);
+window.addEventListener('resize', function(){ if (saverOn) saverCamLayout(); });
 function saverHide(){
   if (!saverOn) return;
   saverOn = false;
   saverMarkup(null);              // её стили - только пока она на экране
+  saverSeq++;                     // ждущий запрос заставки больше не нужен
+  if (saverAbort) { try { saverAbort.abort(); } catch (e) {} saverAbort = null; }
   clearTimeout(saverTimer);
   saverGone = Date.now();
   idleTouch();

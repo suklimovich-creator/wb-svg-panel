@@ -613,7 +613,16 @@ PointerEvent (`lastTouchAt`) считается от конца открытия
 `svgUrl` с `have=`, `takeSvg`) и кладёт в `svgCache`; `toggleSection`
 показывает их сразу. Не ходит при заставке, открытом окне, скрытой
 странице. Кадр камеры: `/cam/<имя>.jpg` отдаёт тип без параметров,
-`saverInline` пересобирает data:-адрес с чистым типом. `geometry._layout`:
+`saverInline` пересобирает data:-адрес с чистым типом.
+
+**1.69 — заставка ждущим запросом и живой кадр**: `saverPanel` шлёт
+`since=saverVer` (как `poll`), 204 — повтор через 2 с, та же картинка — не
+перерисовывается; `saverHide` обрывает запрос (`AbortController`).
+Камера: `data-cam-every` (refresh камеры) на плитке; таймер в idle.js раз в
+250 мс — на панели меняет `href` у `<image>` плитки (если every < 10), в
+заставке — `<img class="sv-cam">` поверх картинки (`saverCamsFrom` берёт
+место плитки из текста SVG до вставки кадров, `saverCamLayout` — по
+object-fit: contain, сверху). `camFrame` грузит кадр заранее. `geometry._layout`:
 `new_row` поднимает «пол» потока до низа уже расставленных плиток, в ключе
 кэша раскладок.
 

@@ -27,6 +27,10 @@
 (команды в /set) и сырые топики работают без отдельной записи. Плитки,
 которых экран пока не умеет (кондиционер, термостат, шторы, график...),
 приходят типом info - заголовок, значение и строка подробностей.
+С 1.71 у сводки кондиционера, термостата, фанкойла и штор есть поле pad -
+описание пульта: экран открывает его по нажатию на плитку (уставка
+колесом, режимы, положение шторы пальцем). Прошивки до 0.4 поле не читают
+и показывают сводку как раньше.
 
 У плитки панели для экрана можно задать:
     screen_w: 1..3      ширина в колонках экрана (их 3)
@@ -116,8 +120,12 @@ def _dev(dev, name):
 
 
 def _info(title, w, value=None, unit="", digits=1, value_map=None, lines=None,
-          active=None, note=None):
+          active=None, note=None, pad=None, invert=False):
     out = {"type": "info", "title": title, "w": w}
+    if pad:
+        out["pad"] = {k: v for k, v in pad.items() if v not in (None, [], "")}
+    if invert:
+        out["invert"] = True
     if value:
         out["value"] = value
         out["unit"] = unit
@@ -131,6 +139,74 @@ def _info(title, w, value=None, unit="", digits=1, value_map=None, lines=None,
     if note:
         out["note"] = note
     return out
+
+
+# ---------------------------------------------------------------- пульты
+#: Режимы кондиционера на кнопках пульта: значение, подпись, оттенок колеса.
+AC_PAD_MODES = (("cool", "Холод", "cool"), ("heat", "Тепло", "heat"),
+                ("dry", "Осуш.", "cool"), ("fan_only", "Вент.", ""),
+                ("auto", "Авто", ""))
+AC_PAD_FANS = (("low", "1", ""), ("medium", "2", ""), ("high", "3", ""),
+               ("auto", "Авто", ""))
+
+
+def _num(v, default):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _scale(conf, bound, role, lo, hi, step):
+    """Пределы и шаг уставки для колеса: от устройства, сужает конфиг."""
+    b = bound.get(role)
+    if conf.get("step") is not None:
+        step = _num(conf["step"], step)
+    elif b is not None and getattr(b, "step", None):
+        step = float(b.step)
+    a, z = b.limits if b else (None, None)
+    lo = max(_num(a, lo), _num(conf.get("scale_min"), lo)) if a is not None else _num(conf.get("scale_min"), lo)
+    hi = min(_num(z, hi), _num(conf.get("scale_max"), hi)) if z is not None else _num(conf.get("scale_max"), hi)
+    if hi <= lo:
+        hi = lo + step
+    return lo, hi, step
+
+
+def _climate_pad(target, target_cmd, current, lo, hi, step, power=None,
+                 power_cmd=None, on="1", off="0", mode=None, mode_cmd=None,
+                 modes=(), fan=None, fan_cmd=None, fans=(), tone="heat"):
+    if not target or not target_cmd:
+        return None
+    return {"kind": "climate", "target": target, "target_cmd": target_cmd,
+            "current": current, "min": lo, "max": hi, "step": step,
+            "power": power, "power_cmd": power_cmd if power else None,
+            "on": on, "off": off, "tone": tone,
+            "mode": mode if mode_cmd else None, "mode_cmd": mode_cmd,
+            "modes": [list(m) for m in modes] if mode_cmd else [],
+            "fan": fan if fan_cmd else None, "fan_cmd": fan_cmd,
+            "fans": [list(f) for f in fans] if fan_cmd else []}
+
+
+def _fancoil_opts(raw, default, cool_flag=False):
+    from .tiles_fancoil import table
+    out = []
+    for k, v in table(raw, default):
+        tone = ("cool" if v.get("cool") else "" if v.get("valve") is False else "heat") \
+            if cool_flag else ""
+        out.append((str(k), str(v.get("title", k)), tone))
+    return out
+
+
+def _cover_pad(conf, bound, style):
+    pos, cmd = _t(bound, "target"), _c(bound, "target")
+    if not pos or not cmd:
+        return None
+    return {"kind": "cover", "style": style, "pos": pos, "pos_cmd": cmd,
+            "invert": bool(conf.get("inverted")) or None,
+            "open": str(conf.get("command_open", "100")),
+            "close": str(conf.get("command_close", "0")),
+            "stop_cmd": _c(bound, "stop"),
+            "stop": str(conf.get("command_stop", "2")) if _c(bound, "stop") else None}
 
 
 def _table_map(raw, default):
@@ -220,16 +296,28 @@ def screen_tile(conf):
 
     # ---- заглушки: показывают состояние, управление - на панели --------
     if kind == "thermostat":
+        lo, hi, step = _scale(conf, bound, "target", 14, 30, 0.5)
+        pad = _climate_pad(_t(bound, "target"), _c(bound, "target"), _t(bound, "current"),
+                           lo, hi, step, power=_t(bound, "mode"), power_cmd=_c(bound, "mode"),
+                           on=str(conf.get("command_mode_on", "1")),
+                           off=str(conf.get("command_mode_off", "0")))
         return _info(title or "Термостат", w, _t(bound, "target"), "°C", 1,
                      lines=[{"label": "сейчас", "topic": _t(bound, "current"),
                              "unit": "°", "digits": 1},
                             {"topic": _t(bound, "mode"),
                              "map": {str(k): v for k, v in HEAT_MODE.items()}}],
-                     active=_t(bound, "state"))
+                     active=_t(bound, "state"), pad=pad)
 
     if kind == "fancoil":
-        from .tiles_fancoil import FANCOIL_FAN_STATES, FANCOIL_MODES
-        return _info(title or "Фанкойл", w, _t(bound, "target"), "°C", 1,
+        from .tiles_fancoil import FANCOIL_FAN_STATES, FANCOIL_FANS, FANCOIL_MODES
+        lo, hi, step = _scale(conf, bound, "target", 16, 30, 0.5)
+        pad = _climate_pad(_t(bound, "target"), _c(bound, "target"), _t(bound, "current"),
+                           lo, hi, step, power=_t(bound, "switch"), power_cmd=_c(bound, "switch"),
+                           mode=_t(bound, "mode"), mode_cmd=_c(bound, "mode"),
+                           modes=_fancoil_opts(conf.get("modes"), FANCOIL_MODES, True),
+                           fan=_t(bound, "fan"), fan_cmd=_c(bound, "fan"),
+                           fans=_fancoil_opts(conf.get("fans"), FANCOIL_FANS))
+        return _info(title or "Фанкойл", w, _t(bound, "target"), "°C", 1, pad=pad,
                      lines=[{"topic": _t(bound, "mode"),
                              "map": _table_map(conf.get("modes"), FANCOIL_MODES)},
                             {"label": "сейчас", "topic": _t(bound, "current"),
@@ -242,7 +330,15 @@ def screen_tile(conf):
         dev = conf.get("device")
         if not dev:
             return _info(title or "Кондиционер", w)
-        return _info(title or "Кондиционер", w, _dev(dev, "target_temp"), "°C", 0,
+        on = lambda name: _dev(dev, name) + "/on"
+        pad = _climate_pad(_dev(dev, "target_temp"), on("target_temp"), _dev(dev, "current_temp"),
+                           _num(conf.get("temp_min"), 16), _num(conf.get("temp_max"), 30),
+                           _num(conf.get("step"), 1),
+                           power=_dev(dev, "power"), power_cmd=on("power"),
+                           mode=_dev(dev, "mode"), mode_cmd=on("mode"), modes=AC_PAD_MODES,
+                           fan=_dev(dev, "fan_mode"), fan_cmd=on("fan_mode"), fans=AC_PAD_FANS,
+                           tone="cool")
+        return _info(title or "Кондиционер", w, _dev(dev, "target_temp"), "°C", 0, pad=pad,
                      lines=[{"topic": _dev(dev, "mode"), "map": AC_MODE_RU},
                             {"label": "сейчас", "topic": _dev(dev, "current_temp"),
                              "unit": "°", "digits": 0},
@@ -251,8 +347,9 @@ def screen_tile(conf):
                      active=_dev(dev, "power"))
 
     if kind in ("curtain", "roller"):
-        pos = _t(bound, "state") or _t(bound, "target")
-        return _info(title or "Штора", w, pos, "%", 0)
+        # Положение - роль target (у шторы state - это «едет/стоит»).
+        return _info(title or "Штора", w, _t(bound, "target") or _t(bound, "left"), "%", 0,
+                     pad=_cover_pad(conf, bound, kind), invert=bool(conf.get("inverted")))
 
     if kind == "chart":
         series = [s for s in (conf.get("series") or []) if isinstance(s, dict) and s.get("channel")]

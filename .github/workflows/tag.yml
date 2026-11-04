@@ -1,0 +1,27 @@
+# Тег версии ставится сам: после пуша в main, если в wbpanel/__init__.py
+# версия, у которой тега ещё нет. update.sh на контроллере ставит по тегам.
+name: Тег версии
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Поставить тег новой версии
+        run: |
+          V=$(sed -n 's/^__version__ *= *["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' wbpanel/__init__.py)
+          [ -n "$V" ] || { echo "версия не найдена"; exit 1; }
+          T="v$V"
+          if git rev-parse -q --verify "refs/tags/$T" >/dev/null; then
+            echo "$T уже есть"
+            exit 0
+          fi
+          git tag "$T"
+          git push origin "$T"
+          echo "поставлен $T"

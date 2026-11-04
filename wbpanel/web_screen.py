@@ -34,7 +34,13 @@
 
 У плитки панели для экрана можно задать:
     screen_w: 1..3      ширина в колонках экрана (их 3)
+    screen_h: 0.5..2    высота в рядах (ряд - квадрат 146 px); без неё
+                        выключатель, сцена и датчик - в полряда, диммер в
+                        одну колонку и сводки - квадратом, широкий диммер -
+                        полосой в полряда (решает экран, 0.6+)
     screen: false       не показывать на экране
+С 1.72 у сцены и датчика есть icon (значок панели), у ленты - light: true:
+экран 0.6+ рисует плитки как панель.
 """
 
 import json
@@ -238,9 +244,21 @@ def _scenes(conf):
         else:
             raw = str(state.values.get(item["channel"]) or "").strip().lower()
             payload = Scene.FORMS.get(raw, ("1", "0"))[0]
-        out.append({"type": "scene", "title": str(item.get("title") or ""), "w": 1,
-                    "cmd": cmd, "payload": payload})
+        tile = {"type": "scene", "title": str(item.get("title") or ""), "w": 1,
+                "cmd": cmd, "payload": payload}
+        if item.get("icon"):
+            tile["icon"] = str(item["icon"])
+        out.append(tile)
     return out
+
+
+def _screen_h(conf):
+    """Высота плитки на экране в рядах (screen_h: 0.5, 1, 1.5, 2) или None."""
+    try:
+        h = float(conf.get("screen_h") or 0)
+    except (TypeError, ValueError):
+        return None
+    return max(0.5, min(2.0, round(h * 2) / 2)) if h > 0 else None
 
 
 def screen_tiles(conf):
@@ -248,9 +266,15 @@ def screen_tiles(conf):
     if not isinstance(conf, dict) or conf.get("screen") is False:
         return []
     if resolve_type(conf, state) == "scenes":
-        return _scenes(conf)
-    t = screen_tile(conf)
-    return [t] if t else []
+        out = _scenes(conf)
+    else:
+        t = screen_tile(conf)
+        out = [t] if t else []
+    h = _screen_h(conf)
+    if h:
+        for t in out:
+            t["h"] = h
+    return out
 
 
 def screen_tile(conf):
@@ -277,8 +301,11 @@ def screen_tile(conf):
         # сырым топиком без адреса команды, нажимать некуда.
         if not cmd:
             return None
-        return {"type": "scene", "title": title, "w": w, "cmd": cmd,
-                "payload": _scene_payload(conf, bound)}
+        out = {"type": "scene", "title": title, "w": w, "cmd": cmd,
+               "payload": _scene_payload(conf, bound)}
+        if conf.get("icon"):
+            out["icon"] = str(conf["icon"])
+        return out
 
     if kind in ("dimmer", "light"):
         lo, hi = _limits(bound, "bright", 0, 100)
@@ -286,6 +313,8 @@ def screen_tile(conf):
                "state": _t(bound, "switch"), "state_cmd": _c(bound, "switch"),
                "level": _t(bound, "bright"), "level_cmd": _c(bound, "bright"),
                "max": hi}
+        if kind == "light":
+            out["light"] = True
         if kind == "light" and _t(bound, "temp"):
             unit = conf.get("temp_unit", "percent")
             tlo, thi = (0, 100) if unit == "percent" else (
@@ -299,9 +328,12 @@ def screen_tile(conf):
         b = bound.get("value")
         if not b:
             return None
-        return {"type": "sensor", "title": title, "w": w, "value": topic_of(b.key),
-                "unit": conf.get("unit") or b.units or "",
-                "digits": int(conf.get("digits", 1))}
+        out = {"type": "sensor", "title": title, "w": w, "value": topic_of(b.key),
+               "unit": conf.get("unit") or b.units or "",
+               "digits": int(conf.get("digits", 1))}
+        if conf.get("icon"):
+            out["icon"] = str(conf["icon"])
+        return out
 
     # ---- заглушки: показывают состояние, управление - на панели --------
     if kind == "thermostat":

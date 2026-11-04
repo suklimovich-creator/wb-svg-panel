@@ -88,6 +88,8 @@ CASES = [
     # Раскладка для настенного экрана esp32-panel (1.70)
     ("GET", "/api/screen/misc", None, (200,), '"type":"dimmer"'),
     ("GET", "/api/screen/scn", None, (200,), '"type":"scene"'),
+    ("GET", "/api/screen/scn", None, (200,), '"icon":"moon"'),
+    ("GET", "/api/screen/misc", None, (200,), '"light":true'),
     ("GET", "/api/screen/clim", None, (200,), '"type":"info"'),
     ("GET", "/api/screen/clim", None, (200,), '"kind":"climate"'),
     ("GET", "/api/screen/nope", None, (404,), ""),

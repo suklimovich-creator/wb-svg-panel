@@ -85,6 +85,11 @@ CASES = [
     ("GET", "/glyph/nope.svg", None, (404,), ""),
     ("GET", "/static/panel.css", None, (200,), ""),
     ("GET", "/static/js/core.js", None, (200,), ""),
+    # Раскладка для настенного экрана esp32-panel (1.70)
+    ("GET", "/api/screen/misc", None, (200,), '"type":"dimmer"'),
+    ("GET", "/api/screen/scn", None, (200,), '"type":"scene"'),
+    ("GET", "/api/screen/clim", None, (200,), '"type":"info"'),
+    ("GET", "/api/screen/nope", None, (404,), ""),
 ]
 
 #: Адреса, которые проверяются выше (правила Flask).
@@ -92,7 +97,8 @@ COVERED = {"/", "/healthz", "/manifest.webmanifest", "/icon.svg", "/docs",
            "/<name>.html", "/<name>.svg", "/tile/<name>/<int:index>.svg", "/chart.svg",
            "/themes", "/api/theme/draft", "/channels", "/check", "/stats",
            "/api/list/<name>", "/api/publish", "/cam/<name>.jpg", "/cam/<name>.mjpeg",
-           "/glyph/<name>.svg", "/static/<path:filename>", "/wall/<key>.jpg"}
+           "/glyph/<name>.svg", "/static/<path:filename>", "/wall/<key>.jpg",
+           "/api/screen/<name>"}
 
 
 def main():

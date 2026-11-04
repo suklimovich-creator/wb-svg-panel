@@ -448,3 +448,4 @@ from .web_live import (MAIN_MARK, cached_panel, demo_svg, lean_head,  # noqa: E4
 from .web_tiles import chart_svg, panel_tiles, tile_svg  # noqa: E402,F401
 from .web_api import allowed_topics, api_list, api_publish  # noqa: E402,F401
 from .web_pages import panel_html, panel_order, wrapper_html  # noqa: E402,F401
+from .web_screen import api_screen  # noqa: E402,F401

@@ -45,7 +45,7 @@ from .assemble import resolve_sections
 from .registry import REGISTRY, resolve_type
 from .sources import bind
 from .state import state
-from .tiles import AC_FAN_RU, AC_MODE_RU, HEAT_MODE, command_topic
+from .tiles import AC_FAN_RU, AC_MODE_RU, HEAT_MODE, HEAT_NOW, command_topic
 from .tiles_basic import Scene
 from .web import app
 
@@ -143,9 +143,12 @@ def _info(title, w, value=None, unit="", digits=1, value_map=None, lines=None,
 
 # ---------------------------------------------------------------- пульты
 #: Режимы кондиционера на кнопках пульта: значение, подпись, оттенок колеса.
-AC_PAD_MODES = (("cool", "Холод", "cool"), ("heat", "Тепло", "heat"),
-                ("dry", "Осуш.", "cool"), ("fan_only", "Вент.", ""),
-                ("auto", "Авто", ""))
+#: Четвёртое - слово на плашке режима, пятое - значок (как AC_MODE_ICON).
+AC_PAD_MODES = (("cool", "Холод", "cool", "холод", "snow"),
+                ("heat", "Тепло", "heat", "тепло", "heat"),
+                ("dry", "Сушка", "cool", "сушка", "drop"),
+                ("fan_only", "Обдув", "", "обдув", "fan"),
+                ("auto", "Авто", "", "авто", "power"))
 AC_PAD_FANS = (("low", "1", ""), ("medium", "2", ""), ("high", "3", ""),
                ("auto", "Авто", ""))
 
@@ -174,17 +177,22 @@ def _scale(conf, bound, role, lo, hi, step):
 
 def _climate_pad(target, target_cmd, current, lo, hi, step, power=None,
                  power_cmd=None, on="1", off="0", mode=None, mode_cmd=None,
-                 modes=(), fan=None, fan_cmd=None, fans=(), tone="heat"):
+                 modes=(), fan=None, fan_cmd=None, fans=(), tone="heat",
+                 style="dial", state=None, states=None, extra=None):
+    """Пульт климата. style: ac - колесо-шкала кондиционера, dial -
+    циферблат термостата (у фанкойла под ним режим и скорость)."""
     if not target or not target_cmd:
         return None
-    return {"kind": "climate", "target": target, "target_cmd": target_cmd,
+    out = {"style": style, "state": state, "states": states}
+    out.update(extra or {})
+    return dict(out, **{"kind": "climate", "target": target, "target_cmd": target_cmd,
             "current": current, "min": lo, "max": hi, "step": step,
             "power": power, "power_cmd": power_cmd if power else None,
             "on": on, "off": off, "tone": tone,
             "mode": mode if mode_cmd else None, "mode_cmd": mode_cmd,
             "modes": [list(m) for m in modes] if mode_cmd else [],
             "fan": fan if fan_cmd else None, "fan_cmd": fan_cmd,
-            "fans": [list(f) for f in fans] if fan_cmd else []}
+            "fans": [list(f) for f in fans] if fan_cmd else []})
 
 
 def _fancoil_opts(raw, default, cool_flag=False):
@@ -193,7 +201,8 @@ def _fancoil_opts(raw, default, cool_flag=False):
     for k, v in table(raw, default):
         tone = ("cool" if v.get("cool") else "" if v.get("valve") is False else "heat") \
             if cool_flag else ""
-        out.append((str(k), str(v.get("title", k)), tone))
+        word = str(v.get("short") or v.get("title", k)).lower()
+        out.append((str(k), str(v.get("title", k)), tone, word, str(v.get("icon") or "")))
     return out
 
 
@@ -300,7 +309,9 @@ def screen_tile(conf):
         pad = _climate_pad(_t(bound, "target"), _c(bound, "target"), _t(bound, "current"),
                            lo, hi, step, power=_t(bound, "mode"), power_cmd=_c(bound, "mode"),
                            on=str(conf.get("command_mode_on", "1")),
-                           off=str(conf.get("command_mode_off", "0")))
+                           off=str(conf.get("command_mode_off", "0")),
+                           state=_t(bound, "state"),
+                           states={str(k): v for k, v in HEAT_NOW.items()})
         return _info(title or "Термостат", w, _t(bound, "target"), "°C", 1,
                      lines=[{"label": "сейчас", "topic": _t(bound, "current"),
                              "unit": "°", "digits": 1},
@@ -337,7 +348,10 @@ def screen_tile(conf):
                            power=_dev(dev, "power"), power_cmd=on("power"),
                            mode=_dev(dev, "mode"), mode_cmd=on("mode"), modes=AC_PAD_MODES,
                            fan=_dev(dev, "fan_mode"), fan_cmd=on("fan_mode"), fans=AC_PAD_FANS,
-                           tone="cool")
+                           tone="cool", style="ac",
+                           extra={"swing": _dev(dev, "swing_mode"), "swing_cmd": on("swing_mode"),
+                                  "swing_h": _dev(dev, "swing_h_mode"),
+                                  "swing_h_cmd": on("swing_h_mode")})
         return _info(title or "Кондиционер", w, _dev(dev, "target_temp"), "°C", 0, pad=pad,
                      lines=[{"topic": _dev(dev, "mode"), "map": AC_MODE_RU},
                             {"label": "сейчас", "topic": _dev(dev, "current_temp"),

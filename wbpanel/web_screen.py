@@ -25,8 +25,9 @@
 
 Топики выводятся теми же ролями, что и у SVG-панели, поэтому Sprut.hub
 (команды в /set) и сырые топики работают без отдельной записи. Плитки,
-которых экран пока не умеет (кондиционер, термостат, шторы, график...),
-приходят типом info - заголовок, значение и строка подробностей.
+Такие плитки, как кондиционер, термостат и шторы, приходят типом info -
+заголовок, значение и строка подробностей. С 1.73 график приходит типом chart,
+а его точки - отдельно через адрес из поля history.
 С 1.71 у сводки кондиционера, термостата, фанкойла и штор есть поле pad -
 описание пульта: экран открывает его по нажатию на плитку (уставка
 колесом, режимы, положение шторы пальцем). Прошивки до 0.4 поле не читают
@@ -44,10 +45,14 @@
 """
 
 import json
+import math
+from urllib.parse import quote
+
 from flask import Response, abort
 
 from . import web
 from .assemble import resolve_sections
+from .geometry import parse_duration
 from .registry import REGISTRY, resolve_type
 from .sources import bind
 from .state import state
@@ -57,7 +62,7 @@ from .web import app
 
 #: Сколько колонок у экрана и какие плитки по умолчанию во всю ширину.
 COLS = 3
-WIDE_KINDS = ("dimmer", "light")
+WIDE_KINDS = ("dimmer", "light", "chart")
 
 
 def topic_of(key):
@@ -401,11 +406,31 @@ def screen_tile(conf):
         series = [s for s in (conf.get("series") or []) if isinstance(s, dict) and s.get("channel")]
         if not series:
             return _info(title or "График", w)
-        first = series[0]
-        lines = [{"topic": topic_of(s["channel"]), "unit": s.get("unit", ""),
-                  "digits": int(s.get("digits", 1))} for s in series[1:3]]
-        return _info(title or "График", w, topic_of(first["channel"]),
-                     first.get("unit", ""), int(first.get("digits", 1)), lines=lines)
+        try:
+            points = int(conf.get("points", 90))
+        except (TypeError, ValueError):
+            points = 90
+        points = max(10, min(points, 120))
+        colors = ("#E08A2D", "#3B93C4", "#4E9A6B")
+        out_series = []
+        for i, spec in enumerate(series[:3]):
+            try:
+                digits = max(0, min(int(spec.get("digits", 1)), 3))
+            except (TypeError, ValueError):
+                digits = 1
+            item = {"channel": spec["channel"], "value": topic_of(spec["channel"]),
+                    "unit": spec.get("unit", ""), "digits": digits,
+                    "color": spec.get("color") or colors[i],
+                    "label": spec.get("label", "")}
+            if spec.get("min") is not None and spec.get("max") is not None:
+                try:
+                    item["min"], item["max"] = float(spec["min"]), float(spec["max"])
+                except (TypeError, ValueError):
+                    pass
+            out_series.append(item)
+        return {"type": "chart", "title": title or "График", "w": w,
+                "range": parse_duration(conf.get("range", "24h")),
+                "points": points, "series": out_series}
 
     if kind == "forecast":
         dev = conf.get("device") or "weather"
@@ -421,8 +446,16 @@ def screen_layout(panel_name):
     panels = web.config.panels
     panel = panels.get(panel_name) or {}
     pages = []
+    chart_index = 0
     for title, tiles, _src, _key in resolve_sections(panel, panels):
         out = [t for c in tiles for t in screen_tiles(c)]
+        for tile in out:
+            if tile.get("type") == "chart":
+                # История меняется независимо от раскладки: отдельный адрес,
+                # иначе каждый новый точечный ряд выглядел бы как новая раскладка.
+                tile["history"] = "/api/screen/%s/chart/%d" % (
+                    quote(panel_name, safe=""), chart_index)
+                chart_index += 1
         if out:
             pages.append({"title": title or panel.get("title") or panel_name,
                           "tiles": out})
@@ -451,4 +484,39 @@ def api_screen(name):
                     headers={"Cache-Control": "no-store"})
 
 
-__all__ = ["api_screen", "screen_layout", "screen_tile", "screen_tiles"]
+@app.route("/api/screen/<name>/chart/<int:index>")
+def api_screen_chart(name, index):
+    """История одного графика экрана; индекс - из поля history в раскладке."""
+    panel = panel_for(name)
+    if not panel:
+        abort(404)
+    layout = screen_layout(panel)
+    charts = [tile for page in layout["pages"] for tile in page["tiles"]
+              if tile.get("type") == "chart"]
+    if index < 0 or index >= len(charts):
+        abort(404)
+    chart = charts[index]
+    out = {"version": 1, "title": chart["title"], "range": chart["range"],
+           "points": chart["points"], "series": []}
+    for spec in chart["series"]:
+        values = []
+        if web.history is not None:
+            data = web.history.get(spec["channel"], chart["range"], chart["points"])
+            for stamp, value in data or []:
+                try:
+                    stamp, value = float(stamp), float(value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(stamp) and math.isfinite(value):
+                    values.append([round(stamp, 3), round(value, 4)])
+        item = {k: spec[k] for k in ("unit", "digits", "color", "label")}
+        if "min" in spec and "max" in spec:
+            item.update({"min": spec["min"], "max": spec["max"]})
+        item["values"] = values
+        out["series"].append(item)
+    body = json.dumps(out, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return Response(body, mimetype="application/json",
+                    headers={"Cache-Control": "no-store"})
+
+
+__all__ = ["api_screen", "api_screen_chart", "screen_layout", "screen_tile", "screen_tiles"]

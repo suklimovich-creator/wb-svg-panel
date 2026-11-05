@@ -1,0 +1,17 @@
+mqtt:
+  host: 127.0.0.1
+panels:
+  espchart:
+    title: Графики для экрана
+    hidden: true
+    tiles:
+    - type: chart
+      title: Воздух
+      range: 12h
+      points: 90
+      screen_w: 3
+      screen_h: 2
+      series:
+      - {channel: msw/Temperature, unit: °C, color: '#E08A2D'}
+      - {channel: msw/Humidity, unit: '%', color: '#3B93C4', digits: 0}
+      - {channel: msw/CO2, unit: ppm, color: '#4E9A6B', digits: 0}

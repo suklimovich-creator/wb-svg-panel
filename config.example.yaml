@@ -159,6 +159,8 @@ panels:
         w: 2                 # двойная ширина
         range: 12h           # 30m | 6h | 12h | 3d
         points: 90
+        screen_w: 3          # esp32-panel 0.7+: график на всю ширину
+        screen_h: 2          # высота два полряда (146 px)
         grid_labels: true    # значения на линиях сетки
         time_labels: true    # время под кривой
         series:

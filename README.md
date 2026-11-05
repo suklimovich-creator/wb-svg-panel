@@ -79,6 +79,7 @@ systemctl restart wb-svg-panel
 | `/panel/docs` | подробный справочник по типам плиток |
 | `/panel/healthz` | состояние демона |
 | `/panel/stats` | счётчики нагрузки (смотреть через `tools/watch-load.py`) |
+| `/panel/api/screen/<имя>/chart/<n>` | история графика для esp32-panel 0.7+ |
 
 Страница `.html` — это PWA: на телефоне её можно добавить на домашний экран,
 и она откроется без адресной строки, как приложение.
@@ -192,6 +193,21 @@ journalctl -u wb-svg-panel -f
 
 CI проверяет совместимость с Python 3.9 (в прошивках на Debian 11 он ещё 3.9,
 и синтаксис новее туда не поедет), синтаксис YAML и шелл-скрипты.
+
+### Стенд графика для esp32-panel
+
+Без контроллера, MQTT и SQLite:
+
+```sh
+python3 tools/esp32-chart-demo.py --out /tmp/esp32-chart
+python3 tools/esp32-chart-demo.py --serve --port 8080  # настоящий HTTP API
+python3 tests/screen_chart_check.py                    # проверка контракта
+```
+
+Первый вариант пишет `layout.json`, `history.json` и `values.txt`; скрипт печатает
+команды симулятора для снимков плитки и полноэкранного графика. В демо — три
+кривые по 90 точек. История отдаётся отдельно от раскладки, поэтому новые точки
+не вызывают перезапуск ESP32.
 
 Issues и pull requests приветствуются. Особенно интересны новые типы плиток —
 они добавляются макросом в `templates/panel.svg.j2` и небольшой функцией

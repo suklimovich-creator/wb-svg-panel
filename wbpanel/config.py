@@ -127,7 +127,12 @@ class Config:
                 if tile.get("type") != "chart":
                     continue
                 span = parse_duration(tile.get("range", "24h"))
-                points = int(tile.get("points", 90))
+                try:
+                    points = int(tile.get("points", 90))
+                except (TypeError, ValueError):
+                    points = 90
+                # Столько же отдаём на esp32-panel: одинаковый ключ кэша.
+                points = max(10, min(points, 120))
                 for s in tile.get("series", []) or []:
                     if s.get("channel"):
                         out[(s["channel"], span, points)] = True

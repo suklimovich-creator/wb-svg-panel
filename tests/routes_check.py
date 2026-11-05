@@ -92,6 +92,7 @@ CASES = [
     ("GET", "/api/screen/misc", None, (200,), '"light":true'),
     ("GET", "/api/screen/clim", None, (200,), '"type":"info"'),
     ("GET", "/api/screen/clim", None, (200,), '"kind":"climate"'),
+    ("GET", "/api/screen/nope/chart/0", None, (404,), ""),
     ("GET", "/api/screen/nope", None, (404,), ""),
 ]
 
@@ -101,7 +102,7 @@ COVERED = {"/", "/healthz", "/manifest.webmanifest", "/icon.svg", "/docs",
            "/themes", "/api/theme/draft", "/channels", "/check", "/stats",
            "/api/list/<name>", "/api/publish", "/cam/<name>.jpg", "/cam/<name>.mjpeg",
            "/glyph/<name>.svg", "/static/<path:filename>", "/wall/<key>.jpg",
-           "/api/screen/<name>"}
+           "/api/screen/<name>", "/api/screen/<name>/chart/<int:index>"}
 
 
 def main():

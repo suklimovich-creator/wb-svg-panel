@@ -17,8 +17,24 @@ def main():
     assert layout_response.status_code == 200
     layout = layout_response.get_json()
     tile = layout["pages"][0]["tiles"][0]
+    assert layout["cols"] == 5
     assert tile["type"] == "chart"
     assert tile["w"] == 3 and tile["h"] == 2
+
+    fraction = client.get("/api/screen/espfraction").get_json()
+    fraction_tile = fraction["pages"][0]["tiles"][0]
+    assert fraction["cols"] == 4
+    assert fraction_tile["w"] == 1.5 and fraction_tile["h"] == 1.5
+
+    default = client.get("/api/screen/espdefault").get_json()
+    default_tile = default["pages"][0]["tiles"][0]
+    assert default["cols"] == 3
+    assert default_tile["w"] == 1 and default_tile["h"] == 1
+
+    clamped = client.get("/api/screen/espclamp").get_json()
+    clamped_tile = clamped["pages"][0]["tiles"][0]
+    assert clamped["cols"] == 2
+    assert clamped_tile["w"] == 2 and clamped_tile["h"] == 0.5
     assert tile["range"] == 12 * 3600 and tile["points"] == 90
     assert tile["history"] == "/api/screen/espchart/chart/0"
     assert len(tile["series"]) == 3
@@ -38,7 +54,7 @@ def main():
         assert all(len(point) == 2 for point in result["values"])
         assert all(isinstance(value, (int, float)) for point in result["values"] for value in point)
     assert client.get("/api/screen/espchart/chart/1").status_code == 404
-    print("OK: раскладка, три кривые, 90 точек на кривую, стабильный JSON")
+    print("OK: cols, обычные и дробные w/h, три кривые, стабильный JSON")
 
 
 if __name__ == "__main__":

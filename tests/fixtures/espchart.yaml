@@ -4,14 +4,45 @@ panels:
   espchart:
     title: Графики для экрана
     hidden: true
+    cols: 5
     tiles:
     - type: chart
       title: Воздух
       range: 12h
       points: 90
-      screen_w: 3
-      screen_h: 2
+      w: 3
+      h: 2
       series:
       - {channel: msw/Temperature, unit: °C, color: '#E08A2D'}
       - {channel: msw/Humidity, unit: '%', color: '#3B93C4', digits: 0}
       - {channel: msw/CO2, unit: ppm, color: '#4E9A6B', digits: 0}
+  espfraction:
+    title: Дробные размеры
+    hidden: true
+    cols: 4
+    tiles:
+    - type: chart
+      title: Полторы колонки
+      w: 1.5
+      h: 1.5
+      series:
+      - {channel: msw/Temperature, unit: °C}
+  espdefault:
+    title: Размеры по умолчанию
+    hidden: true
+    tiles:
+    - type: chart
+      title: Обычная плитка
+      series:
+      - {channel: msw/Temperature, unit: °C}
+  espclamp:
+    title: Ширина не больше панели
+    hidden: true
+    cols: 2
+    tiles:
+    - type: chart
+      title: Широкая плитка
+      w: 5
+      h: 0.5
+      series:
+      - {channel: msw/Temperature, unit: °C}

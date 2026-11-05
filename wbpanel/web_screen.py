@@ -33,12 +33,9 @@
 колесом, режимы, положение шторы пальцем). Прошивки до 0.4 поле не читают
 и показывают сводку как раньше.
 
-У плитки панели для экрана можно задать:
-    screen_w: 1..3      ширина в колонках экрана (их 3)
-    screen_h: 0.5..2    высота в рядах (ряд - квадрат 146 px); без неё
-                        выключатель, сцена и датчик - в полряда, диммер в
-                        одну колонку и сводки - квадратом, широкий диммер -
-                        полосой в полряда (решает экран, 0.6+)
+С 1.74 панель передаёт экрану свой cols (по умолчанию 3), а размеры плиток -
+обычные w и h с шагом 0.5, как в SVG-раскладке. Ширина ограничивается числом
+колонок, высота отдельно не ограничивается. По умолчанию плитка 1x1.
     screen: false       не показывать на экране
 С 1.72 у сцены и датчика есть icon (значок панели), у ленты - light: true:
 экран 0.6+ рисует плитки как панель.
@@ -52,7 +49,7 @@ from flask import Response, abort
 
 from . import web
 from .assemble import resolve_sections
-from .geometry import parse_duration
+from .geometry import cells, parse_duration
 from .registry import REGISTRY, resolve_type
 from .sources import bind
 from .state import state
@@ -60,9 +57,9 @@ from .tiles import AC_FAN_RU, AC_MODE_RU, HEAT_MODE, HEAT_NOW, command_topic
 from .tiles_basic import Scene
 from .web import app
 
-#: Сколько колонок у экрана и какие плитки по умолчанию во всю ширину.
-COLS = 3
-WIDE_KINDS = ("dimmer", "light", "chart")
+#: Прежняя ширина экрана; cols панели может её изменить (с 1.74).
+DEFAULT_COLS = 3
+MAX_COLS = 12
 
 
 def topic_of(key):
@@ -107,14 +104,25 @@ def _limits(bound, role, lo, hi):
     return int(lo), int(hi)
 
 
-def _width(conf, kind):
+def _cols(panel):
+    """Число колонок экрана из обычной настройки панели."""
     try:
-        w = int(conf.get("screen_w") or 0)
+        cols = int(panel.get("cols", DEFAULT_COLS))
     except (TypeError, ValueError):
-        w = 0
-    if not w:
-        w = COLS if kind in WIDE_KINDS else 1
-    return max(1, min(COLS, w))
+        cols = DEFAULT_COLS
+    return max(1, min(MAX_COLS, cols))
+
+
+def _size(conf, key, max_cells=None):
+    """Обычный размер плитки -> число колонок/рядов с шагом 0.5."""
+    n = cells(conf.get(key), 1.0)
+    if max_cells is not None:
+        n = min(n, max_cells)
+    return n // 2 if n % 2 == 0 else n / 2
+
+
+def _width(conf, cols):
+    return _size(conf, "w", cols * 2)
 
 
 def _scene_payload(conf, bound):
@@ -257,38 +265,28 @@ def _scenes(conf):
     return out
 
 
-def _screen_h(conf):
-    """Высота плитки на экране в рядах (screen_h: 0.5, 1, 1.5, 2) или None."""
-    try:
-        h = float(conf.get("screen_h") or 0)
-    except (TypeError, ValueError):
-        return None
-    return max(0.5, min(2.0, round(h * 2) / 2)) if h > 0 else None
-
-
-def screen_tiles(conf):
+def screen_tiles(conf, cols):
     """Плитка панели -> плитки экрана (обычно одна; сцены - по одной на клавишу)."""
     if not isinstance(conf, dict) or conf.get("screen") is False:
         return []
     if resolve_type(conf, state) == "scenes":
         out = _scenes(conf)
     else:
-        t = screen_tile(conf)
+        t = screen_tile(conf, cols)
         out = [t] if t else []
-    h = _screen_h(conf)
-    if h:
-        for t in out:
-            t["h"] = h
+    h = _size(conf, "h")
+    for t in out:
+        t["h"] = h
     return out
 
 
-def screen_tile(conf):
+def screen_tile(conf, cols):
     """Плитка панели -> плитка экрана (или None, если экрану не нужна)."""
     if not isinstance(conf, dict) or conf.get("screen") is False:
         return None
     kind, bound = _bound(conf)
     title = str(conf.get("title") or "")
-    w = _width(conf, kind)
+    w = _width(conf, cols)
 
     if kind == "header":
         return None
@@ -445,10 +443,11 @@ def screen_tile(conf):
 def screen_layout(panel_name):
     panels = web.config.panels
     panel = panels.get(panel_name) or {}
+    cols = _cols(panel)
     pages = []
     chart_index = 0
     for title, tiles, _src, _key in resolve_sections(panel, panels):
-        out = [t for c in tiles for t in screen_tiles(c)]
+        out = [t for c in tiles for t in screen_tiles(c, cols)]
         for tile in out:
             if tile.get("type") == "chart":
                 # История меняется независимо от раскладки: отдельный адрес,
@@ -459,7 +458,7 @@ def screen_layout(panel_name):
         if out:
             pages.append({"title": title or panel.get("title") or panel_name,
                           "tiles": out})
-    return {"version": 1, "panel": panel_name, "pages": pages}
+    return {"version": 1, "panel": panel_name, "cols": cols, "pages": pages}
 
 
 def panel_for(name):

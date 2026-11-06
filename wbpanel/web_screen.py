@@ -22,6 +22,9 @@
           - {from: livingroom, title: "Гостиная"}
           - title: "Сцены"
             tiles: [...]
+          - title: "Заставка"
+            screensaver: 30s  # не вкладка, а экран после 30 с бездействия
+            tiles: [...]
 
 Топики выводятся теми же ролями, что и у SVG-панели, поэтому Sprut.hub
 (команды в /set) и сырые топики работают без отдельной записи. Плитки,
@@ -40,6 +43,10 @@
 С 1.72 у сцены и датчика есть icon (значок панели), у ленты - light: true:
 экран 0.6+ рисует плитки как панель. С 1.75 камера приходит типом camera с
 относительными snapshot и stream; логин, пароль и адрес камеры не выдаются.
+С 1.76 секции со свойством screensaver: 30s не попадают во вкладки экрана,
+а добавляют одноимённый блок: after/every в секундах, унаследованный cols и
+pages с плитками этих секций. Страницы заставки меняются по кругу через every.
+Её графики читаются через /api/screen/<имя>/screensaver/chart/<n>.
 """
 
 import json
@@ -455,25 +462,67 @@ def screen_tile(conf, cols):
     return _info(title or kind, w, note="на панели")
 
 
-def screen_layout(panel_name):
-    panels = web.config.panels
-    panel = panels.get(panel_name) or {}
-    cols = _cols(panel)
+def _screen_sections(panel, panels):
+    """(секция конфига, результат resolve_sections), в исходном порядке."""
+    rows = resolve_sections(panel, panels)
+    configured = [s for s in panel.get("sections", []) or [] if isinstance(s, dict)]
+    if not configured:
+        return [(None, rows[0])] if rows else []
+    return list(zip(configured, rows))
+
+
+def _saver_after(section):
+    """Интервал у секции; само наличие screensaver делает её служебной."""
+    return web._seconds(section.get("screensaver")) if section and "screensaver" in section else 0
+
+
+def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=False):
+    """Секции панели -> обычные страницы экрана либо одна заставка."""
     pages = []
     chart_index = 0
-    for title, tiles, _src, _key in resolve_sections(panel, panels):
+    for section, (title, tiles, _src, _key) in _screen_sections(panel, panels):
+        marked = bool(section and "screensaver" in section)
+        if screensaver:
+            # Все активные секции заставки показываются по кругу. Период
+            # общий: его задаёт первая из них в screen_layout.
+            if not marked or _saver_after(section) <= 0:
+                continue
+        elif marked:
+            # Служебная секция не становится обычной вкладкой, даже если
+            # интервал выключен или написан с ошибкой.
+            continue
         out = [t for c in tiles for t in screen_tiles(c, cols)]
         for tile in out:
             if tile.get("type") == "chart":
                 # История меняется независимо от раскладки: отдельный адрес,
                 # иначе каждый новый точечный ряд выглядел бы как новая раскладка.
-                tile["history"] = "/api/screen/%s/chart/%d" % (
-                    quote(panel_name, safe=""), chart_index)
+                tile["history"] = "%s/%d" % (history_base, chart_index)
                 chart_index += 1
         if out:
             pages.append({"title": title or panel.get("title") or panel_name,
                           "tiles": out})
-    return {"version": 1, "panel": panel_name, "cols": cols, "pages": pages}
+    return pages
+
+
+def screen_layout(panel_name):
+    panels = web.config.panels
+    panel = panels.get(panel_name) or {}
+    cols = _cols(panel)
+    base = "/api/screen/%s" % quote(panel_name, safe="")
+    out = {"version": 1, "panel": panel_name, "cols": cols,
+           "pages": _screen_pages(panel_name, panel, panels, cols, base + "/chart")}
+
+    # Заставка - одна из секций этой же панели. Отдельная панель и ссылка
+    # screensaver.panel для экрана больше не нужны; сетка общая.
+    saver_pages = _screen_pages(panel_name, panel, panels, cols,
+                                base + "/screensaver/chart", screensaver=True)
+    if saver_pages:
+        after = next((_saver_after(section) for section, _row in _screen_sections(panel, panels)
+                      if _saver_after(section) > 0), 0)
+        if after > 0:
+            out["screensaver"] = {"after": after, "every": after,
+                                  "cols": cols, "pages": saver_pages}
+    return out
 
 
 def panel_for(name):
@@ -498,14 +547,14 @@ def api_screen(name):
                     headers={"Cache-Control": "no-store"})
 
 
-@app.route("/api/screen/<name>/chart/<int:index>")
-def api_screen_chart(name, index):
-    """История одного графика экрана; индекс - из поля history в раскладке."""
+def _chart_response(name, index, screensaver=False):
+    """История графика основной раскладки или её заставки."""
     panel = panel_for(name)
     if not panel:
         abort(404)
     layout = screen_layout(panel)
-    charts = [tile for page in layout["pages"] for tile in page["tiles"]
+    pages = layout.get("screensaver", {}).get("pages", []) if screensaver else layout["pages"]
+    charts = [tile for page in pages for tile in page["tiles"]
               if tile.get("type") == "chart"]
     if index < 0 or index >= len(charts):
         abort(404)
@@ -533,4 +582,17 @@ def api_screen_chart(name, index):
                     headers={"Cache-Control": "no-store"})
 
 
-__all__ = ["api_screen", "api_screen_chart", "screen_layout", "screen_tile", "screen_tiles"]
+@app.route("/api/screen/<name>/chart/<int:index>")
+def api_screen_chart(name, index):
+    """История одного графика экрана; индекс - из поля history в раскладке."""
+    return _chart_response(name, index)
+
+
+@app.route("/api/screen/<name>/screensaver/chart/<int:index>")
+def api_screen_saver_chart(name, index):
+    """История графика заставки; нумерация не зависит от основных плиток."""
+    return _chart_response(name, index, screensaver=True)
+
+
+__all__ = ["api_screen", "api_screen_chart", "api_screen_saver_chart",
+           "screen_layout", "screen_tile", "screen_tiles"]

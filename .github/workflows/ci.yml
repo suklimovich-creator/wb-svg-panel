@@ -84,6 +84,11 @@ jobs:
       - name: Камера для настенного экрана и MJPEG
         run: python tests/camera_screen_check.py
 
+      - name: Графики и заставка настенного экрана
+        run: |
+          python tests/screen_chart_check.py
+          python tests/screen_saver_check.py
+
       - name: Скрипты страницы - ES5 и порядок файлов
         run: |
           npm install --no-save --silent acorn@8

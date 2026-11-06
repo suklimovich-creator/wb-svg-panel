@@ -1845,10 +1845,16 @@ panels:
   wall:
     hidden: true
     cols: 5                 # с 1.74: пять колонок на экране
-    sections:               # раздел - вкладка на экране
+    sections:               # обычный раздел - вкладка на экране
       - title: "Свет"
         tiles: [...]
-      - {title: "Сцены", tiles: [*scenes]}</code></pre>
+      - {title: "Сцены", tiles: [*scenes]}
+      - title: "Заставка 1"
+        screensaver: 30s    # с 1.76: не вкладка, а заставка
+        tiles: [...]
+      - title: "Заставка 2" # необязательно: страницы меняются по кругу
+        screensaver: 30s
+        tiles: [...]</code></pre>
 <p>Адрес: <code>/panel/api/screen/&lt;имя&gt;</code> — имя экрана из
 <code>screens:</code> или прямо имя панели. Экран проверяет его раз в минуту
 и перестраивается, когда раскладка изменилась.</p>
@@ -1878,6 +1884,15 @@ panels:
 <code>/cam/имя.jpg</code> и <code>/cam/имя.mjpeg?width=480&amp;fps=5</code>;
 адрес, логин и пароль камеры остаются на контроллере. На камере достаточно
 учётной записи только для просмотра, без прав администратора.</p>
+<p>С 1.76 заставка — секция этой же панели со свойством
+<code>screensaver: 30s</code>. Она не появляется во вкладках, а в JSON приходит
+блоком <code>screensaver</code> с полями <code>after</code>, <code>every</code>,
+<code>cols</code> и обычными <code>pages</code>. Активных секций может быть
+несколько: прошивка меняет их по кругу через <code>every</code> секунд. Плитки
+используют те же <code>w</code>/<code>h</code> и <code>screen: false</code>, а
+<code>cols</code> наследуется от исходной панели. Графики заставки доступны по
+<code>/panel/api/screen/&lt;имя&gt;/screensaver/chart/&lt;n&gt;</code>.
+<code>screensaver: none</code> скрывает служебную секцию без запуска заставки.</p>
 
 <h2 id="recipes">Готовые рецепты</h2>
 

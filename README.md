@@ -79,8 +79,9 @@ systemctl restart wb-svg-panel
 | `/panel/docs` | подробный справочник по типам плиток |
 | `/panel/healthz` | состояние демона |
 | `/panel/stats` | счётчики нагрузки (смотреть через `tools/watch-load.py`) |
-| `/panel/api/screen/<имя>` | раскладка для esp32-panel: `cols` панели и обычные `w`/`h` плиток (с 1.74) |
+| `/panel/api/screen/<имя>` | раскладка для esp32-panel: `cols`, обычные `w`/`h` и секции-заставки `screensaver: 30s` (с 1.76) |
 | `/panel/api/screen/<имя>/chart/<n>` | история графика для esp32-panel 0.7+ |
+| `/panel/api/screen/<имя>/screensaver/chart/<n>` | история графика заставки (с 1.76) |
 | `/panel/cam/<имя>.mjpeg?width=480&fps=5` | уменьшенный MJPEG для экрана ESP32-S3 (с 1.75) |
 
 Страница `.html` — это PWA: на телефоне её можно добавить на домашний экран,
@@ -203,7 +204,8 @@ CI проверяет совместимость с Python 3.9 (в прошив�
 ```sh
 python3 tools/esp32-chart-demo.py --out /tmp/esp32-chart
 python3 tools/esp32-chart-demo.py --serve --port 8080  # настоящий HTTP API
-python3 tests/screen_chart_check.py                    # проверка контракта
+python3 tests/screen_chart_check.py                    # проверка графиков
+python3 tests/screen_saver_check.py                    # проверка заставки
 ```
 
 Первый вариант пишет `layout.json`, `history.json` и `values.txt`; скрипт печатает

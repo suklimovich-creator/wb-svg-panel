@@ -1,0 +1,94 @@
+mqtt:
+  host: 127.0.0.1
+screens:
+  panel-test: wall
+panels:
+  wall:
+    title: Основная панель
+    hidden: true
+    cols: 4
+    sections:
+    - title: Основная
+      tiles:
+      - type: chart
+        title: Основной график
+        range: 12h
+        points: 60
+        series:
+        - {channel: msw/Temperature, unit: °C}
+    - title: Заставка
+      screensaver: 5m
+      tiles:
+      - type: value
+        title: Температура
+        channel: msw/Temperature
+        unit: °C
+        w: 1
+        h: 1
+      - type: chart
+        title: График заставки
+        range: 6h
+        points: 30
+        w: 3
+        h: 1.5
+        series:
+        - {channel: msw/Humidity, unit: '%', digits: 0}
+    - title: Воздух
+      tiles:
+      - {type: value, title: CO2, channel: msw/CO2, unit: ppm}
+  other:
+    title: Другая панель
+    hidden: true
+    cols: 2
+    sections:
+    - title: Основная
+      tiles:
+      - {type: value, title: Температура, channel: msw/Temperature}
+    - title: Заставка другой панели
+      screensaver: 30
+      tiles:
+      - {type: value, title: Влажность, channel: msw/Humidity}
+  disabled:
+    hidden: true
+    sections:
+    - title: Основная
+      tiles:
+      - {type: value, title: Температура, channel: msw/Temperature}
+    - title: Скрытая служебная секция
+      screensaver: none
+      tiles:
+      - {type: value, title: Влажность, channel: msw/Humidity}
+  invalid:
+    hidden: true
+    sections:
+    - title: Основная
+      tiles:
+      - {type: value, title: Температура, channel: msw/Temperature}
+    - title: Неверный интервал
+      screensaver: sometimes
+      tiles:
+      - {type: value, title: Влажность, channel: msw/Humidity}
+  empty:
+    hidden: true
+    sections:
+    - title: Основная
+      tiles:
+      - {type: value, title: Температура, channel: msw/Temperature}
+    - {title: Пустая заставка, screensaver: 1m, tiles: []}
+  legacy:
+    title: Основная
+    hidden: true
+    screensaver: {after: 5m, panel: missing}
+    tiles:
+    - {type: value, title: Температура, channel: msw/Temperature}
+  multiple:
+    hidden: true
+    sections:
+    - title: Первая заставка
+      screensaver: 10s
+      tiles:
+      - {type: value, title: Температура, channel: msw/Temperature}
+    - title: Вторая заставка
+      screensaver: 20s
+      tiles:
+      - {type: value, title: Влажность, channel: msw/Humidity}

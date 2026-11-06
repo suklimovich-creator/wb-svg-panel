@@ -631,6 +631,16 @@ object-fit: contain, сверху). `camFrame` грузит кадр заран�
 `new_row` поднимает «пол» потока до низа уже расставленных плиток, в ключе
 кэша раскладок.
 
+**1.75 — камера на ESP32**: `web_screen.screen_tile` выдаёт `type:camera` и
+только относительные `snapshot`/`stream`, поэтому учётные данные остаются в
+`Camera` на контроллере. Обычный `/cam/<имя>.mjpeg` продолжает отдавать сырые
+чанки браузеру. С `width`/`fps` `Camera.screen_stream` разбирает multipart в
+`mjpeg_frames` (boundary из `Content-Type`, длина из `Content-Length` либо
+JPEG SOI/EOI, предел 2 МБ), пропускает лишние по частоте кадры до декодирования
+и уменьшает остальные через Pillow. Ответ ESP32 собирается заново с одним
+известным boundary. Закрытие генератора в `web_api.cam_stream` закрывает и
+исходящий ответ камеры, затем освобождает общий слот просмотра.
+
 **Демо-сайт (с 1.55)** — `tools/demo-site`: `build.py` собирает папку
 (страница + static + Pyodide + `py/files.json` — исходники текстом),
 `worker.js` поднимает Pyodide и `boot.py` (тот же Flask через

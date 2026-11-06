@@ -38,7 +38,8 @@
 колонок, высота отдельно не ограничивается. По умолчанию плитка 1x1.
     screen: false       не показывать на экране
 С 1.72 у сцены и датчика есть icon (значок панели), у ленты - light: true:
-экран 0.6+ рисует плитки как панель.
+экран 0.6+ рисует плитки как панель. С 1.75 камера приходит типом camera с
+относительными snapshot и stream; логин, пароль и адрес камеры не выдаются.
 """
 
 import json
@@ -47,7 +48,7 @@ from urllib.parse import quote
 
 from flask import Response, abort
 
-from . import web
+from . import cameras, web
 from .assemble import resolve_sections
 from .geometry import cells, parse_duration
 from .registry import REGISTRY, resolve_type
@@ -291,6 +292,20 @@ def screen_tile(conf, cols):
     if kind == "header":
         return None
 
+    if kind == "camera":
+        # Экран ходит только на наши относительные адреса. Имя камеры из
+        # конфига кодируется, а host/user/password наружу не попадают.
+        name = conf.get("camera") or conf.get("name")
+        cam = cameras.get(str(name)) if name else None
+        if cam is None:
+            return _info(title or "Камера", w, note="не настроена")
+        base = "/cam/%s" % quote(str(name), safe="")
+        out = {"type": "camera", "title": title or str(cam.title), "w": w,
+               "snapshot": base + ".jpg"}
+        if cam.stream_path:
+            out["stream"] = base + ".mjpeg?width=480&fps=5"
+        return out
+
     if kind == "switch":
         out = {"type": "switch", "title": title, "w": w,
                "state": _t(bound, "value"), "cmd": _c(bound, "value")}
@@ -435,7 +450,7 @@ def screen_tile(conf, cols):
         return _info(title or "Погода", w, _dev(dev, "temperature"), "°C", 1,
                      lines=[{"topic": _dev(dev, "description")}])
 
-    # Остальное (списки, камеры, календарь, вода, телевизор, ссылки) -
+    # Остальное (списки, календарь, вода, телевизор, ссылки) -
     # честная заглушка с названием.
     return _info(title or kind, w, note="на панели")
 

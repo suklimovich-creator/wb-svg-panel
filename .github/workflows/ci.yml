@@ -81,6 +81,9 @@ jobs:
       - name: Каждый адрес демона отвечает
         run: python tests/routes_check.py
 
+      - name: Камера для настенного экрана и MJPEG
+        run: python tests/camera_screen_check.py
+
       - name: Скрипты страницы - ES5 и порядок файлов
         run: |
           npm install --no-save --silent acorn@8

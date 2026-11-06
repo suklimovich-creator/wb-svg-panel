@@ -161,10 +161,26 @@ def cam_jpg(name):
     return Response(data, mimetype=ctype, headers={"Cache-Control": cache})
 
 
+def _screen_stream_options():
+    """Параметры ужатого потока для ESP32; None - обычный поток браузера."""
+    if "width" not in request.args and "fps" not in request.args:
+        return None
+    try:
+        width = int(request.args.get("width", 480))
+        fps = float(request.args.get("fps", 5))
+    except (TypeError, ValueError):
+        raise ValueError("width и fps должны быть числами")
+    if not 160 <= width <= 480:
+        raise ValueError("width должен быть от 160 до 480")
+    if not 1 <= fps <= 6:
+        raise ValueError("fps должен быть от 1 до 6")
+    return width, fps
+
+
 @app.route("/cam/<name>.mjpeg")
 def cam_stream(name):
     """
-    Поток MJPEG, проксируемый как есть.
+    Поток MJPEG: без параметров как есть, с width/fps - ужатый для ESP32.
 
     Соединение живёт, пока открыто окно, и всё это время занимает поток
     waitress - отсюда и ограничение на число одновременных просмотров, и
@@ -174,11 +190,15 @@ def cam_stream(name):
     cam = cameras.get(name)
     if cam is None:
         abort(404, "камера %r не описана в разделе cameras" % name)
+    try:
+        options = _screen_stream_options()
+    except ValueError as exc:
+        return Response(str(exc), status=400, mimetype="text/plain")
     if not cameras.acquire_slot():
         return Response("сейчас смотрят слишком много камер",
                         status=503, mimetype="text/plain")
     try:
-        gen, ctype = cam.stream()
+        gen, ctype = cam.screen_stream(*options) if options else cam.stream()
     except cameras.CameraError as exc:
         cameras.release_slot()
         log.warning("%s", exc)
@@ -189,6 +209,11 @@ def cam_stream(name):
             for chunk in gen:
                 yield chunk
         finally:
+            # Закрыть генератор = закрыть ответ камеры. Иначе при обрыве
+            # клиента мог освободиться слот, но остаться исходящий MJPEG.
+            close = getattr(gen, "close", None)
+            if close:
+                close()
             cameras.release_slot()
 
     return Response(body(), mimetype=ctype, direct_passthrough=True,

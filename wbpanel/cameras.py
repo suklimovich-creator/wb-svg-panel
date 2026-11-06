@@ -17,9 +17,10 @@
     снимок  - один кадр JPEG, с коротким кешем: несколько планшетов,
               обновляющих панель вразнобой, не должны будить камеру
               каждые полсекунды;
-    поток   - MJPEG, проксируемый как есть. Занимает поток waitress на
-              всё время просмотра, поэтому число одновременных
-              ограничено, а длительность одного соединения - тоже.
+    поток   - MJPEG, проксируемый как есть для браузера; для ESP32 может
+              собираться заново с уменьшением кадров и ограничением fps.
+              Занимает поток waitress на всё время просмотра, поэтому число
+              одновременных ограничено, а длительность одного соединения - тоже.
 
 Пути по умолчанию - для Hikvision/HiWatch; Dahua и IMOU описаны рядом,
 всё остальное задаётся вручную полями snapshot и stream.
@@ -28,11 +29,13 @@
 urllib, и тащить requests ради двух запросов незачем.
 """
 
+import io
 import json
 import threading
 import time
 import urllib.error
 import urllib.request
+from email.message import Message
 
 from .const import log
 
@@ -66,9 +69,140 @@ BRANDS = {
 
 DEFAULT_BRAND = "hikvision"
 
+#: Верхний предел одного JPEG из MJPEG. Без него оборванный или неверно
+#: настроенный поток мог бы наращивать буфер до исчерпания памяти.
+MJPEG_MAX_FRAME = 2 * 1024 * 1024
+SCREEN_BOUNDARY = "wb-svg-panel"
+
 
 class CameraError(Exception):
     """Камера не ответила или ответила не тем. Текст идёт человеку."""
+
+
+def _boundary(content_type):
+    """Boundary из Content-Type; email.message убирает кавычки и параметры."""
+    msg = Message()
+    msg["content-type"] = content_type or ""
+    value = msg.get_param("boundary", header="content-type")
+    if not value:
+        raise CameraError("у MJPEG нет boundary в Content-Type")
+    try:
+        return b"--" + value.encode("latin-1")
+    except (UnicodeEncodeError, AttributeError):
+        raise CameraError("у MJPEG неверный boundary в Content-Type")
+
+
+def _header_end(buf):
+    """(конец заголовков, длина разделителя) для CRLF и простого LF."""
+    crlf = buf.find(b"\r\n\r\n")
+    lf = buf.find(b"\n\n")
+    if crlf < 0 and lf < 0:
+        return -1, 0
+    if crlf >= 0 and (lf < 0 or crlf <= lf):
+        return crlf, 4
+    return lf, 2
+
+
+def mjpeg_frames(read, content_type, max_frame=MJPEG_MAX_FRAME):
+    """
+    JPEG из потока multipart. read(size) блокируется как у urllib response.
+
+    HTTP-чанки нарочно нигде не считаются кадрами: камера может разрезать
+    заголовок или JPEG где угодно. Сначала ищем boundary и заголовки части,
+    затем берём Content-Length; если его нет - конец JPEG FF D9.
+    """
+    marker = _boundary(content_type)
+    buf = bytearray()
+    eof = False
+
+    def fill():
+        nonlocal eof
+        data = read(16384)
+        if not data:
+            eof = True
+            return False
+        buf.extend(data)
+        return True
+
+    while not eof or buf:
+        # Начало следующей MIME-части.
+        at = buf.find(marker)
+        if at < 0:
+            if len(buf) > max_frame + len(marker):
+                raise CameraError("в MJPEG слишком долго нет boundary")
+            if fill():
+                continue
+            return
+        del buf[:at + len(marker)]
+        if buf.startswith(b"--"):                 # завершающий boundary
+            return
+
+        # Заголовки части. Перед ними у boundary обычно стоит CRLF.
+        end, sep = _header_end(buf)
+        while end < 0:
+            if len(buf) > 65536:
+                raise CameraError("в MJPEG слишком длинные заголовки кадра")
+            if not fill():
+                raise CameraError("MJPEG оборвался в заголовках кадра")
+            end, sep = _header_end(buf)
+        headers = bytes(buf[:end]).decode("latin-1", "replace")
+        del buf[:end + sep]
+        length = None
+        for line in headers.splitlines():
+            key, _sep, value = line.partition(":")
+            if key.strip().lower() == "content-length":
+                try:
+                    length = int(value.strip())
+                except ValueError:
+                    raise CameraError("у MJPEG неверный Content-Length")
+                if length < 0:
+                    raise CameraError("у MJPEG отрицательный Content-Length")
+
+        if length is not None:
+            if length > max_frame:
+                raise CameraError("кадр MJPEG больше %d байт" % max_frame)
+            while len(buf) < length:
+                if not fill():
+                    raise CameraError("MJPEG оборвался посреди кадра")
+            frame = bytes(buf[:length])
+            del buf[:length]
+        else:
+            start = buf.find(b"\xff\xd8")
+            while start < 0:
+                if len(buf) > max_frame:
+                    raise CameraError("кадр MJPEG больше %d байт" % max_frame)
+                if not fill():
+                    raise CameraError("в части MJPEG нет JPEG")
+                start = buf.find(b"\xff\xd8")
+            end = buf.find(b"\xff\xd9", start + 2)
+            while end < 0:
+                if len(buf) > max_frame + 2:
+                    raise CameraError("кадр MJPEG больше %d байт" % max_frame)
+                if not fill():
+                    raise CameraError("MJPEG оборвался посреди JPEG")
+                end = buf.find(b"\xff\xd9", start + 2)
+            frame = bytes(buf[start:end + 2])
+            del buf[:end + 2]
+
+        if not frame.startswith(b"\xff\xd8") or not frame.endswith(b"\xff\xd9"):
+            raise CameraError("часть MJPEG не является законченным JPEG")
+        yield frame
+
+
+def screen_jpeg(data, width):
+    """JPEG не шире width, пропорции сохраняются. Pillow уже есть у панели."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(data))
+    img.load()
+    if img.width > width:
+        height = max(1, round(img.height * width / float(img.width)))
+        resampling = getattr(Image, "Resampling", Image)
+        img = img.resize((width, height), resampling.LANCZOS)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=82)
+    return out.getvalue()
 
 
 class Camera(object):
@@ -243,6 +377,62 @@ class Camera(object):
                 except Exception:                      # noqa: BLE001
                     pass
 
+        return gen(), ctype
+
+    def screen_stream(self, width=480, fps=5):
+        """
+        MJPEG для ESP32-S3: не шире 480 px и не чаще 6 кадров/с.
+
+        Сырой поток выше остаётся нетронутым для браузера. Здесь кадры
+        собираются из multipart, лишние по частоте пропускаются до Pillow,
+        а соединение с камерой закрывается при закрытии генератора клиентом.
+        """
+        if not self.stream_path:
+            raise CameraError("у камеры %r поток выключен" % self.name)
+        width = max(160, min(480, int(width)))
+        fps = max(1.0, min(6.0, float(fps)))
+        resp = self.open(self.stream_path, timeout=self.timeout)
+        source_type = (resp.headers.get("Content-Type")
+                       or "multipart/x-mixed-replace; boundary=--boundary")
+        boundary = SCREEN_BOUNDARY.encode("ascii")
+
+        def gen():
+            deadline = (time.time() + self.stream_limit) if self.stream_limit else None
+            next_frame = 0.0
+            bad_frames = 0
+            try:
+                for raw in mjpeg_frames(resp.read, source_type):
+                    if deadline and time.time() > deadline:
+                        log.info("камера %r: поток закрыт по времени", self.name)
+                        break
+                    now = time.monotonic()
+                    if now < next_frame:
+                        continue
+                    next_frame = now + 1.0 / fps
+                    try:
+                        frame = screen_jpeg(raw, width)
+                    except Exception as exc:            # noqa: BLE001
+                        bad_frames += 1
+                        # Не каждый кадр: у постоянно битого потока журнал
+                        # не должен расти быстрее самого потока.
+                        if bad_frames == 1 or bad_frames % 30 == 0:
+                            log.warning("камера %r: пропущен битый JPEG: %s",
+                                        self.name, exc)
+                        continue
+                    head = (b"--" + boundary + b"\r\nContent-Type: image/jpeg\r\n"
+                            + ("Content-Length: %d\r\n\r\n" % len(frame)).encode("ascii"))
+                    yield head + frame + b"\r\n"
+            except GeneratorExit:
+                raise
+            except Exception as exc:                   # noqa: BLE001
+                log.warning("камера %r: поток оборвался: %s", self.name, exc)
+            finally:
+                try:
+                    resp.close()
+                except Exception:                      # noqa: BLE001
+                    pass
+
+        ctype = "multipart/x-mixed-replace; boundary=" + SCREEN_BOUNDARY
         return gen(), ctype
 
 

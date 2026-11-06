@@ -81,6 +81,7 @@ systemctl restart wb-svg-panel
 | `/panel/stats` | счётчики нагрузки (смотреть через `tools/watch-load.py`) |
 | `/panel/api/screen/<имя>` | раскладка для esp32-panel: `cols` панели и обычные `w`/`h` плиток (с 1.74) |
 | `/panel/api/screen/<имя>/chart/<n>` | история графика для esp32-panel 0.7+ |
+| `/panel/cam/<имя>.mjpeg?width=480&fps=5` | уменьшенный MJPEG для экрана ESP32-S3 (с 1.75) |
 
 Страница `.html` — это PWA: на телефоне её можно добавить на домашний экран,
 и она откроется без адресной строки, как приложение.

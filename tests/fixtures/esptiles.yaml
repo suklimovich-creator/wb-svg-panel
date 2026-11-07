@@ -1,0 +1,100 @@
+mqtt:
+  host: 127.0.0.1
+screens:
+  panel-test: wall
+lists:
+  shopping:
+    title: Покупки
+calendars:
+  family:
+    title: Семья
+    ical: https://example.invalid/x.ics
+    color: '#3B8FD4'
+water:
+  modules:
+    mwac:
+      alarm: mw/Leakage Mode
+      reset: mw/Leakage Mode Reset
+  valves:
+    cold:
+      title: Холодная
+      channel: mw/Output K1
+      water: cold
+      module: mwac
+    hot:
+      title: Горячая
+      channel: mw/Output K2
+      water: hot
+      module: mwac
+  sensors:
+    bath:
+      title: Ванная
+      channel: mw/Input F1
+      closes: [cold, hot]
+      module: mwac
+    kitchen:
+      title: Кухня
+      channel: mw/Input F3
+      closes: [cold, hot]
+      module: mwac
+panels:
+  wall:
+    title: Стена
+    hidden: true
+    cols: 4
+    sections:
+    - title: Свет
+      tiles:
+      - type: dimmer
+        title: Споты
+        channel: dm/K1
+        channel_brightness: dm/Channel 1
+        w: 1
+        h: 1
+      - type: light
+        title: Лента
+        channel_switch: led/CCT1
+        channel_brightness: led/CCT1 Brightness
+        channel_temp: led/CCT1 Temperature
+        temp_unit: percent
+        temp_min: 2700
+        temp_max: 6500
+        w: 1
+        h: 1
+    - title: Сцены
+      tiles:
+      - type: scenes
+        title: Сцены
+        w: 1.5
+        h: 1.5
+        items:
+        - {title: "Выкл. всё", icon: power, channel: "lightingScenes/off_all"}
+        - {title: "Спать", icon: moon, channel: "lightingScenes/bedtime"}
+        - {title: "Кино", icon: tv, channel: "lightingScenes/cinema", level: 0.4}
+        - {title: "Ярко", icon: sun, channel: "lightingScenes/bright", command_on: "true"}
+    - title: Дом
+      tiles:
+      - type: tv
+        title: Телевизор
+        device: tv_living
+        w: 1
+        h: 1
+        apps:
+        - {control: app_kinopoisk, title: Кинопоиск}
+        - {control: app_youtube, title: YouTube}
+      - {type: leak, title: Протечки, w: 2, h: 1}
+      - {type: forecast, title: Погода, device: weather, w: 2, h: 1}
+      - type: today
+        title: Сегодня
+        list: shopping
+        calendars: [family]
+        w: 2
+        h: 1.5
+    - title: Заставка
+      screensaver: 5m
+      tiles:
+      - type: agenda
+        title: Расписание
+        calendars: [family]
+        w: 2
+        h: 1.5

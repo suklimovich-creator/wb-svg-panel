@@ -47,8 +47,21 @@
 а добавляют одноимённый блок: after/every в секундах, унаследованный cols и
 pages с плитками этих секций. Страницы заставки меняются по кругу через every.
 Её графики читаются через /api/screen/<имя>/screensaver/chart/<n>.
+С 1.77 (нужна esp32-panel 0.10+):
+- у диммера и ленты есть поле pad kind=light - пульт света во весь экран
+  (яркость и теплота детально, как pads-light.js у панели);
+- scenes приходит одной плиткой-набором с items, а не плиткой на клавишу;
+- телевизор - типом tv со своим пультом (kind=tv): крестовина, медиа,
+  громкость, приложения;
+- протечки - типом leak со списком датчиков, флагом тревоги и сбросом
+  (kind=leak);
+- прогноз - типом weather: текущие каналы и ряды прогноза одними топиками;
+- «Сегодня» и расписание - типом today; дела и события меняются, поэтому
+  отдаются отдельно: /api/screen/<имя>/today/<n> (у заставки -
+  /api/screen/<имя>/screensaver/today/<n>), как точки графиков.
 """
 
+import datetime as dt
 import json
 import math
 from urllib.parse import quote
@@ -57,12 +70,18 @@ from flask import Response, abort
 
 from . import cameras, web
 from .assemble import resolve_sections
-from .geometry import cells, parse_duration
+from .calendars import MONTHS, WEEKDAYS, calendars, day_label
+from .geometry import cells, field_color, parse_duration
+from .lists import lists
 from .registry import REGISTRY, resolve_type
 from .sources import bind
 from .state import state
 from .tiles import AC_FAN_RU, AC_MODE_RU, HEAT_MODE, HEAT_NOW, command_topic
 from .tiles_basic import Scene
+from .tiles_calendar import _hm, _state, _when_text
+from .tiles_devicewide import TV_STATE_RU, tv_apps
+from .tiles_today import _cal_names
+from .water import water
 from .web import app
 
 #: Прежняя ширина экрана; cols панели может её изменить (с 1.74).
@@ -245,43 +264,75 @@ def _cover_pad(conf, bound, style):
             "stop": str(conf.get("command_stop", "2")) if _c(bound, "stop") else None}
 
 
+def _light_pad(conf, bound):
+    """Пульт света во весь экран (с 1.77): яркость и теплота детально.
+
+    Топики те же, что у плитки, - продублированы, как у сводок: пульт
+    разбирает только своё поле pad и плитку не видит.
+    """
+    level, level_cmd = _t(bound, "bright"), _c(bound, "bright")
+    if not level or not level_cmd:
+        return None
+    _lo, hi = _limits(bound, "bright", 0, 100)
+    pad = {"kind": "light", "state": _t(bound, "switch"),
+           "state_cmd": _c(bound, "switch"),
+           "level": level, "level_cmd": level_cmd, "max": hi}
+    if _t(bound, "temp"):
+        # Цвета - от кельвинов конфига, даже когда канал в процентах
+        # (как в Light.prepare: cold - холодный край, k_max).
+        unit = str(conf.get("temp_unit", "percent"))
+        tlo, thi = (0, 100) if unit == "percent" else (
+            int(conf.get("temp_min", 2700)), int(conf.get("temp_max", 6500)))
+        tlo, thi = _limits(bound, "temp", tlo, thi)
+        k_lo, k_hi = int(conf.get("temp_min", 2700)), int(conf.get("temp_max", 6500))
+        pad.update({"temp": _t(bound, "temp"), "temp_cmd": _c(bound, "temp"),
+                    "temp_min": tlo, "temp_max": thi, "unit": unit,
+                    "cold": str(conf.get("cold_color") or field_color(k_hi)),
+                    "warm": str(conf.get("warm_color") or field_color(k_lo))})
+    return pad
+
+
 def _table_map(raw, default):
     """Таблица значений фанкойла -> {"0": "Охлаждение", ...}."""
     from .tiles_fancoil import table
     return {str(k): str(v.get("title", k)) for k, v in table(raw, default)}
 
 
-def _scenes(conf):
-    """Плитка scenes (клавиши сеткой) -> отдельная плитка на каждую сцену."""
-    out = []
-    for item in conf.get("items") or []:
-        if not isinstance(item, dict) or not item.get("channel"):
-            continue
+def _scenes_tile(conf, w):
+    """Плитка scenes (клавиши сеткой) -> один набор на экране (с 1.77)."""
+    raw = [i for i in (conf.get("items") or []) if isinstance(i, dict) and i.get("channel")]
+    items = []
+    for k, item in enumerate(raw):
         cmd = command_topic(item["channel"], item.get("command_topic"))
         if not cmd:
             continue
         if item.get("command_on") is not None:
             payload = str(item["command_on"])
         else:
-            raw = str(state.values.get(item["channel"]) or "").strip().lower()
-            payload = Scene.FORMS.get(raw, ("1", "0"))[0]
-        tile = {"type": "scene", "title": str(item.get("title") or ""), "w": 1,
-                "cmd": cmd, "payload": payload}
+            raw_value = str(state.values.get(item["channel"]) or "").strip().lower()
+            payload = Scene.FORMS.get(raw_value, ("1", "0"))[0]
+        try:
+            level = float(item.get("level"))
+        except (TypeError, ValueError):
+            # Без level - как на панели: от тусклых к ярким по порядку.
+            level = k / float(max(1, len(raw) - 1))
+        out = {"title": str(item.get("title") or ""), "cmd": cmd,
+               "payload": payload, "level": round(max(0.0, min(1.0, level)), 2)}
         if item.get("icon"):
-            tile["icon"] = str(item["icon"])
-        out.append(tile)
-    return out
+            out["icon"] = str(item["icon"])
+        items.append(out)
+    if not items:
+        return None
+    return {"type": "scenes", "title": str(conf.get("title") or "Сцены"),
+            "w": w, "items": items}
 
 
 def screen_tiles(conf, cols):
-    """Плитка панели -> плитки экрана (обычно одна; сцены - по одной на клавишу)."""
+    """Плитка панели -> плитки экрана (сейчас всегда одна)."""
     if not isinstance(conf, dict) or conf.get("screen") is False:
         return []
-    if resolve_type(conf, state) == "scenes":
-        out = _scenes(conf)
-    else:
-        t = screen_tile(conf, cols)
-        out = [t] if t else []
+    t = screen_tile(conf, cols)
+    out = [t] if t else []
     h = _size(conf, "h")
     for t in out:
         t["h"] = h
@@ -320,6 +371,11 @@ def screen_tile(conf, cols):
             out["invert"] = True
         return out if out["state"] else None
 
+    if kind == "scenes":
+        # С 1.77 - одна плитка-набор; экраны до 0.10 раскладывали её на
+        # отдельные плитки сцен и этот тип не покажут.
+        return _scenes_tile(conf, w)
+
     if kind == "scene":
         cmd = _c(bound, "value")
         # Канал сцены - виртуальный выключатель; если он readonly или задан
@@ -347,7 +403,12 @@ def screen_tile(conf, cols):
             tlo, thi = _limits(bound, "temp", tlo, thi)
             out.update({"temp": _t(bound, "temp"), "temp_cmd": _c(bound, "temp"),
                         "temp_min": tlo, "temp_max": thi})
-        return out if out["level"] else None
+        if not out["level"]:
+            return None
+        pad = _light_pad(conf, bound)
+        if pad:
+            out["pad"] = {k: v for k, v in pad.items() if v is not None}
+        return out
 
     if kind == "value":
         b = bound.get("value")
@@ -453,9 +514,76 @@ def screen_tile(conf, cols):
                 "points": points, "series": out_series}
 
     if kind == "forecast":
+        # Погода (с 1.77): текущие каналы устройства и ряды прогноза.
+        # Значения экран читает из MQTT, раскладка от этого стабильна.
         dev = conf.get("device") or "weather"
-        return _info(title or "Погода", w, _dev(dev, "temperature"), "°C", 1,
-                     lines=[{"topic": _dev(dev, "description")}])
+        return {"type": "weather", "title": title or "Погода", "w": w,
+                "temp": _dev(dev, "temperature"), "desc": _dev(dev, "description"),
+                "hum": _dev(dev, "humidity"), "press": _dev(dev, "pressure"),
+                "wind": _dev(dev, "windspeed"),
+                "tmin": _dev(dev, "temp_min_12h"), "tmax": _dev(dev, "temp_max_12h"),
+                "series": {"temp": _dev(dev, "temp_series"),
+                           "code": _dev(dev, "code_series"),
+                           "prob": _dev(dev, "precip_prob_series"),
+                           "cloud": _dev(dev, "cloud_series"),
+                           "start": _dev(dev, "forecast_start")}}
+
+    if kind == "tv":
+        # Телевизор (с 1.77): плитка со статусом и пульт kind=tv. Адреса
+        # кнопок экран собирает сам из base и имён контролов моста wb-tv.
+        dev = conf.get("device")
+        if not dev:
+            return _info(title or "Телевизор", w, note="не настроен")
+        base = _dev(dev, "")
+        apps = [{"title": name, "cmd": "%s%s/on" % (base, control)}
+                for control, name in tv_apps(conf)]
+        pad = {"kind": "tv", "base": base, "state": _dev(dev, "power"),
+               "link": _dev(dev, "online"), "app": _dev(dev, "current_app"),
+               "mode": _dev(dev, "state"),
+               "states": {str(k): v for k, v in TV_STATE_RU.items()},
+               "apps": apps}
+        return {"type": "tv", "title": title or "Телевизор", "w": w,
+                "state": pad["state"], "link": pad["link"], "app": pad["app"],
+                "mode": pad["mode"], "states": pad["states"],
+                "pad": {k: v for k, v in pad.items() if v not in (None, [], "")}}
+
+    if kind == "leak":
+        # Протечки (с 1.77): датчики списком (экран рисует чипы сам),
+        # общий флаг тревоги и адреса сброса из раздела water.
+        sensors = water.pick_sensors(conf.get("sensors"), conf.get("channel"))
+        rows = []
+        for s in sensors:
+            topic = topic_of(s.get("channel"))
+            if topic:
+                rows.append({"topic": topic, "title": str(s.get("title") or "")})
+        alarm = _t(bound, "alarm")
+        if not rows and not alarm:
+            return _info(title or "Протечки", w, note="не заданы датчики")
+        resets = list(water.resets(sensors))
+        b = bound.get("reset")
+        if b and b.command and b.command not in resets:
+            resets.append(b.command)
+        pad = {"kind": "leak", "reset": resets}
+        out = {"type": "leak", "title": title or "Протечки", "w": w,
+               "icon": str(conf.get("icon") or "leak"), "sensors": rows,
+               "pad": {k: v for k, v in pad.items() if v not in (None, [], "")}}
+        if alarm:
+            out["alarm"] = alarm
+        return out
+
+    if kind in ("today", "agenda"):
+        # «Сегодня» и расписание (с 1.77): в раскладке - только откуда брать
+        # данные; дела и события приходят отдельно через адрес из поля data,
+        # как точки графиков (иначе раскладка менялась бы каждый час).
+        out = {"type": "today",
+               "title": title or ("Сегодня" if kind == "today" else "Расписание"),
+               "w": w}
+        if conf.get("list"):
+            out["list"] = str(conf["list"])
+        names = _cal_names(conf.get("calendars"))
+        if names:
+            out["calendars"] = names
+        return out
 
     # Остальное (списки, календарь, вода, телевизор, ссылки) -
     # честная заглушка с названием.
@@ -480,6 +608,8 @@ def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=Fal
     """Секции панели -> обычные страницы экрана либо одна заставка."""
     pages = []
     chart_index = 0
+    today_index = 0
+    today_base = history_base[:-len("chart")] + "today"
     for section, (title, tiles, _src, _key) in _screen_sections(panel, panels):
         marked = bool(section and "screensaver" in section)
         if screensaver:
@@ -498,6 +628,10 @@ def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=Fal
                 # иначе каждый новый точечный ряд выглядел бы как новая раскладка.
                 tile["history"] = "%s/%d" % (history_base, chart_index)
                 chart_index += 1
+            elif tile.get("type") == "today":
+                # Дела и события - тоже отдельно: они меняются каждый час.
+                tile["data"] = "%s/%d" % (today_base, today_index)
+                today_index += 1
         if out:
             pages.append({"title": title or panel.get("title") or panel_name,
                           "tiles": out})
@@ -588,6 +722,74 @@ def api_screen_chart(name, index):
     return _chart_response(name, index)
 
 
+def _today_response(name, index, screensaver=False):
+    """Дела и события плитки «Сегодня» основной раскладки или заставки."""
+    panel = panel_for(name)
+    if not panel:
+        abort(404)
+    layout = screen_layout(panel)
+    pages = layout.get("screensaver", {}).get("pages", []) if screensaver else layout["pages"]
+    tiles = [tile for page in pages for tile in page["tiles"]
+             if tile.get("type") == "today"]
+    if index < 0 or index >= len(tiles):
+        abort(404)
+    tile = tiles[index]
+
+    tz = calendars.tz()
+    now = dt.datetime.now(tz)
+    today = now.date()
+    out = {"version": 1, "title": tile.get("title") or "Сегодня",
+           "date": day_label(today, today).split(", ", 1)[-1]}
+
+    name_l = tile.get("list")
+    if name_l and lists.known(str(name_l)):
+        view = lists.view(str(name_l))
+        out["list_title"] = str(view.get("title") or name_l)
+        out["tasks"] = [str(item.get("text") or "")
+                        for item in view.get("open") or []]
+
+    names = [str(n) for n in tile.get("calendars") or []]
+    if names:
+        days = []
+        for shift in (0, 1):
+            day = today + dt.timedelta(days=shift)
+            events = []
+            for ev in calendars.day(names, day):
+                row = {"text": str(ev.get("title") or ""),
+                       "color": str(ev.get("color") or ""),
+                       "state": (_state(ev, now) if day == today
+                                 else ("day" if ev["all_day"] else "next"))}
+                if ev["all_day"]:
+                    row["time"] = "весь день"
+                else:
+                    row["time"] = _when_text(ev, day, tz)
+                    if (ev["end"] > ev["start"] and
+                            ev["start"].astimezone(tz).date() == day):
+                        row["end"] = _hm(ev["end"].astimezone(tz))
+                where = str(ev.get("location") or "")
+                if where:
+                    row["where"] = where
+                events.append(row)
+            days.append({"label": day_label(day, today), "events": events})
+        out["days"] = days
+
+    body = json.dumps(out, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return Response(body, mimetype="application/json",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.route("/api/screen/<name>/today/<int:index>")
+def api_screen_today(name, index):
+    """Дела и события плитки «Сегодня»; индекс - из поля data в раскладке."""
+    return _today_response(name, index)
+
+
+@app.route("/api/screen/<name>/screensaver/today/<int:index>")
+def api_screen_saver_today(name, index):
+    """Данные плитки «Сегодня» заставки; нумерация не зависит от основных плиток."""
+    return _today_response(name, index, screensaver=True)
+
+
 @app.route("/api/screen/<name>/screensaver/chart/<int:index>")
 def api_screen_saver_chart(name, index):
     """История графика заставки; нумерация не зависит от основных плиток."""
@@ -595,4 +797,5 @@ def api_screen_saver_chart(name, index):
 
 
 __all__ = ["api_screen", "api_screen_chart", "api_screen_saver_chart",
+           "api_screen_saver_today", "api_screen_today",
            "screen_layout", "screen_tile", "screen_tiles"]

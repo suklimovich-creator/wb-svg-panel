@@ -79,9 +79,11 @@ systemctl restart wb-svg-panel
 | `/panel/docs` | подробный справочник по типам плиток |
 | `/panel/healthz` | состояние демона |
 | `/panel/stats` | счётчики нагрузки (смотреть через `tools/watch-load.py`) |
-| `/panel/api/screen/<имя>` | раскладка для esp32-panel: `cols`, обычные `w`/`h` и секции-заставки `screensaver: 30s` (с 1.76) |
+| `/panel/api/screen/<имя>` | раскладка для esp32-panel: `cols`, обычные `w`/`h` и секции-заставки `screensaver: 30s` (с 1.76); пульт света, набор сцен и типы `tv`, `leak`, `weather`, `today` (с 1.77, esp32-panel 0.10+) |
 | `/panel/api/screen/<имя>/chart/<n>` | история графика для esp32-panel 0.7+ |
 | `/panel/api/screen/<имя>/screensaver/chart/<n>` | история графика заставки (с 1.76) |
+| `/panel/api/screen/<имя>/today/<n>` | дела и события плитки `today`/`agenda` (с 1.77) |
+| `/panel/api/screen/<имя>/screensaver/today/<n>` | то же для заставки (с 1.77) |
 | `/panel/cam/<имя>.mjpeg?width=480&fps=5` | уменьшенный MJPEG для экрана ESP32-S3 (с 1.75) |
 
 Страница `.html` — это PWA: на телефоне её можно добавить на домашний экран,

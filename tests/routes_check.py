@@ -87,13 +87,16 @@ CASES = [
     ("GET", "/static/js/core.js", None, (200,), ""),
     # Раскладка для настенного экрана esp32-panel (1.70)
     ("GET", "/api/screen/misc", None, (200,), '"type":"dimmer"'),
-    ("GET", "/api/screen/scn", None, (200,), '"type":"scene"'),
+    # С 1.77 сцены - одна плитка-набор, а не плитка на каждую клавишу.
+    ("GET", "/api/screen/scn", None, (200,), '"type":"scenes"'),
     ("GET", "/api/screen/scn", None, (200,), '"icon":"moon"'),
     ("GET", "/api/screen/misc", None, (200,), '"light":true'),
     ("GET", "/api/screen/clim", None, (200,), '"type":"info"'),
     ("GET", "/api/screen/clim", None, (200,), '"kind":"climate"'),
     ("GET", "/api/screen/nope/chart/0", None, (404,), ""),
     ("GET", "/api/screen/misc/screensaver/chart/0", None, (404,), ""),
+    ("GET", "/api/screen/nope/today/0", None, (404,), ""),
+    ("GET", "/api/screen/misc/screensaver/today/0", None, (404,), ""),
     ("GET", "/api/screen/nope", None, (404,), ""),
 ]
 
@@ -104,7 +107,9 @@ COVERED = {"/", "/healthz", "/manifest.webmanifest", "/icon.svg", "/docs",
            "/api/list/<name>", "/api/publish", "/cam/<name>.jpg", "/cam/<name>.mjpeg",
            "/glyph/<name>.svg", "/static/<path:filename>", "/wall/<key>.jpg",
            "/api/screen/<name>", "/api/screen/<name>/chart/<int:index>",
-           "/api/screen/<name>/screensaver/chart/<int:index>"}
+           "/api/screen/<name>/screensaver/chart/<int:index>",
+           "/api/screen/<name>/today/<int:index>",
+           "/api/screen/<name>/screensaver/today/<int:index>"}
 
 
 def main():

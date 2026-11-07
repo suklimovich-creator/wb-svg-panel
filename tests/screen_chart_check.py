@@ -39,6 +39,9 @@ def main():
     assert tile["history"] == "/api/screen/espchart/chart/0"
     assert len(tile["series"]) == 3
     assert tile["series"][0]["value"] == "/devices/msw/controls/Temperature"
+    # Явный цвет сохраняется; CO2 и VOC без color получают цвета величины WB,
+    # а не первые два цвета общей палитры экрана.
+    assert [s["color"] for s in tile["series"]] == ["#E08A2D", "#4E9A6B", "#8E6BC4"]
     assert layout_response.get_data() == client.get("/api/screen/espchart").get_data(), \
         "история не должна менять раскладку"
 

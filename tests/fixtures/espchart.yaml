@@ -14,8 +14,8 @@ panels:
       h: 2
       series:
       - {channel: msw/Temperature, unit: °C, color: '#E08A2D'}
-      - {channel: msw/Humidity, unit: '%', color: '#3B93C4', digits: 0}
-      - {channel: msw/CO2, unit: ppm, color: '#4E9A6B', digits: 0}
+      - {channel: msw/CO2, unit: ppm, digits: 0}
+      - {channel: msw/Air Quality (VOC), unit: '', digits: 0}
   espfraction:
     title: Дробные размеры
     hidden: true

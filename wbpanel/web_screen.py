@@ -68,7 +68,7 @@ from urllib.parse import quote
 
 from flask import Response, abort
 
-from . import cameras, web
+from . import cameras, palette, web
 from .assemble import resolve_sections
 from .calendars import MONTHS, WEEKDAYS, calendars, day_label
 from .geometry import cells, field_color, parse_duration
@@ -79,7 +79,7 @@ from .state import state
 from .tiles import AC_FAN_RU, AC_MODE_RU, HEAT_MODE, HEAT_NOW, command_topic
 from .tiles_basic import Scene
 from .tiles_calendar import _hm, _state, _when_text
-from .tiles_devicewide import TV_STATE_RU, tv_apps
+from .tiles_devicewide import TV_STATE_RU, _series_kind, tv_apps
 from .tiles_today import _cal_names
 from .water import water
 from .web import app
@@ -492,7 +492,13 @@ def screen_tile(conf, cols):
         except (TypeError, ValueError):
             points = 90
         points = max(10, min(points, 120))
-        colors = ("#E08A2D", "#3B93C4", "#4E9A6B")
+        # Как в SVG-графике: свой color сильнее темы, затем цвет величины
+        # (CO2/VOC и т. п.), и только потом общая палитра. Раньше здесь
+        # принудительно подставлялись оранжевый/синий, поэтому ESP получал
+        # их как явный color и не мог применить свои цвета по умолчанию.
+        colors = palette.series_colors("light", [
+            (spec.get("color"), _series_kind(spec, state.snapshot(spec["channel"])))
+            for spec in series[:3]])
         out_series = []
         for i, spec in enumerate(series[:3]):
             try:
@@ -501,7 +507,7 @@ def screen_tile(conf, cols):
                 digits = 1
             item = {"channel": spec["channel"], "value": topic_of(spec["channel"]),
                     "unit": spec.get("unit", ""), "digits": digits,
-                    "color": spec.get("color") or colors[i],
+                    "color": colors[i],
                     "label": spec.get("label", "")}
             if spec.get("min") is not None and spec.get("max") is not None:
                 try:

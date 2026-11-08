@@ -1,18 +1,82 @@
 mqtt:
   host: 127.0.0.1
 screens:
-  panel-clock: clock
+  panel-clock: clock-all
 panels:
   clock:
-    title: Часы
+    title: Часы и погода — композиция
     hidden: true
     cols: 4
     sections:
     - title: Часы и погода
       tiles:
-      - {type: clock, title: Часы, device: weather, w: 2, h: 1}
-      - {type: clock, device: weather, w: 1, h: 1}
       - {type: clock, device: weather, w: 2, h: 0.5}
+      - {type: clock, device: weather, w: 1, h: 1}
+      - {type: clock, device: weather, w: 2, h: 1}
+      - {type: clock, device: weather, w: 2, h: 2}
+      - {type: clock, device: weather, w: 1.5, h: 1.5}
+      - {type: clock, device: weather, w: 1, h: 1.5}
+  clock-single:
+    title: Только часы
+    hidden: true
+    cols: 4
+    sections:
+    - title: Часы
+      tiles:
+      - {type: clock, view: clock, device: weather, w: 2, h: 0.5}
+      - {type: clock, view: clock, device: weather, w: 1, h: 1}
+      - {type: clock, view: clock, device: weather, w: 2, h: 1}
+      - {type: clock, view: clock, device: weather, w: 2, h: 2}
+      - {type: clock, view: clock, device: weather, w: 1.5, h: 1.5}
+      - {type: clock, view: clock, device: weather, w: 1, h: 1.5}
+  weather-single:
+    title: Только погода
+    hidden: true
+    cols: 4
+    sections:
+    - title: Погода
+      tiles:
+      - {type: clock, view: weather, device: weather, w: 2, h: 0.5}
+      - {type: clock, view: weather, device: weather, w: 1, h: 1}
+      - {type: clock, view: weather, device: weather, w: 2, h: 1}
+      - {type: clock, view: weather, device: weather, w: 2, h: 2}
+      - {type: clock, view: weather, device: weather, w: 1.5, h: 1.5}
+      - {type: clock, view: weather, device: weather, w: 1, h: 1.5}
+  clock-all:
+    title: Часы — все режимы
+    hidden: true
+    cols: 4
+    sections:
+    - title: Низкие
+      tiles:
+      - {type: clock, device: weather, w: 2, h: 0.5}
+      - {type: clock, view: clock, device: weather, w: 2, h: 0.5}
+      - {type: clock, view: weather, device: weather, w: 2, h: 0.5}
+    - title: Квадраты
+      tiles:
+      - {type: clock, device: weather, w: 1, h: 1}
+      - {type: clock, view: clock, device: weather, w: 1, h: 1}
+      - {type: clock, view: weather, device: weather, w: 1, h: 1}
+    - title: Широкие
+      tiles:
+      - {type: clock, device: weather, w: 2, h: 1}
+      - {type: clock, view: clock, device: weather, w: 2, h: 1}
+      - {type: clock, view: weather, device: weather, w: 2, h: 1}
+    - title: Большие квадраты
+      tiles:
+      - {type: clock, device: weather, w: 2, h: 2}
+      - {type: clock, view: clock, device: weather, w: 2, h: 2}
+      - {type: clock, view: weather, device: weather, w: 2, h: 2}
+    - title: Полуторные квадраты
+      tiles:
+      - {type: clock, device: weather, w: 1.5, h: 1.5}
+      - {type: clock, view: clock, device: weather, w: 1.5, h: 1.5}
+      - {type: clock, view: weather, device: weather, w: 1.5, h: 1.5}
+    - title: Вертикальные
+      tiles:
+      - {type: clock, device: weather, w: 1, h: 1.5}
+      - {type: clock, view: clock, device: weather, w: 1, h: 1.5}
+      - {type: clock, view: weather, device: weather, w: 1, h: 1.5}
   clock-inv:
     title: Часы — тёмные карточки
     hidden: true
@@ -20,6 +84,9 @@ panels:
     sections:
     - title: Проверка стилей
       tiles:
-      - {type: clock, device: weather, color: dark, w: 2, h: 1}
-      - {type: clock, device: weather, color: dark, w: 1, h: 1}
       - {type: clock, device: weather, color: dark, w: 2, h: 0.5}
+      - {type: clock, device: weather, color: dark, w: 1, h: 1}
+      - {type: clock, device: weather, color: dark, w: 2, h: 1}
+      - {type: clock, device: weather, color: dark, w: 2, h: 2}
+      - {type: clock, device: weather, color: dark, w: 1.5, h: 1.5}
+      - {type: clock, device: weather, color: dark, w: 1, h: 1.5}

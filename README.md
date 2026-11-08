@@ -79,7 +79,7 @@ systemctl restart wb-svg-panel
 | `/panel/docs` | подробный справочник по типам плиток |
 | `/panel/healthz` | состояние демона |
 | `/panel/stats` | счётчики нагрузки (смотреть через `tools/watch-load.py`) |
-| `/panel/api/screen/<имя>` | раскладка для esp32-panel: `cols`, обычные `w`/`h` и секции-заставки `screensaver: 30s` (с 1.76); пульт света, набор сцен и типы `tv`, `leak`, `weather`, `today` (с 1.77, esp32-panel 0.10+), `clock` (с 1.77.3, esp32-panel 0.11.7+); `swipe: true` у панели разрешает листание вкладок (с 1.77.2, esp32-panel 0.11.7+) |
+| `/panel/api/screen/<имя>` | раскладка для esp32-panel: `cols`, обычные `w`/`h` и секции-заставки `screensaver: 30s` (с 1.76); пульт света, набор сцен и типы `tv`, `leak`, `weather`, `today` (с 1.77, esp32-panel 0.10+), `clock` (с 1.77.3; отрисовка и режимы `view` — esp32-panel 0.11.8+); `swipe: true` у панели разрешает листание вкладок (с 1.77.2, esp32-panel 0.11.7+) |
 | `/panel/api/screen/<имя>/chart/<n>` | история графика для esp32-panel 0.7+ |
 | `/panel/api/screen/<имя>/screensaver/chart/<n>` | история графика заставки (с 1.76) |
 | `/panel/api/screen/<имя>/today/<n>` | дела и события плитки `today`/`agenda` (с 1.77) |

@@ -804,57 +804,50 @@ class Clock(Forecast):
     def prepare(self, ctx):
         data = super().prepare(ctx)
         data["clock_time"], data["clock_date"] = clock_now()
-        # Отдельный SVG-маршрут передаёт view=pad в конфиге; без явного
-        # переноса в данные шаблон продолжал рисовать маленькие часы.
-        data["view"] = ctx.conf.get("view")
+        # view=pad — служебный маршрут полного прогноза. Пользовательский
+        # view описывает состав плитки и больше с ним не смешивается.
+        requested = ctx.conf.get("view")
+        data["view"] = "pad" if requested == "pad" else None
+        data["clock_mode"] = requested if requested in ("clock", "clock_weather", "weather") else "clock_weather"
         data["title"] = ctx.conf.get("title") or "Часы"
-        # Подпись по умолчанию появляется уже после общей подготовки строк,
-        # поэтому обновляем и их: базовые макросы используют готовые списки.
         data["title_lines"] = [data["title"]]
         data["title_low"] = [data["title"]]
 
-        inner_w = ctx.conf.get("inner_w")
-        inner_h = ctx.conf.get("inner_h")
-        if inner_w is not None and inner_h is not None:
-            width, height = float(inner_w), float(inner_h)
-            low = height <= 90
-            square = not low and width <= 180
+        grid_w = float(ctx.conf.get("w") or 1)
+        grid_h = float(ctx.conf.get("h") or 1)
+        ratio = grid_w / grid_h if grid_h > 0 else 2
+        if grid_h <= 0.5:
+            layout = "low"
+        elif ratio > 1.2:
+            layout = "wide"
+        elif ratio < 0.6:
+            layout = "tower"
+        elif ratio < 0.85:
+            layout = "tall"
         else:
-            # На этапе prepare обычно доступны ещё размеры в клетках,
-            # а не пиксели: 2×1, 1×1 и 2×0.5.
-            grid_w = float(ctx.conf.get("w") or 1)
-            grid_h = float(ctx.conf.get("h") or 1)
-            low = grid_h <= 0.5
-            square = not low and grid_w <= 1
-            width = 170 if square else 354
-        if low:
-            # Две равные половины без видимого названия: часы слева,
-            # погода справа; время и температура стоят на одной линии.
-            data["clock_time_fit"] = _fit_weather_text(data["clock_time"], 136, 42, 30)
-            data["clock_temp_fit"] = _fit_weather_text(data["now_temp"], 112, 28, 20)
-            data["clock_desc_fit"] = _fit_weather_text(data["weather_desc"], 153, 10, 6.5)
-            data["clock_extra_fit"] = _fit_weather_text(data["extra"] or "—", 153, 9.5, 6.5)
-        elif square:
-            # Значок и температура центрируются как единая группа. Поэтому
-            # «21°» и «−12.5°» не сдвигают значок и не задевают друг друга.
-            data["clock_time_fit"] = _fit_weather_text(data["clock_time"], 154, 56, 38)
-            temp = _fit_weather_text(data["now_temp"], 94, 28, 20)
-            data["clock_temp_fit"] = temp
-            group_w = 24 + 12 + temp["width"]
-            data["clock_icon_x"] = round((width - group_w) / 2.0, 1)
-            data["clock_temp_x"] = round(data["clock_icon_x"] + 36, 1)
-            data["clock_desc_fit"] = _fit_weather_text(data["weather_desc"], 140, 10.5, 7)
-            data["clock_extra_fit"] = _fit_weather_text(data["extra"] or "—", 140, 9, 6.5)
-        else:
-            # Широкая плитка остаётся в системе координат 354×170.
-            # Время центрируется в левом квадрате независимо от цифр,
-            # а температура уменьшается только когда ей тесно рядом со значком.
-            data["clock_time_fit"] = _fit_weather_text(data["clock_time"], 154, 64, 46)
-            data["clock_temp_fit"] = _fit_weather_text(data["now_temp"], 94, 44, 26)
-            data["clock_desc_fit"] = _fit_weather_text(data["weather_desc"], 144, 12, 8)
-            data["clock_metrics"] = [
-                {"text": part, "fit": _fit_weather_text(part, 150, 11, 7)}
-                for part in (data["extra_parts"] or ["—"])]
+            layout = "square"
+        data["clock_layout"] = layout
+
+        # Независимые базовые представления. Композиция меняет только их
+        # transform, поэтому 2×2 и 1.5×1.5 не получают отдельной разметки.
+        data["clock_low_time_fit"] = _fit_weather_text(data["clock_time"], 136, 42, 30)
+        data["clock_half_time_fit"] = _fit_weather_text(data["clock_time"], 154, 56, 38)
+        data["clock_square_time_fit"] = _fit_weather_text(data["clock_time"], 154, 64, 46)
+        data["clock_low_temp_fit"] = _fit_weather_text(data["now_temp"], 112, 28, 20)
+        data["clock_half_temp_fit"] = _fit_weather_text(data["now_temp"], 94, 28, 20)
+        data["clock_square_temp_fit"] = _fit_weather_text(data["now_temp"], 94, 44, 26)
+        data["clock_low_desc_fit"] = _fit_weather_text(data["weather_desc"], 153, 10, 6.5)
+        data["clock_half_desc_fit"] = _fit_weather_text(data["weather_desc"], 140, 10.5, 7)
+        data["clock_square_desc_fit"] = _fit_weather_text(data["weather_desc"], 144, 12, 8)
+        data["clock_low_extra_fit"] = _fit_weather_text(data["extra"] or "—", 153, 9.5, 6.5)
+        data["clock_half_extra_fit"] = _fit_weather_text(data["extra"] or "—", 140, 9, 6.5)
+        temp = data["clock_half_temp_fit"]
+        group_w = 24 + 12 + temp["width"]
+        data["clock_half_icon_x"] = round((170 - group_w) / 2.0, 1)
+        data["clock_half_temp_x"] = round(data["clock_half_icon_x"] + 36, 1)
+        data["clock_metrics"] = [
+            {"text": part, "fit": _fit_weather_text(part, 150, 11, 7)}
+            for part in (data["extra_parts"] or ["—"])]
         return data
 
 

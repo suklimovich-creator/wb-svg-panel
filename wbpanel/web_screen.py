@@ -63,6 +63,8 @@ pages с плитками этих секций. Страницы заставк
 esp32-panel 0.11.7+ разрешает по нему горизонтальное листание вкладок.
 С 1.77.3 плитка clock приходит типом clock с теми же погодными каналами,
 что и weather; время экран показывает из своих синхронизированных часов.
+С 1.77.4 её view передаёт состав clock, clock_weather (по умолчанию) или
+weather; служебный view=pad в JSON не попадает и по-прежнему означает прогноз.
 """
 
 import datetime as dt
@@ -528,17 +530,21 @@ def screen_tile(conf, cols):
         # ряды прогноза. Значения экран читает из MQTT, время - локально,
         # поэтому раскладка не меняется ни от показаний, ни каждую минуту.
         dev = conf.get("device") or "weather"
-        return {"type": "clock" if kind == "clock" else "weather",
-                "title": title or ("Часы" if kind == "clock" else "Погода"), "w": w,
-                "temp": _dev(dev, "temperature"), "desc": _dev(dev, "description"),
-                "hum": _dev(dev, "humidity"), "press": _dev(dev, "pressure"),
-                "wind": _dev(dev, "windspeed"),
-                "tmin": _dev(dev, "temp_min_12h"), "tmax": _dev(dev, "temp_max_12h"),
-                "series": {"temp": _dev(dev, "temp_series"),
-                           "code": _dev(dev, "code_series"),
-                           "prob": _dev(dev, "precip_prob_series"),
-                           "cloud": _dev(dev, "cloud_series"),
-                           "start": _dev(dev, "forecast_start")}}
+        out = {"type": "clock" if kind == "clock" else "weather",
+               "title": title or ("Часы" if kind == "clock" else "Погода"), "w": w,
+               "temp": _dev(dev, "temperature"), "desc": _dev(dev, "description"),
+               "hum": _dev(dev, "humidity"), "press": _dev(dev, "pressure"),
+               "wind": _dev(dev, "windspeed"),
+               "tmin": _dev(dev, "temp_min_12h"), "tmax": _dev(dev, "temp_max_12h"),
+               "series": {"temp": _dev(dev, "temp_series"),
+                          "code": _dev(dev, "code_series"),
+                          "prob": _dev(dev, "precip_prob_series"),
+                          "cloud": _dev(dev, "cloud_series"),
+                          "start": _dev(dev, "forecast_start")}}
+        if kind == "clock":
+            view = conf.get("view")
+            out["view"] = view if view in ("clock", "clock_weather", "weather") else "clock_weather"
+        return out
 
     if kind == "tv":
         # Телевизор (с 1.77): плитка со статусом и пульт kind=tv. Адреса

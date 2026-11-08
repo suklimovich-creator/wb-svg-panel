@@ -100,91 +100,163 @@
 {% endmacro %}
 
 
-{#- ---- часы и текущая погода (1.77.3) ----
-    Широкая плитка использует двухколоночный макет 354×170. Квадратная и
-    низкая имеют собственные раскладки: простое уменьшение широкого макета
-    делало текст мелким и оставляло большую часть площади пустой.
-    Раскрытие использует полноценный прогноз выше. -#}
+{#- ---- часы и текущая погода: композиция базовых блоков (1.77.4) ----
+    low = два блока 177×75; square = два блока 170×85;
+    wide = два блока 177×170; tall = 177×170 + 170×85;
+    tower = два блока 177×170. Один режим масштабирует свой базовый блок.
+    Раскрытие по-прежнему использует полноценный прогноз выше. -#}
+{% macro clock_low(t) %}
+  <g data-clock-block="clock-low">
+    <text x="88.5" y="38" text-anchor="middle" class="wnow" data-clock-time="true"
+          style="font-size:{{ t.clock_low_time_fit.size }}px;letter-spacing:-1.2px;font-variant-numeric:tabular-nums"
+          {% if t.clock_low_time_fit.length %}textLength="{{ t.clock_low_time_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.clock_time }}</text>
+    <text x="88.5" y="55" text-anchor="middle" class="status" data-clock-date="true"
+          style="font-size:11.5px;font-weight:500">{{ t.clock_date }}</text>
+  </g>
+{% endmacro %}
+
+{% macro weather_low(t) %}
+  <g data-clock-block="weather-low">
+    <use href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}" xlink:href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}"
+         x="13" y="6" width="24" height="24" class="icon"/>
+    <text x="161" y="38" text-anchor="end" class="wnow" data-clock-temp="true"
+          style="font-size:{{ t.clock_low_temp_fit.size }}px;letter-spacing:-1px"
+          {% if t.clock_low_temp_fit.length %}textLength="{{ t.clock_low_temp_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.now_temp }}</text>
+    {% if t.weather_desc %}
+    <text x="88.5" y="53" text-anchor="middle" class="status" data-clock-desc="true"
+          style="font-size:{{ t.clock_low_desc_fit.size }}px;font-weight:500"
+          {% if t.clock_low_desc_fit.length %}textLength="{{ t.clock_low_desc_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.weather_desc }}</text>
+    {% endif %}
+    <text x="88.5" y="68" text-anchor="middle" class="status" data-clock-extra="true"
+          style="font-size:{{ t.clock_low_extra_fit.size }}px;font-weight:500"
+          {% if t.clock_low_extra_fit.length %}textLength="{{ t.clock_low_extra_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.extra or '—' }}</text>
+  </g>
+{% endmacro %}
+
+{% macro clock_half(t) %}
+  <g data-clock-block="clock-half">
+    <text x="85" y="56" text-anchor="middle" class="wnow" data-clock-time="true"
+          style="font-size:{{ t.clock_half_time_fit.size }}px;letter-spacing:-1.5px;font-variant-numeric:tabular-nums"
+          {% if t.clock_half_time_fit.length %}textLength="{{ t.clock_half_time_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.clock_time }}</text>
+    <text x="85" y="77" text-anchor="middle" class="status" data-clock-date="true"
+          style="font-size:14px;font-weight:500">{{ t.clock_date }}</text>
+  </g>
+{% endmacro %}
+
+{% macro weather_half(t) %}
+  <g data-clock-block="weather-half">
+    <use href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}" xlink:href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}"
+         x="{{ t.clock_half_icon_x }}" y="9" width="24" height="24" class="icon"/>
+    <text x="{{ t.clock_half_temp_x }}" y="35" class="wnow" data-clock-temp="true"
+          style="font-size:{{ t.clock_half_temp_fit.size }}px;letter-spacing:-1px"
+          {% if t.clock_half_temp_fit.length %}textLength="{{ t.clock_half_temp_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.now_temp }}</text>
+    {% if t.weather_desc %}
+    <text x="85" y="51" text-anchor="middle" class="status" data-clock-desc="true"
+          style="font-size:{{ t.clock_half_desc_fit.size }}px;font-weight:500"
+          {% if t.clock_half_desc_fit.length %}textLength="{{ t.clock_half_desc_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.weather_desc }}</text>
+    {% endif %}
+    <text x="85" y="66" text-anchor="middle" class="status" data-clock-extra="true"
+          style="font-size:{{ t.clock_half_extra_fit.size }}px;font-weight:500"
+          {% if t.clock_half_extra_fit.length %}textLength="{{ t.clock_half_extra_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.extra or '—' }}</text>
+  </g>
+{% endmacro %}
+
+{% macro clock_square(t) %}
+  <g data-clock-block="clock-square">
+    <text x="88.5" y="93" text-anchor="middle" class="wnow" data-clock-time="true"
+          style="font-size:{{ t.clock_square_time_fit.size }}px;letter-spacing:-2px;font-variant-numeric:tabular-nums"
+          {% if t.clock_square_time_fit.length %}textLength="{{ t.clock_square_time_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.clock_time }}</text>
+    <text x="88.5" y="120" text-anchor="middle" class="status" data-clock-date="true"
+          style="font-size:15px;font-weight:500">{{ t.clock_date }}</text>
+  </g>
+{% endmacro %}
+
+{% macro weather_square(t) %}
+  <g data-clock-block="weather-square">
+    <use href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}" xlink:href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}"
+         x="13" y="28" width="36" height="36" class="icon"/>
+    <text x="164" y="66" text-anchor="end" class="wnow" data-clock-temp="true"
+          style="font-size:{{ t.clock_square_temp_fit.size }}px;letter-spacing:-1.5px"
+          {% if t.clock_square_temp_fit.length %}textLength="{{ t.clock_square_temp_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.now_temp }}</text>
+    {% if t.weather_desc %}
+    <text x="88.5" y="92" text-anchor="middle" class="status" data-clock-desc="true"
+          style="font-size:{{ t.clock_square_desc_fit.size }}px;font-weight:500"
+          {% if t.clock_square_desc_fit.length %}textLength="{{ t.clock_square_desc_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.weather_desc }}</text>
+    {% endif %}
+    {% for metric in t.clock_metrics %}
+    <text x="164" y="{{ 110 + loop.index0 * 17 }}" text-anchor="end" class="status" data-clock-metric="true"
+          style="font-size:{{ metric.fit.size }}px;font-weight:500"
+          {% if metric.fit.length %}textLength="{{ metric.fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ metric.text }}</text>
+    {% endfor %}
+  </g>
+{% endmacro %}
+
+{% macro clock_single(t) %}
+  {% if t.clock_layout == 'low' %}
+    {% set bw, bh = 177, 75 %}
+  {% else %}
+    {% set bw, bh = 177, 170 %}
+  {% endif %}
+  {% set s = [t.w / bw, t.h / bh] | min %}
+  {% set dx = (t.w - bw * s) / 2 %}
+  {% set dy = (t.h - bh * s) / 2 %}
+  <g data-clock-layout="single-{{ t.clock_mode }}" data-clock-mode="{{ t.clock_mode }}"
+     transform="translate({{ dx }},{{ dy }}) scale({{ s }})">
+    {% if t.clock_mode == 'clock' %}
+      {% if t.clock_layout == 'low' %}{{ clock_low(t) }}{% else %}{{ clock_square(t) }}{% endif %}
+    {% else %}
+      {% if t.clock_layout == 'low' %}{{ weather_low(t) }}{% else %}{{ weather_square(t) }}{% endif %}
+    {% endif %}
+  </g>
+{% endmacro %}
+
+{% macro clock_composite(t) %}
+  {% if t.clock_layout == 'low' %}
+    {% set bw, bh = 354, 75 %}
+  {% elif t.clock_layout == 'wide' %}
+    {% set bw, bh = 354, 170 %}
+  {% elif t.clock_layout == 'tall' %}
+    {% set bw, bh = 177, 255 %}
+  {% elif t.clock_layout == 'tower' %}
+    {% set bw, bh = 177, 340 %}
+  {% else %}
+    {% set bw, bh = 170, 170 %}
+  {% endif %}
+  {% set s = [t.w / bw, t.h / bh] | min %}
+  {% set dx = (t.w - bw * s) / 2 %}
+  {% set dy = (t.h - bh * s) / 2 %}
+  <g data-clock-layout="{{ t.clock_layout }}" data-clock-mode="clock_weather"
+     {% if s != 1 or dx or dy %}transform="translate({{ dx }},{{ dy }}) scale({{ s }})"{% endif %}>
+    {% if t.clock_layout == 'low' %}
+      {{ clock_low(t) }}
+      <g transform="translate(177,0)">{{ weather_low(t) }}</g>
+      <line x1="177" y1="6" x2="177" y2="69" class="tick" style="stroke-width:1px;opacity:.35"/>
+    {% elif t.clock_layout == 'wide' %}
+      {{ clock_square(t) }}
+      <g transform="translate(177,0)">{{ weather_square(t) }}</g>
+      <line x1="177" y1="25" x2="177" y2="145" class="tick" style="stroke-width:1px;opacity:.35"/>
+    {% elif t.clock_layout == 'tall' %}
+      {{ clock_square(t) }}
+      <g transform="translate(3.5,170)">{{ weather_half(t) }}</g>
+      <line x1="16" y1="170" x2="161" y2="170" class="tick" style="stroke-width:1px;opacity:.35"/>
+    {% elif t.clock_layout == 'tower' %}
+      {{ clock_square(t) }}
+      <g transform="translate(0,170)">{{ weather_square(t) }}</g>
+      <line x1="16" y1="170" x2="161" y2="170" class="tick" style="stroke-width:1px;opacity:.35"/>
+    {% else %}
+      {{ clock_half(t) }}
+      <g transform="translate(0,85)">{{ weather_half(t) }}</g>
+      <line x1="16" y1="85" x2="154" y2="85" class="tick" style="stroke-width:1px;opacity:.35"/>
+    {% endif %}
+  </g>
+{% endmacro %}
+
 {% macro tile_clock(t) %}
   {% if t.view == 'pad' %}
     {{ tile_forecast(t) }}
   {% else %}
     {{ base.plate(t) }}
-    {% if t.h <= 90 %}
-    <g data-clock-layout="low">
-      <text x="88.5" y="38" text-anchor="middle" class="wnow" data-clock-time="true"
-            style="font-size:{{ t.clock_time_fit.size }}px;letter-spacing:-1.2px;font-variant-numeric:tabular-nums"
-            {% if t.clock_time_fit.length %}textLength="{{ t.clock_time_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.clock_time }}</text>
-      <text x="88.5" y="55" text-anchor="middle" class="status" data-clock-date="true"
-            style="font-size:11.5px;font-weight:500">{{ t.clock_date }}</text>
-
-      <line x1="177" y1="6" x2="177" y2="69" class="tick" style="stroke-width:1px;opacity:.35"/>
-      <use href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}" xlink:href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}"
-           x="190" y="6" width="24" height="24" class="icon"/>
-      <text x="338" y="38" text-anchor="end" class="wnow" data-clock-temp="true"
-            style="font-size:{{ t.clock_temp_fit.size }}px;letter-spacing:-1px"
-            {% if t.clock_temp_fit.length %}textLength="{{ t.clock_temp_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.now_temp }}</text>
-      {% if t.weather_desc %}
-      <text x="265.5" y="53" text-anchor="middle" class="status" data-clock-desc="true"
-            style="font-size:{{ t.clock_desc_fit.size }}px;font-weight:500"
-            {% if t.clock_desc_fit.length %}textLength="{{ t.clock_desc_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.weather_desc }}</text>
-      {% endif %}
-      <text x="265.5" y="68" text-anchor="middle" class="status" data-clock-extra="true"
-            style="font-size:{{ t.clock_extra_fit.size }}px;font-weight:500"
-            {% if t.clock_extra_fit.length %}textLength="{{ t.clock_extra_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.extra or '—' }}</text>
-    </g>
-    {% elif t.w <= 180 %}
-    <g data-clock-layout="square">
-      <text x="{{ t.w / 2 }}" y="56" text-anchor="middle" class="wnow" data-clock-time="true"
-            style="font-size:{{ t.clock_time_fit.size }}px;letter-spacing:-1.5px;font-variant-numeric:tabular-nums"
-            {% if t.clock_time_fit.length %}textLength="{{ t.clock_time_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.clock_time }}</text>
-      <text x="{{ t.w / 2 }}" y="77" text-anchor="middle" class="status" data-clock-date="true"
-            style="font-size:14px;font-weight:500">{{ t.clock_date }}</text>
-
-      <line x1="16" y1="{{ t.h / 2 }}" x2="{{ t.w - 16 }}" y2="{{ t.h / 2 }}" class="tick" style="stroke-width:1px;opacity:.35"/>
-      <use href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}" xlink:href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}"
-           x="{{ t.clock_icon_x }}" y="94" width="24" height="24" class="icon"/>
-      <text x="{{ t.clock_temp_x }}" y="120" class="wnow" data-clock-temp="true"
-            style="font-size:{{ t.clock_temp_fit.size }}px;letter-spacing:-1px"
-            {% if t.clock_temp_fit.length %}textLength="{{ t.clock_temp_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.now_temp }}</text>
-      {% if t.weather_desc %}
-      <text x="{{ t.w / 2 }}" y="136" text-anchor="middle" class="status" data-clock-desc="true"
-            style="font-size:{{ t.clock_desc_fit.size }}px;font-weight:500"
-            {% if t.clock_desc_fit.length %}textLength="{{ t.clock_desc_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.weather_desc }}</text>
-      {% endif %}
-      <text x="{{ t.w / 2 }}" y="151" text-anchor="middle" class="status" data-clock-extra="true"
-            style="font-size:{{ t.clock_extra_fit.size }}px;font-weight:500"
-            {% if t.clock_extra_fit.length %}textLength="{{ t.clock_extra_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.extra or '—' }}</text>
-    </g>
-    {% else %}
-    {% set s = [t.w / 354.0, t.h / 170.0] | min %}
-    {% set dx = (t.w - 354 * s) / 2 %}
-    {% set dy = (t.h - 170 * s) / 2 %}
-    <g data-clock-layout="wide" transform="translate({{ dx }},{{ dy }}) scale({{ s }})">
-      <text x="88.5" y="93" text-anchor="middle" class="wnow" data-clock-time="true"
-            style="font-size:{{ t.clock_time_fit.size }}px;letter-spacing:-2px;font-variant-numeric:tabular-nums"
-            {% if t.clock_time_fit.length %}textLength="{{ t.clock_time_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.clock_time }}</text>
-      <text x="88.5" y="120" text-anchor="middle" class="status" data-clock-date="true"
-            style="font-size:15px;font-weight:500">{{ t.clock_date }}</text>
-
-      <line x1="177" y1="25" x2="177" y2="145" class="tick" style="stroke-width:1px;opacity:.35"/>
-      <use href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}" xlink:href="#{{ uid }}ic-{{ t.icon_now or 'sun' }}"
-           x="190" y="28" width="36" height="36" class="icon"/>
-      <text x="334" y="66" text-anchor="end" class="wnow" data-clock-temp="true"
-            style="font-size:{{ t.clock_temp_fit.size }}px;letter-spacing:-1.5px"
-            {% if t.clock_temp_fit.length %}textLength="{{ t.clock_temp_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.now_temp }}</text>
-      {% if t.weather_desc %}
-      <text x="265.5" y="92" text-anchor="middle" class="status" data-clock-desc="true"
-            style="font-size:{{ t.clock_desc_fit.size }}px;font-weight:500"
-            {% if t.clock_desc_fit.length %}textLength="{{ t.clock_desc_fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ t.weather_desc }}</text>
-      {% endif %}
-      {% for metric in t.clock_metrics %}
-      <text x="334" y="{{ 110 + loop.index0 * 17 }}" text-anchor="end" class="status" data-clock-metric="true"
-            style="font-size:{{ metric.fit.size }}px;font-weight:500"
-            {% if metric.fit.length %}textLength="{{ metric.fit.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ metric.text }}</text>
-      {% endfor %}
-    </g>
-    {% endif %}
+    {% if t.clock_mode == 'clock_weather' %}{{ clock_composite(t) }}{% else %}{{ clock_single(t) }}{% endif %}
     {% if t.stale_forecast %}
     <circle cx="{{ t.w - 12 }}" cy="12" r="3.5" class="dot-warn"/>
     {% endif %}

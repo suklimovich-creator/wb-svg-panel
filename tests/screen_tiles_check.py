@@ -17,6 +17,7 @@ def main():
     assert response.status_code == 200
     layout = response.get_json()
     assert layout["cols"] == 4
+    assert layout["swipe"] is True
     pages = {page["title"]: page["tiles"] for page in layout["pages"]}
     assert list(pages) == ["Свет", "Сцены", "Дом"], \
         "секция заставки не должна становиться вкладкой"

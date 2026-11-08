@@ -42,6 +42,7 @@ panels:
     title: Стена
     hidden: true
     cols: 4
+    swipe: true
     sections:
     - title: Свет
       tiles:

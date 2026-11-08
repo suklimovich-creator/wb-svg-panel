@@ -16,6 +16,7 @@ def main():
     response = client.get("/api/screen/panel-test")
     assert response.status_code == 200
     layout = response.get_json()
+    assert "swipe" not in layout, "без swipe: true прежняя раскладка не меняется"
     saver = layout["screensaver"]
     assert saver["after"] == 300 and saver["every"] == 300
     assert "panel" not in saver, "отдельная панель заставки больше не нужна"

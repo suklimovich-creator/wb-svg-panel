@@ -59,6 +59,8 @@ pages с плитками этих секций. Страницы заставк
 - «Сегодня» и расписание - типом today; дела и события меняются, поэтому
   отдаются отдельно: /api/screen/<имя>/today/<n> (у заставки -
   /api/screen/<имя>/screensaver/today/<n>), как точки графиков.
+С 1.77.2 свойство панели swipe: true передаётся корневым полем swipe;
+esp32-panel 0.11.7+ разрешает по нему горизонтальное листание вкладок.
 """
 
 import datetime as dt
@@ -651,6 +653,8 @@ def screen_layout(panel_name):
     base = "/api/screen/%s" % quote(panel_name, safe="")
     out = {"version": 1, "panel": panel_name, "cols": cols,
            "pages": _screen_pages(panel_name, panel, panels, cols, base + "/chart")}
+    if panel.get("swipe") is True:
+        out["swipe"] = True
 
     # Заставка - одна из секций этой же панели. Отдельная панель и ссылка
     # screensaver.panel для экрана больше не нужны; сетка общая.

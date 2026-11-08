@@ -1,0 +1,25 @@
+mqtt:
+  host: 127.0.0.1
+screens:
+  panel-clock: clock
+panels:
+  clock:
+    title: Часы
+    hidden: true
+    cols: 4
+    sections:
+    - title: Часы и погода
+      tiles:
+      - {type: clock, title: Часы, device: weather, w: 2, h: 1}
+      - {type: clock, device: weather, w: 1, h: 1}
+      - {type: clock, device: weather, w: 2, h: 0.5}
+  clock-inv:
+    title: Часы — тёмные карточки
+    hidden: true
+    cols: 4
+    sections:
+    - title: Проверка стилей
+      tiles:
+      - {type: clock, device: weather, color: dark, w: 2, h: 1}
+      - {type: clock, device: weather, color: dark, w: 1, h: 1}
+      - {type: clock, device: weather, color: dark, w: 2, h: 0.5}

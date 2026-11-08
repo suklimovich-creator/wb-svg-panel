@@ -61,6 +61,8 @@ pages с плитками этих секций. Страницы заставк
   /api/screen/<имя>/screensaver/today/<n>), как точки графиков.
 С 1.77.2 свойство панели swipe: true передаётся корневым полем swipe;
 esp32-panel 0.11.7+ разрешает по нему горизонтальное листание вкладок.
+С 1.77.3 плитка clock приходит типом clock с теми же погодными каналами,
+что и weather; время экран показывает из своих синхронизированных часов.
 """
 
 import datetime as dt
@@ -521,11 +523,13 @@ def screen_tile(conf, cols):
                 "range": parse_duration(conf.get("range", "24h")),
                 "points": points, "series": out_series}
 
-    if kind == "forecast":
-        # Погода (с 1.77): текущие каналы устройства и ряды прогноза.
-        # Значения экран читает из MQTT, раскладка от этого стабильна.
+    if kind in ("forecast", "clock"):
+        # Погода (с 1.77) и часы (с 1.77.3): текущие каналы устройства и
+        # ряды прогноза. Значения экран читает из MQTT, время - локально,
+        # поэтому раскладка не меняется ни от показаний, ни каждую минуту.
         dev = conf.get("device") or "weather"
-        return {"type": "weather", "title": title or "Погода", "w": w,
+        return {"type": "clock" if kind == "clock" else "weather",
+                "title": title or ("Часы" if kind == "clock" else "Погода"), "w": w,
                 "temp": _dev(dev, "temperature"), "desc": _dev(dev, "description"),
                 "hum": _dev(dev, "humidity"), "press": _dev(dev, "pressure"),
                 "wind": _dev(dev, "windspeed"),

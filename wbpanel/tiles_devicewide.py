@@ -20,7 +20,7 @@ import time
 from . import air
 from .const import BAND, log
 from .geometry import (CHAR_W, _fmt, cct_color, edge_anchor, field_color,
-                       grid_bounds, hour_ticks, label_color, label_digits, nice_step,
+                       clock_now, grid_bounds, hour_ticks, label_color, label_digits, nice_step,
                        parse_duration, smooth_path, text_width)
 from .ac_disk import build_arc, build_disk, build_screen, build_screen_arc
 from .skeuo import tv_tile
@@ -31,6 +31,24 @@ from .tiles import (AC_CONTROLS, AC_FAN_RU, AC_MODE_ICON, AC_MODE_RU,
                     AC_SWING_DEG, AC_SWING_H_DEG, WMO_ICONS, ac_channels,
                     build_wheel, forecast_channels, louver_glyph, parse_iso_hour,
                     parse_series, wmo_icon)
+
+def _fit_weather_text(text, width, max_size, min_size):
+    """Кегль под доступную ширину; в крайнем случае - мягкое сжатие SVG."""
+    text = str(text or "")
+    size = float(max_size)
+    measured = text_width(text, size)
+    if measured > width and measured > 0:
+        size = max(float(min_size), size * width / measured)
+    size = round(size, 1)
+    measured = text_width(text, size)
+    return {
+        "size": size,
+        "width": round(min(measured, width), 1),
+        # Обычные строки не искажаем. textLength нужен только для очень
+        # длинного описания, которое даже на минимальном кегле не поместилось.
+        "length": round(width, 1) if measured > width + 0.05 else None,
+    }
+
 
 def _wrap(text, width, size, lines):
     """Текст по словам в несколько строк шириной width; лишнее - «…»."""
@@ -549,6 +567,7 @@ def build_forecast(tile, state):
     # убираем дубль и подрезаем строку под ширину плитки.
     desc = (desc_snap["raw"] or "").strip()
     desc = re.sub(r",\s*ветер\b.*$", "", desc).strip()
+    desc_full = desc
     avail = max((tile.get("inner_w") or 354) - 84, 60)
     if text_width(desc, 13.5) > avail:
         while desc and text_width(desc + "…", 13.5) > avail:
@@ -578,7 +597,13 @@ def build_forecast(tile, state):
         "now_temp": ("%s°" % _fmt(cur, 1)) if cur is not None else "--",
         "short": ("%s°" % _fmt(cur, 1)) if cur is not None else "",
         "desc": desc,
+        # Полное описание нужно адаптивной раскладке: старое усечённое desc
+        # остаётся для совместимости, но больше не ограничивает новые строки.
+        "desc_full": desc_full,
         "extra": " · ".join(bits),
+        # Широкие часы показывают каждый показатель на своей строке;
+        # компактные плитки и полный прогноз используют прежний extra.
+        "extra_parts": bits,
         "geom": geom,
         "marks": marks,
         "bars": bars,
@@ -754,10 +779,83 @@ class Forecast(Tile):
     def prepare(self, ctx):
         data = build_forecast(ctx.conf, ctx.state)
         ctx.snaps.extend(data.pop("snaps", []) or [])
+        # Описание и показатели - разные данные и разные строки. Каждая
+        # подгоняется независимо, поэтому длинное описание не уменьшает extra.
+        data["weather_desc"] = data["rain_note"] or data["desc_full"]
+        fs = float(ctx.conf.get("fs", 1) or 1)
+        width = float(ctx.conf.get("inner_w") or 354)
+        data["forecast_desc_fit"] = _fit_weather_text(
+            data["weather_desc"], max(width - 84, 60), 13.5 * fs, 8 * fs)
+        title = ctx.conf.get("title") or ""
+        title_w = text_width(title, 15 * fs)
+        extra_w = max(width - 56 - title_w, 60)
+        data["forecast_extra_fit"] = _fit_weather_text(
+            data["extra"], extra_w, 13.5 * fs, 8 * fs)
         return data
 
     def zones(self, ctx, data):
         return [Zone("expand", "all")]
+
+
+@tile("clock")
+class Clock(Forecast):
+    """Крупные часы и текущая погода; раскрытие показывает прогноз."""
+
+    def prepare(self, ctx):
+        data = super().prepare(ctx)
+        data["clock_time"], data["clock_date"] = clock_now()
+        # Отдельный SVG-маршрут передаёт view=pad в конфиге; без явного
+        # переноса в данные шаблон продолжал рисовать маленькие часы.
+        data["view"] = ctx.conf.get("view")
+        data["title"] = ctx.conf.get("title") or "Часы"
+        # Подпись по умолчанию появляется уже после общей подготовки строк,
+        # поэтому обновляем и их: базовые макросы используют готовые списки.
+        data["title_lines"] = [data["title"]]
+        data["title_low"] = [data["title"]]
+
+        inner_w = ctx.conf.get("inner_w")
+        inner_h = ctx.conf.get("inner_h")
+        if inner_w is not None and inner_h is not None:
+            width, height = float(inner_w), float(inner_h)
+            low = height <= 90
+            square = not low and width <= 180
+        else:
+            # На этапе prepare обычно доступны ещё размеры в клетках,
+            # а не пиксели: 2×1, 1×1 и 2×0.5.
+            grid_w = float(ctx.conf.get("w") or 1)
+            grid_h = float(ctx.conf.get("h") or 1)
+            low = grid_h <= 0.5
+            square = not low and grid_w <= 1
+            width = 170 if square else 354
+        if low:
+            # Две равные половины без видимого названия: часы слева,
+            # погода справа; время и температура стоят на одной линии.
+            data["clock_time_fit"] = _fit_weather_text(data["clock_time"], 136, 42, 30)
+            data["clock_temp_fit"] = _fit_weather_text(data["now_temp"], 112, 28, 20)
+            data["clock_desc_fit"] = _fit_weather_text(data["weather_desc"], 153, 10, 6.5)
+            data["clock_extra_fit"] = _fit_weather_text(data["extra"] or "—", 153, 9.5, 6.5)
+        elif square:
+            # Значок и температура центрируются как единая группа. Поэтому
+            # «21°» и «−12.5°» не сдвигают значок и не задевают друг друга.
+            data["clock_time_fit"] = _fit_weather_text(data["clock_time"], 154, 56, 38)
+            temp = _fit_weather_text(data["now_temp"], 94, 28, 20)
+            data["clock_temp_fit"] = temp
+            group_w = 24 + 12 + temp["width"]
+            data["clock_icon_x"] = round((width - group_w) / 2.0, 1)
+            data["clock_temp_x"] = round(data["clock_icon_x"] + 36, 1)
+            data["clock_desc_fit"] = _fit_weather_text(data["weather_desc"], 140, 10.5, 7)
+            data["clock_extra_fit"] = _fit_weather_text(data["extra"] or "—", 140, 9, 6.5)
+        else:
+            # Широкая плитка остаётся в системе координат 354×170.
+            # Время центрируется в левом квадрате независимо от цифр,
+            # а температура уменьшается только когда ей тесно рядом со значком.
+            data["clock_time_fit"] = _fit_weather_text(data["clock_time"], 154, 64, 46)
+            data["clock_temp_fit"] = _fit_weather_text(data["now_temp"], 94, 44, 26)
+            data["clock_desc_fit"] = _fit_weather_text(data["weather_desc"], 144, 12, 8)
+            data["clock_metrics"] = [
+                {"text": part, "fit": _fit_weather_text(part, 150, 11, 7)}
+                for part in (data["extra_parts"] or ["—"])]
+        return data
 
 
 @tile("ac")

@@ -513,6 +513,7 @@
   {% elif t.kind == 'dimmer'  %}{{ devices.tile_dimmer(t) }}
   {% elif t.kind == 'thermostat' %}{{ devices.tile_thermostat(t) }}
   {% elif t.kind == 'forecast' %}{{ forecast.tile_forecast(t) }}
+  {% elif t.kind == 'clock' %}{{ forecast.tile_clock(t) }}
   {% elif t.kind == 'ac' %}{{ ac.tile_ac(t) }}
   {% elif t.kind == 'fancoil' %}{{ devices.tile_fancoil(t) }}
   {% elif t.kind == 'header' %}{{ basic.tile_header(t) }}

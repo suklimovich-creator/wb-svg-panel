@@ -14,6 +14,7 @@
 import json
 import os
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "fixtures"))
@@ -22,6 +23,12 @@ import env  # noqa: E402  (fixtures/env.py)
 
 web, palette, cfg, sent = env.setup(freeze_time=True)
 client = web.app.test_client()
+
+# Маршруты прошивок проверяются на пустом временном хранилище; содержимое,
+# SHA-256 и скачивание .bin отдельно покрывает tests/firmware_check.py.
+from wbpanel import web_firmware  # noqa: E402
+from wbpanel.firmware import FirmwareStore  # noqa: E402
+web_firmware.store = FirmwareStore(tempfile.mkdtemp())
 
 # Обои стекла своей картинкой (1.50): адрес с ключом - из картинки панели.
 _wall = client.get("/gal.svg?theme=glass").get_data(as_text=True)
@@ -98,6 +105,9 @@ CASES = [
     ("GET", "/api/screen/nope/today/0", None, (404,), ""),
     ("GET", "/api/screen/misc/screensaver/today/0", None, (404,), ""),
     ("GET", "/api/screen/nope", None, (404,), ""),
+    # Единый манифест OTA esp32-panel (1.77.5).
+    ("GET", "/fw/firmware.json", None, (200,), '"latest": null'),
+    ("GET", "/fw/esp32-panel-9.9.9.bin", None, (404,), ""),
 ]
 
 #: Адреса, которые проверяются выше (правила Flask).
@@ -109,7 +119,8 @@ COVERED = {"/", "/healthz", "/manifest.webmanifest", "/icon.svg", "/docs",
            "/api/screen/<name>", "/api/screen/<name>/chart/<int:index>",
            "/api/screen/<name>/screensaver/chart/<int:index>",
            "/api/screen/<name>/today/<int:index>",
-           "/api/screen/<name>/screensaver/today/<int:index>"}
+           "/api/screen/<name>/screensaver/today/<int:index>",
+           "/fw/firmware.json", "/fw/<name>.bin"}
 
 
 def main():

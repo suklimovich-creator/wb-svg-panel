@@ -110,9 +110,11 @@ apt-get install -y --no-install-recommends \
     python3-dateutil python3-pil
 
 echo "==> данные"
-# Файл списков. Юнит пускает демон писать только сюда (ReadWritePaths).
-mkdir -p "$SRC/data"
+# Файл списков и прошивки esp32-panel. Юнит пускает демон писать только
+# в data/ (ReadWritePaths), а версионные .bin не попадают в Git.
+mkdir -p "$SRC/data/firmware"
 echo "    ok:  $SRC/data"
+echo "    ok:  $SRC/data/firmware"
 
 echo "==> systemd"
 install -m 644 "$SRC/wb-svg-panel.service" /etc/systemd/system/wb-svg-panel.service

@@ -30,6 +30,6 @@ def firmware_file(name):
     except (FileNotFoundError, FirmwareError):
         abort(404)
     response = send_file(path, mimetype="application/octet-stream",
-                         conditional=True, max_age=31536000)
+                         conditional=True)
     response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response

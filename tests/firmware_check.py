@@ -132,6 +132,22 @@ def main():
         assert client.get("/fw/not-a-firmware.bin").status_code == 404
         checks += 8
 
+        # Flask на контроллере может не поддерживать max_age у send_file.
+        real_send_file = web_firmware.send_file
+
+        def old_flask_send_file(path, mimetype=None, conditional=False):
+            return real_send_file(path, mimetype=mimetype, conditional=conditional)
+
+        web_firmware.send_file = old_flask_send_file
+        try:
+            response = client.get("/fw/esp32-panel-0.11.10.bin")
+        finally:
+            web_firmware.send_file = real_send_file
+        assert response.status_code == 200
+        assert response.data == body
+        assert response.headers["Cache-Control"] == "public, max-age=31536000, immutable"
+        checks += 3
+
         with open(store.manifest_path, "w", encoding="utf-8") as fh:
             fh.write("not json")
         assert client.get("/fw/firmware.json").status_code == 500

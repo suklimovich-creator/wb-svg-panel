@@ -48,10 +48,12 @@ def inspect_image(path):
     if magic != APP_DESC_MAGIC:
         raise FirmwareError("в файле нет описания приложения ESP-IDF")
     try:
-        version = _cstring(head[APP_DESC_OFFSET + 12:APP_DESC_OFFSET + 44])
-        project = _cstring(head[APP_DESC_OFFSET + 44:APP_DESC_OFFSET + 76])
-        time = _cstring(head[APP_DESC_OFFSET + 76:APP_DESC_OFFSET + 92])
-        date = _cstring(head[APP_DESC_OFFSET + 92:APP_DESC_OFFSET + 108])
+        # esp_app_desc_t: magic(4), secure_version(4), reserv1(8),
+        # затем version[32], project_name[32], time[16], date[16].
+        version = _cstring(head[APP_DESC_OFFSET + 16:APP_DESC_OFFSET + 48])
+        project = _cstring(head[APP_DESC_OFFSET + 48:APP_DESC_OFFSET + 80])
+        time = _cstring(head[APP_DESC_OFFSET + 80:APP_DESC_OFFSET + 96])
+        date = _cstring(head[APP_DESC_OFFSET + 96:APP_DESC_OFFSET + 112])
     except (UnicodeDecodeError, ValueError) as exc:
         raise FirmwareError("описание приложения содержит нечитаемые строки") from exc
     if project != PROJECT_NAME:

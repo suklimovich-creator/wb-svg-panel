@@ -93,8 +93,9 @@ systemctl restart wb-svg-panel
 
 ## Публикация прошивок esp32-panel
 
-С версии 1.77.5 прошивки хранятся внутри установки панели:
-`/mnt/data/wb-svg-panel/data/firmware/`. Каталог создаётся штатным
+Хранение прошивок появилось в 1.77.5; для публикации используйте 1.77.6+,
+где исправлено чтение полей `esp_app_desc_t`. Файлы хранятся внутри установки
+панели: `/mnt/data/wb-svg-panel/data/firmware/`. Каталог создаётся штатным
 `install.sh`; отдельное правило nginx не нужно, потому что `/panel/` уже
 проксируется в демон. Бинарные файлы и `firmware.json` не попадают в Git.
 
@@ -104,7 +105,7 @@ systemctl restart wb-svg-panel
 
 ```sh
 cd /mnt/data/wb-svg-panel
-python3 tools/firmware_publish.py esp32-panel-0.11.10.bin
+python3 tools/firmware_publish.py esp32-panel-0.11.12.bin
 curl http://192.168.1.77/panel/fw/firmware.json
 ```
 

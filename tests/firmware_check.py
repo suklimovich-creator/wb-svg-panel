@@ -36,10 +36,10 @@ def image(path, version="0.11.10", project="esp32-panel", magic=APP_DESC_MAGIC,
         body[offset:offset + size] = raw + bytes(size - len(raw))
 
     struct.pack_into("<I", body, APP_DESC_OFFSET, magic)
-    put(APP_DESC_OFFSET + 12, 32, version)
-    put(APP_DESC_OFFSET + 44, 32, project)
-    put(APP_DESC_OFFSET + 76, 16, "12:34:56")
-    put(APP_DESC_OFFSET + 92, 16, "Nov 11 2026")
+    put(APP_DESC_OFFSET + 16, 32, version)
+    put(APP_DESC_OFFSET + 48, 32, project)
+    put(APP_DESC_OFFSET + 80, 16, "12:34:56")
+    put(APP_DESC_OFFSET + 96, 16, "Nov 11 2026")
     with open(path, "wb") as fh:
         fh.write(body)
     return bytes(body)

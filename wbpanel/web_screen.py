@@ -63,6 +63,9 @@ pages с плитками этих секций. Страницы заставк
 esp32-panel 0.11.7+ разрешает по нему горизонтальное листание вкладок.
 С 1.77.3 плитка clock приходит типом clock с теми же погодными каналами,
 что и weather; время экран показывает из своих синхронизированных часов.
+С 1.78 тема экрана отдаётся отдельно: /api/screen/<имя>/theme - режим
+light/dark, ревизия и палитра по ролям (docs/SCREEN_THEME.md). Ряды графика
+без своего color несут ещё и role - цвет берётся из текущей темы экрана.
 С 1.77.4 её view передаёт состав clock, clock_weather (по умолчанию) или
 weather; служебный view=pad в JSON не попадает и по-прежнему означает прогноз.
 """
@@ -72,7 +75,7 @@ import json
 import math
 from urllib.parse import quote
 
-from flask import Response, abort
+from flask import Response, abort, request
 
 from . import cameras, palette, web
 from .assemble import resolve_sections
@@ -502,9 +505,9 @@ def screen_tile(conf, cols):
         # (CO2/VOC и т. п.), и только потом общая палитра. Раньше здесь
         # принудительно подставлялись оранжевый/синий, поэтому ESP получал
         # их как явный color и не мог применить свои цвета по умолчанию.
+        kinds = [_series_kind(spec, state.snapshot(spec["channel"])) for spec in series[:3]]
         colors = palette.series_colors("light", [
-            (spec.get("color"), _series_kind(spec, state.snapshot(spec["channel"])))
-            for spec in series[:3]])
+            (spec.get("color"), kind) for spec, kind in zip(series[:3], kinds)])
         out_series = []
         for i, spec in enumerate(series[:3]):
             try:
@@ -515,6 +518,11 @@ def screen_tile(conf, cols):
                     "unit": spec.get("unit", ""), "digits": digits,
                     "color": colors[i],
                     "label": spec.get("label", "")}
+            # С 1.78 ряд без своего цвета несёт роль палитры: экран 0.12+
+            # берёт цвет из текущей темы, старые прошивки - прежний color.
+            if not spec.get("color"):
+                item["role"] = ("chart." + kinds[i] if kinds[i] in palette.CHART_KINDS
+                                else "chart.series%d" % (i + 1))
             if spec.get("min") is not None and spec.get("max") is not None:
                 try:
                     item["min"], item["max"] = float(spec["min"]), float(spec["max"])
@@ -736,6 +744,39 @@ def _chart_response(name, index, screensaver=False):
                     headers={"Cache-Control": "no-store"})
 
 
+def screen_theme(name):
+    """Тема экрана: своя в screens:, иначе тема его панели, иначе общая;
+    auto раскрывается по theme_auto (расписание или канал WB)."""
+    screens = web.config.get("screens") or {}
+    own = screens.get(name)
+    panel = web.config.panels.get(panel_for(name)) or {}
+    if isinstance(own, dict) and own.get("theme"):
+        wanted = own["theme"]
+    else:
+        wanted = panel.get("theme", web.config.get("theme", "light"))
+    return web.themes.resolve(wanted, web.config)
+
+
+@app.route("/api/screen/<name>/theme")
+def api_screen_theme(name):
+    """
+    Палитра экрана по ролям (с 1.78, esp32-panel 0.12+). Отдельно от
+    раскладки: смена темы не меняет её текст, и экран не перестраивает
+    страницы, а только перекрашивает их. Ревизия - ETag: пока тема та же,
+    экран получает 304 и ничего не делает.
+    """
+    if not panel_for(name):
+        abort(404)
+    palette.refresh()
+    body = palette.screen_palette(screen_theme(name))
+    etag = '"%s"' % body["revision"]
+    headers = {"Cache-Control": "no-store", "ETag": etag}
+    if etag in [t.strip() for t in (request.headers.get("If-None-Match") or "").split(",")]:
+        return Response(status=304, headers=headers)
+    return Response(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                    mimetype="application/json", headers=headers)
+
+
 @app.route("/api/screen/<name>/chart/<int:index>")
 def api_screen_chart(name, index):
     """История одного графика экрана; индекс - из поля history в раскладке."""
@@ -816,6 +857,6 @@ def api_screen_saver_chart(name, index):
     return _chart_response(name, index, screensaver=True)
 
 
-__all__ = ["api_screen", "api_screen_chart", "api_screen_saver_chart",
+__all__ = ["api_screen", "api_screen_chart", "api_screen_saver_chart", "api_screen_theme",
            "api_screen_saver_today", "api_screen_today",
-           "screen_layout", "screen_tile", "screen_tiles"]
+           "screen_layout", "screen_theme", "screen_tile", "screen_tiles"]

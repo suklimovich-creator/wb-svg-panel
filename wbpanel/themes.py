@@ -10,6 +10,13 @@
       night_from: sunset+30m
       location: {lat: 55.75, lon: 37.62}   # нужна для sunrise/sunset
 
+      channel: panel/night        # необязательно: день/ночь решает автоматика WB
+
+С каналом расписание - только запасной вариант, пока канал молчит. Значения
+1/on/true/night/dark - ночь, 0/off/false/day/light - день, имя темы - эта
+тема. Датчик освещённости и пороги живут в правилах контроллера: панель и
+экран только читают итог.
+
 theme: auto можно поставить и у одной панели. Выбор темы кнопкой на
 устройстве сильнее: «как в конфиге» возвращает к расписанию.
 
@@ -104,6 +111,30 @@ def _moment(spec, day, sun):
     return base
 
 
+_NIGHT = ("1", "on", "true", "night", "dark", "ночь")
+_DAY = ("0", "off", "false", "day", "light", "день")
+
+
+def _channel_theme(conf, day_name, night_name):
+    """Тема по каналу theme_auto.channel; None - канал молчит или непонятен."""
+    channel = conf.get("channel")
+    if not channel:
+        return None
+    from .state import state            # здесь, чтобы themes не тянул MQTT при импорте
+    raw = state.values.get(str(channel))
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    low = value.lower()
+    if low in _NIGHT:
+        return night_name
+    if low in _DAY:
+        return day_name
+    if palette.exists(value):
+        return value
+    return None
+
+
 def problems(config):
     """Что не так с theme_auto - для /check. Список строк."""
     conf = (config.get("theme_auto") or {}) if config else {}
@@ -117,6 +148,9 @@ def problems(config):
         val = conf.get(key)
         if val and not (_CLOCK_RE.match(str(val)) or _SPEC_RE.match(str(val))):
             out.append("theme_auto.%s: %r не понять - нужно «07:00» или «sunset+30m»" % (key, val))
+    channel = conf.get("channel")
+    if channel is not None and (not isinstance(channel, str) or "/" not in channel):
+        out.append("theme_auto.channel: %r - нужен канал «устройство/канал»" % (channel,))
     if uses_sun and not _location(conf, config):
         out.append("theme_auto: для sunrise/sunset нужны координаты location: "
                    "{lat, lon}; пока по часам %s–%s" % (FALLBACK["day_from"], FALLBACK["night_from"]))
@@ -132,6 +166,9 @@ def auto_theme(config, now=None):
         day_name = DEFAULTS["day"]
     if not palette.exists(night_name):
         night_name = DEFAULTS["night"]
+    by_channel = _channel_theme(conf, day_name, night_name)
+    if by_channel:
+        return by_channel
     now = now or dt.datetime.now().astimezone()
     loc = _location(conf, config)
     sun = sun_times(now.date(), loc[0], loc[1]) if loc else None

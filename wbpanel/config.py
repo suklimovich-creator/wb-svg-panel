@@ -90,6 +90,10 @@ class Config:
                 # хотя канал режима приходит исправно. У чипа протечки -
                 # датчики и флаги модулей из раздела water.
                 out.update(status_channels(entry))
+        # Канал дня/ночи автотемы: его смена должна будить страницы и экраны.
+        channel = (self.get("theme_auto") or {}).get("channel")
+        if isinstance(channel, str) and channel:
+            out.add(channel)
         self._channels_cache = (self._mtime, frozenset(out))
         return out
 

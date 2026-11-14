@@ -96,6 +96,19 @@ def _check_themes(config):
     for where, text in palette.problems():
         out.append(dict(row, tile="themes/" + os.path.basename(str(where)), text=text,
                         hint="тема из папки themes/"))
+    # Роли настенного экрана (1.78): раздел screen: темы и тема у экрана.
+    for name in palette.names():
+        for text in palette.screen_problems(name):
+            out.append(dict(row, tile="тема %s" % name, text=text,
+                            hint="роли - в docs/SCREEN_THEME.md"))
+    for screen, conf in (config.get("screens") or {}).items():
+        name = conf.get("theme") if isinstance(conf, dict) else None
+        if name and name != "auto" and not palette.exists(name):
+            places.append(("экран %s" % screen, name))
+            out.append(dict(row, tile="экран %s" % screen, text="темы %r нет" % name,
+                            hint="есть: auto, " + ", ".join(palette.names())))
+        elif name == "auto":
+            places.append(("экран %s" % screen, name))
     # Обои стекла своей картинкой (1.50): файл, Pillow.
     from . import wallpaper
     from .const import BASE_DIR

@@ -40,6 +40,8 @@ theme: light           # light | sprut | autumn | retro | noir | neumo | glass-d
 #   day_from: sunrise-30m        # или "07:00"
 #   night_from: sunset+30m       # или "21:00"
 #   location: {lat: 55.75, lon: 37.62}
+#   channel: panel/night         # с 1.78: день/ночь решает автоматика WB
+#                                # (1/night - ночь, 0/day - день), расписание - запасное
 
 # Шторы (с 1.20) рисуют за тканью небо «сейчас»: солнце и луну по времени
 # и координатам, погоду - с устройства прогноза (extras/weather.js).
@@ -161,6 +163,9 @@ water:
 # (долгое нажатие на плитку), scenes приходит одной плиткой-набором, а tv,
 # leak, forecast (тип weather) и today/agenda - своими типами; дела и
 # события today экран получает отдельно по адресу из поля data раскладки.
+# С 1.78 (esp32-panel 0.12+) экран получает палитру темы по ролям и
+# перекрашивается без перезапуска; своя тема экрана - так:
+#   panel-6a10: {panel: wall, theme: auto}
 # screens:
 #   panel-6a10: wall
 

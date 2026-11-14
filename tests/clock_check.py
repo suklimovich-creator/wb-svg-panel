@@ -155,7 +155,11 @@ def main():
         parents = {child: parent for parent in current_root.iter() for child in parent}
         for name, by_block in widths.items():
             for el in role(current_root, name):
-                assert_fit(el, by_block[block_of(el, parents)], text_width)
+                block = block_of(el, parents)
+                # Блоки *-fill (1.79.1) считают ширину по размеру плитки.
+                width = (float(el.attrib["data-clock-fit"]) if block.endswith("-fill")
+                         else by_block[block])
+                assert_fit(el, width, text_width)
 
     check_fits(root)
     baseline_temp_sizes = [font_size(el) for el in role(root, "temp")]
@@ -175,6 +179,15 @@ def main():
         assert all(blocks(g)[0].startswith(mode if mode == "clock" else "weather")
                    for g in single_groups)
         check_fits(single_root)
+        if mode == "clock":
+            # 1.79.1: часы занимают всю плитку, а не блок 1×1 в её центре.
+            sizes = [font_size(el) for el in role(single_root, "time")]
+            assert sizes[2] > sizes[1] * 1.25, ("2×1 крупнее 1×1", sizes)
+            assert sizes[0] > 48, ("2×0.5 — время в ряд с датой", sizes)
+            assert all(b.endswith("-fill") for g in single_groups for b in blocks(g))
+        else:
+            assert [blocks(g)[0] for g in single_groups][:3] == \
+                ["weather-fill", "weather-square", "weather-fill"]
 
     for theme in palette.names():
         themed_root = ET.fromstring(render(web, "clock", theme).encode("utf-8"))

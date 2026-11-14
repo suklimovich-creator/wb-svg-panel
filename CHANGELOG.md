@@ -3,6 +3,25 @@
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 Версии — [семантические](https://semver.org/lang/ru/).
 
+## [1.79.0]
+
+Изменено:
+
+- **`docs/ARCHITECTURE.md` актуализирован до 1.78** (документация, код не
+  менялся). Вступление описывает esp32-panel как клиента экранного JSON-API
+  вместо отменённого рендера PNG. Раскладка репозитория дополнена новыми
+  модулями: `yamlx`, `commands`, `water`, `air`, `calendars`/`lists`,
+  `firmware`/`web_firmware`, `themes`, `checkup`, роли палитры в
+  `palette.py`, разрезанные `templates/tiles/`, полный список `static/js`
+  и проверок, `tools/firmware_publish.py`, `docs/SCREEN_THEME.md`.
+  Добавлены записи 1.77–1.78: плитки экрана `scenes`, `tv`, `leak`,
+  `weather`, `today` и пульт света, цвета CO₂/VOC, свайп вкладок, плитка
+  `clock` с композициями и режимами `view`, хранение и публикация прошивок
+  esp32-panel, палитра темы с ETag/304 и `theme_auto.channel`. Список типов
+  плиток теперь полный — из реестра. Из «Что дальше» убран выполненный
+  техдолг: зоны команд (`commands.py`), разрезание шаблона (1.43) и отчёт
+  проверки конфига на `/check` (`checkup.py`).
+
 ## [1.78.0]
 
 Добавлено:

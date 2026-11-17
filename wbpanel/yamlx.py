@@ -169,3 +169,9 @@ def stamp(path):
         except OSError:
             pass
     return out
+
+
+def load_documents(path, *, strict=False, confined=False):
+    """Read an isolated include graph with physical and logical locations."""
+    from .editor_documents import Documents
+    return Documents(path, strict=strict, confined=confined)

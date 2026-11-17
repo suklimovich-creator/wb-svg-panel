@@ -96,6 +96,19 @@ def _check_themes(config):
     for where, text in palette.problems():
         out.append(dict(row, tile="themes/" + os.path.basename(str(where)), text=text,
                         hint="тема из папки themes/"))
+    # Роли настенного экрана (1.78): раздел screen: темы и тема у экрана.
+    for name in palette.names():
+        for text in palette.screen_problems(name):
+            out.append(dict(row, tile="тема %s" % name, text=text,
+                            hint="роли - в docs/SCREEN_THEME.md"))
+    for screen, conf in (config.get("screens") or {}).items():
+        name = conf.get("theme") if isinstance(conf, dict) else None
+        if name and name != "auto" and not palette.exists(name):
+            places.append(("экран %s" % screen, name))
+            out.append(dict(row, tile="экран %s" % screen, text="темы %r нет" % name,
+                            hint="есть: auto, " + ", ".join(palette.names())))
+        elif name == "auto":
+            places.append(("экран %s" % screen, name))
     # Обои стекла своей картинкой (1.50): файл, Pillow.
     from . import wallpaper
     from .const import BASE_DIR
@@ -162,6 +175,80 @@ def check_config(config, state, history=None):
     return out
 
 
+def _contract(tile, cls, state, expand=None):
+    from .sources import bind
+
+    tile = (expand or cls.expand)(tile)
+    obj = cls()
+    return tile, obj, bind(tile, obj.schema(), state, obj)
+
+
+def publication_errors(config):
+    """Count offline configuration errors without exposing resolved values."""
+    from math import isfinite
+    from .assemble import resolve_sections
+    from .cameras import Camera
+    from .tiles_today import _no_cal
+    from .water import Water
+
+    count = 0
+    lists = config.get("lists") or {}
+    calendars = config.get("calendars") or {}
+    cameras = config.get("cameras") or {}
+    water = Water()
+    water.configure(config)
+    for target in (config.get("screens") or {}).values():
+        name = target.get("panel") if isinstance(target, dict) else target
+        count += name not in config.panels
+    for panel in config.panels.values():
+        for section in panel.get("sections") or []:
+            if isinstance(section, dict):
+                src = section.get("from") or []
+                count += sum(n not in config.panels for n in (
+                    src if isinstance(src, list) else [src]))
+        sections = list(resolve_sections(panel, config.panels))
+        for _title, tiles, _source, _key in sections:
+            for conf in tiles:
+                for prop in ("w", "h"):
+                    if prop in conf:
+                        value = float(conf[prop])
+                        count += not (isfinite(value) and value > 0)
+                kind = resolve_type(conf, None)
+                cls = REGISTRY.get(kind)
+                if not cls:
+                    # Service auto-detection needs the broker metadata.
+                    count += kind != "unknown" or not conf.get("service") or bool(conf.get("type"))
+                    continue
+                expand = None
+                if kind == "valve":
+                    expand = lambda tile: cls.expand(tile, water)
+                tile, obj, bound = _contract(conf, cls, None, expand)
+                if kind in ("agenda", "today"):
+                    spec = tile.get("calendars")
+                    name = tile.get("list") if kind == "today" else None
+                    if name:
+                        count += str(name) not in lists
+                    no_cal = kind == "today" and _no_cal(spec)
+                    if not no_cal and spec not in (None, "", "all"):
+                        names = spec if isinstance(spec, list) else [spec]
+                        count += sum(str(n) not in calendars for n in names)
+                    count += not name and (no_cal or not calendars)
+                elif kind == "leak":
+                    sensors = water.pick_sensors(tile.get("sensors"), tile.get("channel"))
+                    count += not (sensors or "alarm" in bound)
+                elif not tile.get("service"):
+                    count += bool(obj.check(tile, bound))
+                if kind == "link" and tile.get("panel"):
+                    count += tile["panel"] not in config.panels
+                if kind == "camera":
+                    name = tile.get("camera") or tile.get("name")
+                    definition = cameras.get(name)
+                    count += not isinstance(definition, dict) or not Camera(name, definition).host
+                if kind == "list":
+                    count += str(tile.get("list") or "") not in lists
+    return count
+
+
 def _check_tile(tile, panel_title, panel_name, config, state,
                 known, logged, interactive):
     out = []
@@ -199,10 +286,7 @@ def _check_tile(tile, panel_title, panel_name, config, state,
                                 "бывают: " + ", ".join(TINT_NAMES)))
 
     # --- обязательные роли -------------------------------------------------
-    tile = cls.expand(tile)
-    obj = cls()
-    from .sources import bind
-    bound = bind(tile, obj.schema(), state, obj)
+    tile, obj, bound = _contract(tile, cls, state)
     problem = obj.check(tile, bound)
     if problem:
         out.append(_problem(ERROR, panel_title, tile, problem))

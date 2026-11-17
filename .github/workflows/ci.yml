@@ -78,6 +78,9 @@ jobs:
           pip install flask paho-mqtt pillow
           python tests/render_check.py --soft
 
+      - name: Миграция и ревизии редактора плиток
+        run: python tests/editor_check.py
+
       - name: Каждый адрес демона отвечает
         run: python tests/routes_check.py
 

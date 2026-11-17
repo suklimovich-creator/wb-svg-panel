@@ -209,15 +209,15 @@ class Valve(Tile):
     quiet = True
 
     @staticmethod
-    def expand(conf):
+    def expand(conf, registry=water):
         name = conf.get("valve")
         if not name:
             return conf
-        known = (water.valves().get(str(name)) or {})
+        known = (registry.valves().get(str(name)) or {})
         merged = dict(known)
         merged.update(conf)          # поля плитки сильнее описания крана
         if not merged.get("channel_alarm"):
-            mod = water.modules().get(str(merged.get("module") or "")) or {}
+            mod = registry.modules().get(str(merged.get("module") or "")) or {}
             if mod.get("alarm"):
                 merged["channel_alarm"] = mod["alarm"]
         return merged

@@ -63,6 +63,9 @@ pages с плитками этих секций. Страницы заставк
 esp32-panel 0.11.7+ разрешает по нему горизонтальное листание вкладок.
 С 1.77.3 плитка clock приходит типом clock с теми же погодными каналами,
 что и weather; время экран показывает из своих синхронизированных часов.
+С 1.78 тема экрана отдаётся отдельно: /api/screen/<имя>/theme - режим
+light/dark, ревизия и палитра по ролям (docs/SCREEN_THEME.md). Ряды графика
+без своего color несут ещё и role - цвет берётся из текущей темы экрана.
 С 1.77.4 её view передаёт состав clock, clock_weather (по умолчанию) или
 weather; служебный view=pad в JSON не попадает и по-прежнему означает прогноз.
 """
@@ -72,11 +75,11 @@ import json
 import math
 from urllib.parse import quote
 
-from flask import Response, abort
+from flask import Response, abort, request
 
 from . import cameras, palette, web
 from .assemble import resolve_sections
-from .calendars import MONTHS, WEEKDAYS, calendars, day_label
+from .calendars import Calendars, MONTHS, WEEKDAYS, calendars, day_label
 from .geometry import cells, field_color, parse_duration
 from .lists import lists
 from .registry import REGISTRY, resolve_type
@@ -87,7 +90,7 @@ from .tiles_basic import Scene
 from .tiles_calendar import _hm, _state, _when_text
 from .tiles_devicewide import TV_STATE_RU, _series_kind, tv_apps
 from .tiles_today import _cal_names
-from .water import water
+from .water import Water, water
 from .web import app
 
 #: Прежняя ширина экрана; cols панели может её изменить (с 1.74).
@@ -333,11 +336,11 @@ def _scenes_tile(conf, w):
             "w": w, "items": items}
 
 
-def screen_tiles(conf, cols):
+def screen_tiles(conf, cols, config=None):
     """Плитка панели -> плитки экрана (сейчас всегда одна)."""
     if not isinstance(conf, dict) or conf.get("screen") is False:
         return []
-    t = screen_tile(conf, cols)
+    t = screen_tile(conf, cols, config)
     out = [t] if t else []
     h = _size(conf, "h")
     for t in out:
@@ -345,7 +348,7 @@ def screen_tiles(conf, cols):
     return out
 
 
-def screen_tile(conf, cols):
+def screen_tile(conf, cols, config=None):
     """Плитка панели -> плитка экрана (или None, если экрану не нужна)."""
     if not isinstance(conf, dict) or conf.get("screen") is False:
         return None
@@ -360,7 +363,11 @@ def screen_tile(conf, cols):
         # Экран ходит только на наши относительные адреса. Имя камеры из
         # конфига кодируется, а host/user/password наружу не попадают.
         name = conf.get("camera") or conf.get("name")
-        cam = cameras.get(str(name)) if name else None
+        if config is None:
+            cam = cameras.get(str(name)) if name else None
+        else:
+            definition = (config.get("cameras") or {}).get(str(name))
+            cam = cameras.Camera(str(name), definition) if isinstance(definition, dict) else None
         if cam is None:
             return _info(title or "Камера", w, note="не настроена")
         base = "/cam/%s" % quote(str(name), safe="")
@@ -502,9 +509,9 @@ def screen_tile(conf, cols):
         # (CO2/VOC и т. п.), и только потом общая палитра. Раньше здесь
         # принудительно подставлялись оранжевый/синий, поэтому ESP получал
         # их как явный color и не мог применить свои цвета по умолчанию.
+        kinds = [_series_kind(spec, state.snapshot(spec["channel"])) for spec in series[:3]]
         colors = palette.series_colors("light", [
-            (spec.get("color"), _series_kind(spec, state.snapshot(spec["channel"])))
-            for spec in series[:3]])
+            (spec.get("color"), kind) for spec, kind in zip(series[:3], kinds)])
         out_series = []
         for i, spec in enumerate(series[:3]):
             try:
@@ -515,6 +522,11 @@ def screen_tile(conf, cols):
                     "unit": spec.get("unit", ""), "digits": digits,
                     "color": colors[i],
                     "label": spec.get("label", "")}
+            # С 1.78 ряд без своего цвета несёт роль палитры: экран 0.12+
+            # берёт цвет из текущей темы, старые прошивки - прежний color.
+            if not spec.get("color"):
+                item["role"] = ("chart." + kinds[i] if kinds[i] in palette.CHART_KINDS
+                                else "chart.series%d" % (i + 1))
             if spec.get("min") is not None and spec.get("max") is not None:
                 try:
                     item["min"], item["max"] = float(spec["min"]), float(spec["max"])
@@ -568,7 +580,11 @@ def screen_tile(conf, cols):
     if kind == "leak":
         # Протечки (с 1.77): датчики списком (экран рисует чипы сам),
         # общий флаг тревоги и адреса сброса из раздела water.
-        sensors = water.pick_sensors(conf.get("sensors"), conf.get("channel"))
+        water_registry = water
+        if config is not None:
+            water_registry = Water()
+            water_registry.configure(config)
+        sensors = water_registry.pick_sensors(conf.get("sensors"), conf.get("channel"))
         rows = []
         for s in sensors:
             topic = topic_of(s.get("channel"))
@@ -577,7 +593,7 @@ def screen_tile(conf, cols):
         alarm = _t(bound, "alarm")
         if not rows and not alarm:
             return _info(title or "Протечки", w, note="не заданы датчики")
-        resets = list(water.resets(sensors))
+        resets = list(water_registry.resets(sensors))
         b = bound.get("reset")
         if b and b.command and b.command not in resets:
             resets.append(b.command)
@@ -598,7 +614,11 @@ def screen_tile(conf, cols):
                "w": w}
         if conf.get("list"):
             out["list"] = str(conf["list"])
-        names = _cal_names(conf.get("calendars"))
+        calendar_registry = calendars
+        if config is not None:
+            calendar_registry = Calendars()
+            calendar_registry.configure(config)
+        names = _cal_names(conf.get("calendars"), calendar_registry)
         if names:
             out["calendars"] = names
         return out
@@ -622,7 +642,7 @@ def _saver_after(section):
     return web._seconds(section.get("screensaver")) if section and "screensaver" in section else 0
 
 
-def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=False):
+def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=False, config=None):
     """Секции панели -> обычные страницы экрана либо одна заставка."""
     pages = []
     chart_index = 0
@@ -639,7 +659,7 @@ def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=Fal
             # Служебная секция не становится обычной вкладкой, даже если
             # интервал выключен или написан с ошибкой.
             continue
-        out = [t for c in tiles for t in screen_tiles(c, cols)]
+        out = [t for c in tiles for t in screen_tiles(c, cols, config)]
         for tile in out:
             if tile.get("type") == "chart":
                 # История меняется независимо от раскладки: отдельный адрес,
@@ -656,20 +676,21 @@ def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=Fal
     return pages
 
 
-def screen_layout(panel_name):
-    panels = web.config.panels
+def screen_layout(panel_name, config=None):
+    panels = (web.config if config is None else config).panels
     panel = panels.get(panel_name) or {}
     cols = _cols(panel)
     base = "/api/screen/%s" % quote(panel_name, safe="")
     out = {"version": 1, "panel": panel_name, "cols": cols,
-           "pages": _screen_pages(panel_name, panel, panels, cols, base + "/chart")}
+           "pages": _screen_pages(panel_name, panel, panels, cols, base + "/chart",
+                                  config=config)}
     if panel.get("swipe") is True:
         out["swipe"] = True
 
     # Заставка - одна из секций этой же панели. Отдельная панель и ссылка
     # screensaver.panel для экрана больше не нужны; сетка общая.
     saver_pages = _screen_pages(panel_name, panel, panels, cols,
-                                base + "/screensaver/chart", screensaver=True)
+                                base + "/screensaver/chart", screensaver=True, config=config)
     if saver_pages:
         after = next((_saver_after(section) for section, _row in _screen_sections(panel, panels)
                       if _saver_after(section) > 0), 0)
@@ -734,6 +755,39 @@ def _chart_response(name, index, screensaver=False):
     body = json.dumps(out, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return Response(body, mimetype="application/json",
                     headers={"Cache-Control": "no-store"})
+
+
+def screen_theme(name):
+    """Тема экрана: своя в screens:, иначе тема его панели, иначе общая;
+    auto раскрывается по theme_auto (расписание или канал WB)."""
+    screens = web.config.get("screens") or {}
+    own = screens.get(name)
+    panel = web.config.panels.get(panel_for(name)) or {}
+    if isinstance(own, dict) and own.get("theme"):
+        wanted = own["theme"]
+    else:
+        wanted = panel.get("theme", web.config.get("theme", "light"))
+    return web.themes.resolve(wanted, web.config)
+
+
+@app.route("/api/screen/<name>/theme")
+def api_screen_theme(name):
+    """
+    Палитра экрана по ролям (с 1.78, esp32-panel 0.12+). Отдельно от
+    раскладки: смена темы не меняет её текст, и экран не перестраивает
+    страницы, а только перекрашивает их. Ревизия - ETag: пока тема та же,
+    экран получает 304 и ничего не делает.
+    """
+    if not panel_for(name):
+        abort(404)
+    palette.refresh()
+    body = palette.screen_palette(screen_theme(name))
+    etag = '"%s"' % body["revision"]
+    headers = {"Cache-Control": "no-store", "ETag": etag}
+    if etag in [t.strip() for t in (request.headers.get("If-None-Match") or "").split(",")]:
+        return Response(status=304, headers=headers)
+    return Response(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                    mimetype="application/json", headers=headers)
 
 
 @app.route("/api/screen/<name>/chart/<int:index>")
@@ -816,6 +870,6 @@ def api_screen_saver_chart(name, index):
     return _chart_response(name, index, screensaver=True)
 
 
-__all__ = ["api_screen", "api_screen_chart", "api_screen_saver_chart",
+__all__ = ["api_screen", "api_screen_chart", "api_screen_saver_chart", "api_screen_theme",
            "api_screen_saver_today", "api_screen_today",
-           "screen_layout", "screen_tile", "screen_tiles"]
+           "screen_layout", "screen_theme", "screen_tile", "screen_tiles"]

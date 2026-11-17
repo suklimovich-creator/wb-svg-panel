@@ -41,8 +41,8 @@ def _no_cal(spec):
                              spec.strip().lower() in ("none", "no", "нет"))
 
 
-def _cal_names(spec):
-    return [] if _no_cal(spec) else calendars.pick(spec)
+def _cal_names(spec, registry=calendars):
+    return [] if _no_cal(spec) else registry.pick(spec)
 
 
 @tile("today")

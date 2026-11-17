@@ -3,16 +3,21 @@
 Чтение config.yaml и слежение за его изменениями.
 """
 
+from contextlib import contextmanager
+from dataclasses import replace
+import fcntl
 import os
+from pathlib import Path
 import re
 import time
-import yaml
 from .const import CONFIG_PATH, log
 from .geometry import parse_duration
 import threading
 from .registry import channels_of
 from .status import status_channels, status_entries
 from . import tiles          # noqa: F401  наполняет реестр типами плиток
+from .editor_documents import DocumentError
+from .editor_model import resolve
 from . import yamlx          # !secret и !include (1.61)
 
 
@@ -23,25 +28,75 @@ from . import yamlx          # !secret и !include (1.61)
 class Config:
     """Конфиг с горячей перезагрузкой по mtime - правите YAML, жмёте F5."""
 
-    def __init__(self, path):
+    def __init__(self, path, *, strict=False, confined=False, editor_lock=True):
         self.path = path
+        self.strict = strict
+        self.confined = confined
+        self.editor_lock = editor_lock
+        self.documents = None
+        self.origins = {}
         self._lock = threading.Lock()
         self._mtime = 0
         self.data = {}
         self.reload(force=True)
 
     def reload(self, force=False):
-        with self._lock:
+        with self._lock, self._editor_read_lock():
             if not os.path.exists(self.path):
                 return
-            # вместе с secrets.yaml и кусками !include (1.61)
-            mtime = yamlx.stamp(self.path)
-            if not force and mtime == self._mtime:
+            stamp = self._stamp()
+            if not force and stamp == self._mtime:
                 return
-            yamlx.default_dir = os.path.dirname(os.path.abspath(self.path))
-            self.data = yamlx.load(self.path) or {}
-            self._mtime = yamlx.stamp(self.path)
+            documents = yamlx.load_documents(self.path, strict=self.strict, confined=self.confined)
+            data, origins = resolve(documents)
+            self.documents, self.origins, self.data = documents, origins, data
+            self._mtime = self._stamp()
+            self._channels_cache = None
             log.info("конфиг загружен: %s", self.path)
+
+    @contextmanager
+    def _editor_read_lock(self):
+        directory = Path(self.path).resolve().parent / "data" / "editor"
+        try:
+            fd = os.open(directory / "lock", os.O_RDONLY | os.O_NOFOLLOW) if self.editor_lock else None
+        except (FileNotFoundError, PermissionError):
+            fd = None
+        if fd is None:
+            yield
+            return
+        with os.fdopen(fd, "rb") as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
+            if (directory / "journal.json").exists():
+                raise DocumentError("Нужно восстановить незавершённую публикацию")
+            yield
+
+    def _stamp(self):
+        root = os.path.abspath(self.path)
+        files = {root, os.path.join(os.path.dirname(root), yamlx.SECRETS_NAME)}
+        if self.documents:
+            files.update(str(p) for p in self.documents.files)
+            files.update(str(p) for p in self.documents.secret_files)
+
+        def signature(path):
+            try:
+                st = os.stat(path)
+                return st.st_mtime_ns, st.st_ctime_ns, st.st_ino
+            except FileNotFoundError:
+                return None
+
+        return tuple((path, signature(path)) for path in sorted(files))
+
+    def tile_origin(self, stable_id, *field_path):
+        """Find the effective field in an instance or its library element."""
+        instance = self.origins["tile", stable_id]
+        if not field_path:
+            return instance
+        logical = instance.logical_path
+        raw = self.documents.data_at(logical)
+        if field_path[0] not in raw:
+            logical = self.origins["element", raw["element"]].logical_path
+        origin = self.documents.origins[logical + field_path]
+        return replace(origin, stable_id=stable_id)
 
     def get(self, key, default=None):
         return self.data.get(key, default)
@@ -90,6 +145,10 @@ class Config:
                 # хотя канал режима приходит исправно. У чипа протечки -
                 # датчики и флаги модулей из раздела water.
                 out.update(status_channels(entry))
+        # Канал дня/ночи автотемы: его смена должна будить страницы и экраны.
+        channel = (self.get("theme_auto") or {}).get("channel")
+        if isinstance(channel, str) and channel:
+            out.add(channel)
         self._channels_cache = (self._mtime, frozenset(out))
         return out
 

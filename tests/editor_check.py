@@ -54,6 +54,33 @@ panels:
     assert screen_layout("main", before) == screen_layout("main", after)
 
 
+def check_inline_migration(root):
+    path = put(root / "config.yaml", """
+default: &common {type: switch, channel: dev/one}
+panels:
+  one:
+    tiles:
+    - <<: *common
+      title: First
+    - {type: value, channel: dev/value, id: room_meter}
+  two:
+    tiles:
+    - <<: *common
+      channel: dev/two
+""")
+    before = Config(path)
+    store = RevisionStore(path)
+    draft = store.migration(inline=True)
+    store.inspect(draft, migrate=True)
+    store.publish(draft, migrate=True)
+    after = Config(path, strict=True)
+    assert [{k: v for k, v in tile.items() if k != "id"} for tile in before.all_tiles()] == list(after.all_tiles())
+    assert [stable_id for kind, stable_id in after.origins if kind == "tile"] == [
+        "switch-001", "room_meter", "switch-002"]
+    raw = (root / "panels.yaml").read_text()
+    assert "&id" not in raw and "*id" not in raw and "element:" not in raw
+
+
 def main(root):
     legacy = {
         "config.yaml": "# keep this comment exactly\npanels: !include rooms/panels.yaml\n",
@@ -184,3 +211,4 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as directory:
         main(Path(directory))
         check_merge_overrides(Path(directory) / "merge")
+        check_inline_migration(Path(directory) / "inline")

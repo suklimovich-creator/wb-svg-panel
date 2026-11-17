@@ -16,7 +16,7 @@ from . import palette, yamlx
 from .assemble import _from_names
 from .config import Config
 from .editor_documents import DocumentError, _Loader
-from .editor_model import PLACEMENT
+from .editor_model import MANAGED_SCHEMAS, PLACEMENT
 from .editor_operations import OperationError, apply, list_at, validate
 from .editor_revisions import Conflict, RevisionNotFound, RevisionStore, ValidationError
 from .registry import has_pad, resolve_type
@@ -138,7 +138,7 @@ class EditorService:
                     session.mutex.release()
 
     def create(self):
-        if self.active().get("schema") != 2:
+        if self.active().get("schema") not in MANAGED_SCHEMAS:
             raise EditorError("legacy", "Сначала выполните явную миграцию через editor_cli", 409)
         with self.mutex:
             self._expire(time.monotonic())
@@ -159,7 +159,7 @@ class EditorService:
             self._expire(now)
             session = self.sessions.get(key)
             if session is None:
-                raise EditorError("draft_unknown", "Черновик не найден", 404)
+                raise EditorError("draft_unknown", "Черновик больше недоступен. Нажмите «Новый черновик».", 404)
             session.accessed = now
             return session
 
@@ -174,7 +174,8 @@ class EditorService:
 
         docs = candidate.documents
         policy = SecretPolicy(candidate)
-        elements = docs.data["elements"]
+        elements = docs.data.get("elements", {})
+        inline = candidate.get("schema") == 3
         library = {}
         for name, value in elements.items():
             kind = resolve_type(value, state)
@@ -191,7 +192,13 @@ class EditorService:
                                  if k in tile}
                     if "title" in tile and placement["title"] != tile["title"]:
                         placement["title_protected"] = True
-                    result.append({"id": tile["id"], "element": tile["element"], **placement})
+                    item = {"id": tile["id"], **placement}
+                    if "element" in tile:
+                        item["element"] = tile["element"]
+                    else:
+                        kind = resolve_type(tile, state)
+                        item.update(type=kind, pad=has_pad(kind))
+                    result.append(item)
                 return result
 
             if "tiles" in panel or not panel.get("sections"):
@@ -214,6 +221,8 @@ class EditorService:
         body = {"draft_id": key, "base_revision": session.draft.base_revision,
                 "draft_version": session.version, "checked": session.checked == session.version,
                 "panels": panels, "library": list(library.values()), "themes": palette.names()}
+        if inline:
+            body["inline_tiles"] = True
         policy.check(json.dumps(body, ensure_ascii=False))
         return body
 
@@ -276,8 +285,9 @@ class EditorService:
                 if not policy.contains(panel) and not policy.contains(stable_id):
                     details = {"id": stable_id, "panel": panel}
                     break
-            raise EditorError("candidate_invalid", "Проверьте настройки конфигурации кандидата",
-                              422, **details) from None
+            message = ("У плитки неполные или неверные настройки. Исправьте её настройки или уберите её из черновика."
+                       if details else "Черновик не прошёл проверку. Проверьте последние изменения в панелях.")
+            raise EditorError("candidate_invalid", message, 422, **details) from None
 
     def diff(self, key):
         session = self.get(key)
@@ -307,7 +317,7 @@ class EditorService:
             candidate, summary = self._candidate(session)
             self._expect(key, session, version, candidate)
             if session.checked != version or not (summary["writes"] or summary["deletes"]):
-                raise EditorError("unchecked", "Проверьте текущий черновик с изменениями", 409)
+                raise EditorError("unchecked", "Внесите изменения и нажмите «Проверить и показать изменения» перед публикацией.", 409)
             revision = self.store().publish(session.draft)
             session.closed = True
             session.version += 1

@@ -50,7 +50,7 @@ class Documents:
         root_secrets = self.root.parent / yamlx.SECRETS_NAME
         if yamlx.use_secrets and root_secrets.is_file():
             self._bytes(root_secrets)
-        if strict or isinstance(self.data, dict) and self.data.get("schema") == 2:
+        if strict or isinstance(self.data, dict) and self.data.get("schema") in (2, 3):
             if self.duplicates:
                 origin = self.duplicates[0]
                 raise DocumentError("Повторяющийся YAML-ключ: %s" % origin.file.name)

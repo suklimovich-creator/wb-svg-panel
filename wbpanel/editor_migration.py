@@ -3,12 +3,13 @@
 from copy import copy, deepcopy
 from pathlib import Path
 import os
+import re
 import uuid
 
 import yaml
 
 from .editor_documents import DocumentError
-from .editor_model import PLACEMENT, tile_lists
+from .editor_model import PLACEMENT, next_tile_id, reserve_tile_id, tile_lists
 
 MAP = "tag:yaml.org,2002:map"
 STR = "tag:yaml.org,2002:str"
@@ -137,6 +138,116 @@ def migration_files(config):
     return files
 
 
+def block_copy(node, source, destination):
+    """Copy each YAML occurrence, retaining its tag and rebasing includes."""
+    result = copy(node)
+    if isinstance(node, yaml.MappingNode):
+        result.flow_style = False
+        result.value = [(block_copy(k, source, destination), block_copy(v, source, destination))
+                        for k, v in node.value]
+    elif isinstance(node, yaml.SequenceNode):
+        result.flow_style = False
+        result.value = [block_copy(v, source, destination) for v in node.value]
+    elif node.tag == "!include" and source != destination:
+        result.value = os.path.relpath(source / node.value, destination)
+    elif node.tag == "!secret" and source != destination:
+        raise DocumentError("Плитка использует локальный !secret в другом каталоге")
+    return result
+
+
+def _entry_nodes(docs, path, destination):
+    for key, value in _effective_pairs(docs.nodes[path]):
+        logical = path + (key.value,)
+        includes = docs.includes.get(logical)
+        source = includes[0][0].file.parent if includes else docs.origins[logical].file.parent
+        yield key.value, block_copy(value, source, destination)
+
+
+def inline_tile(config, path, destination):
+    docs = config.documents
+    raw = docs.data_at(path)
+    pairs = {}
+    if "element" in raw and config.get("schema") in (2, 3):
+        pairs.update(_entry_nodes(docs, ("elements", raw["element"]), destination))
+    pairs.update(_entry_nodes(docs, path, destination))
+    pairs.pop("element", None)
+    pairs.pop("id", None)
+    return pairs
+
+
+def inline_migration_files(config):
+    docs = config.documents
+    if config.get("schema") == 3:
+        raise DocumentError("Конфигурация уже использует schema: 3")
+    root = docs.root.parent
+    panels_file = Path("panels.yaml")
+    groups = docs.includes.get(("panels",), [])
+    # Only replace an existing panels file when that file exclusively
+    # supplies the root panels key. Retain other source files for rollback.
+    same_file = (len(groups) == 1 and docs.origins[("panels",)].file == root / panels_file
+                 and not any(origin.file == root / panels_file and path[:1] != ("panels",)
+                             for path, origin in docs.origins.items()))
+    if not same_file and (root / panels_file).exists():
+        panels_file = Path("panels-inline.yaml")
+        if (root / panels_file).exists():
+            raise DocumentError("Файл panels-inline.yaml уже существует")
+    replacements = {}
+    entries = [(path + (index,), tile)
+               for path, _, tiles in tile_lists(config.panels, legacy=True)
+               for index, tile in enumerate(tiles)]
+    generated = re.compile(r"tile_[0-9a-f]{32}")
+    occupied = {raw_id for path, _ in entries if isinstance(
+        raw_id := docs.data_at(path).get("id"), str) and not generated.fullmatch(raw_id)}
+    used = set()
+    counters = {}
+    for path, tile in entries:
+        previous = docs.data_at(path).get("id")
+        stable_id = (previous if isinstance(previous, str) and previous in occupied and not generated.fullmatch(previous) else next_tile_id(tile, occupied))
+        if stable_id in used:
+            raise DocumentError("Повторяющийся исходный id плитки")
+        occupied.add(stable_id)
+        used.add(stable_id)
+        reserve_tile_id(counters, stable_id)
+        fields = inline_tile(config, path, root)
+        replacements[path] = _mapping([("id", _scalar(stable_id)), *fields.items()])
+
+    def transform(path):
+        if path in replacements:
+            return replacements[path]
+        node = docs.nodes[path]
+        if not any(target[:len(path)] == path for target in replacements):
+            includes = docs.includes.get(path)
+            if includes and path != ("panels",):
+                origin, reference = includes[0]
+                return block_copy(reference, origin.file.parent, root)
+            return block_copy(node, docs.origins[path].file.parent, root)
+        if isinstance(node, yaml.MappingNode):
+            return _mapping((key.value, transform(path + (key.value,)))
+                            for key, _ in _effective_pairs(node))
+        return yaml.SequenceNode(node.tag, [transform(path + (i,)) for i in range(len(node.value))])
+
+    panels = transform(("panels",)) if ("panels",) in docs.nodes else _mapping([])
+    if panels.tag == "!include" and same_file:
+        panels = block_copy(docs.nodes[("panels",)], root, root)
+    config_pairs = [("schema", _scalar("3", INT)),
+                    ("panels", _scalar(str(panels_file), "!include"))]
+    if counters:
+        config_pairs.append(("last_tile_ids", _mapping((k, _scalar(v)) for k, v in counters.items())))
+    config_pairs.extend((key, value) for key, value in _entry_nodes(docs, (), root)
+                        if key not in {"schema", "panels", "elements"})
+    return {panels_file: _serialize(panels), Path(docs.root.name): _serialize(_mapping(config_pairs))}
+
+
+def id_changes(old, new):
+    result = {}
+    for path, _, tiles in tile_lists(old.documents.data.get("panels", {}), legacy=True):
+        for index, tile in enumerate(tiles):
+            previous = tile.get("id")
+            if isinstance(previous, str) and re.fullmatch(r"tile_[0-9a-f]{32}", previous):
+                result[previous] = new.documents.data_at(path + (index,))["id"]
+    return result
+
+
 def verify_migration(old, new):
     """Resolved data equality includes bindings, commands, order and sizes."""
     from . import web  # noqa: F401  registers screen routes
@@ -146,6 +257,7 @@ def verify_migration(old, new):
         data = deepcopy(config.data)
         data.pop("schema", None)
         data.pop("elements", None)
+        data.pop("last_tile_ids", None)
         for _path, _container, tiles in tile_lists(data.get("panels") or {}, legacy=True):
             for tile in tiles:
                 tile.pop("id", None)

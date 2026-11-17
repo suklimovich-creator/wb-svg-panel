@@ -15,6 +15,7 @@ import stat
 import tempfile
 import uuid
 
+from .editor_model import MANAGED_SCHEMAS
 from .config import Config
 from .editor_documents import DocumentError
 from .editor_drafts import Changeset, Draft
@@ -215,16 +216,16 @@ class RevisionStore:
 
     def draft(self, *, managed=False):
         with self._locked():
-            if managed and self._load(self.path).get("schema") != 2:
+            if managed and self._load(self.path).get("schema") not in MANAGED_SCHEMAS:
                 raise DocumentError("Сначала выполните явную миграцию")
             return self._baseline()[1]
 
-    def migration(self):
-        from .editor_migration import migration_files
+    def migration(self, *, inline=False):
+        from .editor_migration import inline_migration_files, migration_files
 
         with self._locked():
             config, draft = self._baseline()
-            draft.changeset = Changeset(migration_files(config))
+            draft.changeset = Changeset((inline_migration_files if inline else migration_files)(config))
             return draft
 
     def _revision(self, revision, parent, action, source=None):
@@ -297,7 +298,7 @@ class RevisionStore:
 
     def _publish(self, draft, *, migrate=False, source=None, preview=False,
                  candidate_only=False, verify=True, managed=False):
-        from .editor_migration import verify_migration
+        from .editor_migration import id_changes, verify_migration
 
         def check_base():
             if self._head() != draft.base_revision:
@@ -313,8 +314,6 @@ class RevisionStore:
         old, active = check_base()
         if (managed or (not migrate and not draft._restore)) and "schema" not in old.data:
             raise DocumentError("Сначала выполните явную миграцию")
-        if migrate and "schema" in old.data:
-            raise DocumentError("Исходная конфигурация уже мигрирована")
         files = dict(active)
         changed = {}
         for path, data in draft.changeset._files.items():
@@ -338,8 +337,8 @@ class RevisionStore:
                 target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 _replace(target, data)
             candidate = self._load(stage / self.path.name)
-            if (managed or not draft._restore) and candidate.get("schema") != 2:
-                raise DocumentError("Публикация требует schema: 2")
+            if (managed or not draft._restore) and candidate.get("schema") not in MANAGED_SCHEMAS:
+                raise DocumentError("Публикация требует управляемую schema")
             if verify:
                 self._verify(candidate)
             if candidate_only:
@@ -353,7 +352,10 @@ class RevisionStore:
                 except Exception:
                     raise DocumentError("Не удалось сравнить ESP JSON при миграции") from None
             if preview:
-                return draft.changeset.summary(old, candidate)
+                summary = draft.changeset.summary(old, candidate)
+                if migrate and candidate.get("schema") == 3:
+                    summary["tile_ids"] = id_changes(old, candidate)
+                return summary
 
             check_base()
             modes = self._modes(active)

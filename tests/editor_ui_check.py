@@ -72,6 +72,22 @@ def run():
     for raw, code in (("{", 400), ("[" + " " * 8192 + "]", 413), ('{"x":1,"x":2}', 400)):
         assert safe(client.post(PREFIX + "/drafts", data=raw, headers=HEADERS,
                                 content_type="application/json")).status_code == code
+    # Cloud-style termination and host rewriting upstream from nginx.
+    cloud = {**HEADERS, "Origin": "https://panel.http.wirenboard.cloud",
+             "X-Forwarded-Proto": "http"}
+    for headers in (
+        cloud,
+        {**cloud, "Sec-Fetch-Site": "same-site"},
+        {**cloud, "Sec-Fetch-Site": "cross-site"},
+        {**cloud, "Sec-Fetch-Site": "same-origin", "Origin": "null"},
+        {**cloud, "Sec-Fetch-Site": "same-origin", "X-WB-Editor": "2"},
+    ):
+        denied = safe(client.post(PREFIX + "/drafts", json={}, headers=headers))
+        assert denied.status_code == 403 and denied.get_json()["error"]["code"] == "origin"
+    assert not store.directory.exists()
+    allowed = safe(client.post(PREFIX + "/drafts", json={},
+                               headers={**cloud, "Sec-Fetch-Site": "same-origin"}))
+    assert allowed.status_code == 201
     post("/drafts", {"path": "../outside.yaml", "_files": {}}, 400)
     get("/drafts/missing", 404)
     get("/drafts/missing/diff", 404)
@@ -298,6 +314,34 @@ def run():
     assert [rv["id"] for rv in history["revisions"]] == [restored["id"], published["id"], state["base_revision"]]
     assert cfg.used_channels() == base_channels and sent == []
     assert all(path.read_bytes() == content for path, content in expected_files.items())
+    conversion = store.migration(inline=True)
+    store.inspect(conversion, migrate=True)
+    migrated = store.publish(conversion, migrate=True)
+    cfg.reload(force=True)
+    assert cfg.get("schema") == 3 and cfg.used_channels() == base_channels
+    yaml_text = (directory / "panels.yaml").read_text()
+    assert "!secret" in yaml_text and "${site}" in yaml_text
+    assert "&id" not in yaml_text and "*id" not in yaml_text
+    assert all(tile.get("type") for tile in cfg.all_tiles())
+
+    inline, state = draft()
+    state = operation(inline, state, "add_instance", element="first", id="my-light")
+    assert state["panels"][0]["sections"][0]["tiles"][-1]["id"] == "my-light"
+    operation(inline, state, "add_instance", element="first", id="my-light", code=400)
+    state = operation(inline, state, "add_instance", element="first")
+    created_id = state["panels"][0]["sections"][0]["tiles"][-1]["id"]
+    assert created_id == "dimmer-001"
+    state = operation(inline, state, "remove_instance", id=created_id)
+    state = operation(inline, state, "add_instance", element="first")
+    assert state["panels"][0]["sections"][0]["tiles"][-1]["id"] == "dimmer-002"
+    get(inline + "/preview/room.svg")
+    get(inline + "/diff")
+    inline_published = post(inline + "/publish", {"draft_version": state["draft_version"]})
+    assert cfg.get("last_tile_ids") == {"dimmer": "dimmer-002"}
+    reverted = post("/rollback", {"revision": restored["id"], "base_revision": inline_published["id"],
+                                  "confirm": True})
+    assert reverted["source"] == restored["id"] and cfg.get("schema") == 2
+    assert inline_published["parent"] == migrated.id
     print("editor HTTP: операции, SVG, секреты, конфликты, восстановление и история OK")
 
 

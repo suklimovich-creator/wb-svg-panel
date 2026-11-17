@@ -85,17 +85,25 @@ def _route(func):
 def _origin_allowed():
     if request.headers.get("X-WB-Editor") != "1":
         return False
-    if request.headers.get("Sec-Fetch-Site") not in (None, "same-origin"):
+    site = request.headers.get("Sec-Fetch-Site")
+    if site not in (None, "same-origin"):
         return False
     origin = request.headers.get("Origin")
     if origin is None:
         return True  # A cross-origin script cannot send the custom header without CORS.
-    expected = request.headers.get("X-Forwarded-Proto", request.scheme)
     try:
         url = urlsplit(origin)
-        return (expected in ("http", "https") and url.scheme == expected
-                and url.netloc.lower() == request.host.lower()
-                and not (url.path or url.query or url.fragment))
+        if (url.scheme not in ("http", "https") or not url.hostname
+                or url.username is not None or url.password is not None
+                or url.path or url.query or url.fragment):
+            return False
+        _port = url.port
+        # Browser-controlled metadata reflects the public page/request pair.
+        # A reverse proxy can replace the scheme and host before Flask.
+        if site == "same-origin":
+            return True
+        expected = request.headers.get("X-Forwarded-Proto", request.scheme)
+        return url.scheme == expected and url.netloc.lower() == request.host.lower()
     except ValueError:
         return False
 
@@ -113,7 +121,10 @@ def _invalid_constant(_value):
 
 def _payload(fields):
     if not _origin_allowed():
-        raise EditorError("origin", "Требуется запрос со страницы редактора", 403)
+        raise EditorError("origin",
+                          "Редактор не смог подтвердить адрес страницы. Откройте редактор заново. "
+                          "Если ошибка появляется через Wiren Board Cloud, попробуйте локальный адрес контроллера.",
+                          403)
     if request.mimetype != "application/json":
         raise EditorError("content_type", "Требуется application/json", 415)
     if request.content_length is not None and request.content_length > MAX_BODY:
@@ -171,7 +182,7 @@ def editor_page(name=None):
 @_route
 def editor_state():
     config = _service().active()
-    return {"managed": config.get("schema") == 2}
+    return {"managed": config.get("schema") in (2, 3)}
 
 
 @app.route("/api/editor/drafts", methods=["POST"])

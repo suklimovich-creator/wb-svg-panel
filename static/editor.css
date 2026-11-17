@@ -5,6 +5,7 @@ body { margin: 0; }
 header { padding: 1.15rem clamp(1rem, 3vw, 2.5rem); background: #142640; color: #fff; }
 header h1 { margin: .4rem 0; font-size: 1.65rem; }
 header a { color: #b9deff; }
+header pre { overflow-x: auto; }
 header p { overflow-wrap: anywhere; margin: .4rem 0 .8rem; }
 main { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(15rem, 2.5fr) minmax(15rem, 1fr); gap: 1rem; padding: 1rem; align-items: start; }
 .card { background: #fff; border: 1px solid #d7e0ed; border-radius: .9rem; padding: 1rem; min-width: 0; overflow-wrap: anywhere; }

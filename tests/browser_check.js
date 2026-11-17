@@ -54,7 +54,19 @@ async function editorFlow(browser) {
     p.on('pageerror', e => errors.push(e.message));
     p.on('dialog', dialog => dialog.accept());
     await p.goto(base);
+    let rejectDraft = true;
+    await p.route('**/api/editor/drafts', route => {
+      if (!rejectDraft) return route.continue();
+      rejectDraft = false;
+      return route.fulfill({status: 403, json: {error: {
+        code: 'origin', message: 'Редактор не смог подтвердить адрес страницы.'
+      }}});
+    });
     await p.getByRole('link', {name: 'Редактор панелей'}).click();
+    const retry = p.getByRole('button', {name: 'Повторить загрузку редактора'});
+    await retry.waitFor();
+    ok('редактор: подсказка о доступе', (await p.locator('#status').innerText()).includes('адрес страницы'));
+    await retry.click();
     await p.selectOption('#panels', 'summary');
     await p.selectOption('#sections', '1');
     ok('редактор: импортированный раздел', (await p.locator('#sources').innerText()).includes('room')
@@ -65,7 +77,7 @@ async function editorFlow(browser) {
     await p.click('#add');
     await p.locator('#instances .invalid').waitFor();
     ok('редактор: ошибка кандидата и плитки', await p.locator('#preview-image').isHidden()
-       && (await p.locator('#instance-error').innerText()).includes('конфигурации кандидата'));
+       && (await p.locator('#instance-error').innerText()).includes('У плитки неполные или неверные настройки'));
     await p.click('#remove');
     await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 3);
     await p.fill('#search', 'Подсветка');

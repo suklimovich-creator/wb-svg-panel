@@ -53,10 +53,12 @@
             if (xhr.status >= 200 && xhr.status < 300) {
                 done(null, result);
             } else {
-                done(result.error || {message: 'Ошибка HTTP ' + xhr.status});
+                done(result.error || {message: xhr.status === 401 || xhr.status === 403 ?
+                    'Доступ к редактору отклонён. Проверьте, что вы вошли, и откройте страницу заново.' :
+                    'Сервер не смог обработать запрос (HTTP ' + xhr.status + ').'});
             }
         };
-        xhr.onerror = xhr.ontimeout = function () { done({message: 'Сервер не ответил'}); };
+        xhr.onerror = xhr.ontimeout = function () { done({message: 'Контроллер не ответил. Проверьте подключение и повторите действие.'}); };
         xhr.send(data ? JSON.stringify(data) : null);
     }
 
@@ -102,8 +104,13 @@
 
     function progress() {
         if (!model) { return; }
-        status('База ' + model.base_revision + ' · версия черновика ' + model.draft_version +
-               (model.checked ? ' · проверено' : ' · ожидает проверки'));
+        if (!model.draft_version) {
+            status('Редактор готов. Выберите панель и внесите изменения.');
+        } else if (model.checked) {
+            status('Проверка прошла. Изменения можно опубликовать.');
+        } else {
+            status('Изменения пока в черновике. Проверьте их перед публикацией.');
+        }
         byId('publish').disabled = !model.checked || !model.draft_version;
         byId('check').disabled = false;
     }
@@ -128,6 +135,20 @@
                 option(menu, item.id, label(item));
             }
         });
+        if (model.inline_tiles) {
+            model.panels.forEach(function (p) {
+                p.sections.forEach(function (s) {
+                    s.tiles.filter(function (tile) { return !tile.element; }).forEach(function (tile) {
+                        var name = label({id: tile.id, type: tile.type, title: tile.title || tile.type});
+                        if (name.toLowerCase().indexOf(query) >= 0) {
+                            option(menu, 'copy:' + tile.id, 'Копия · ' + name);
+                        }
+                    });
+                });
+            });
+
+        }
+        byId('library-title').textContent = model.inline_tiles ? 'Добавить плитку' : 'Библиотека';
         byId('add').disabled = !menu.options.length;
     }
 
@@ -194,7 +215,7 @@
             }
             current.tiles.forEach(function (tile) {
                 var li = node('li', '');
-                var button = node('button', (tile.title || libraryItem(tile.element).title) + ' · ' + tile.id);
+                var button = node('button', (tile.title || (tile.element ? libraryItem(tile.element).title : tile.type)) + ' · ' + tile.id);
                 button.setAttribute('aria-pressed', String(selected === tile.id));
                 button.onclick = function () {
                     selected = tile.id;
@@ -224,12 +245,12 @@
             padOpen = false;
             return;
         }
-        var element = libraryItem(tile.element);
-        byId('identity').textContent = 'ID ' + tile.id + ' · элемент ' + element.id + ' · ' + element.type;
+        var element = tile.element ? libraryItem(tile.element) : tile;
+        byId('identity').textContent = 'ID ' + tile.id + (tile.element ? ' · элемент ' + element.id : '') + ' · ' + element.type;
         byId('width').value = tile.w == null ? '' : tile.w;
         byId('height').value = tile.h == null ? '' : tile.h;
         byId('title').value = tile.title || '';
-        byId('title').placeholder = tile.title_protected ? 'Защищённое название' : element.title;
+        byId('title').placeholder = tile.title_protected ? 'Защищённое название' : (element.title || element.type);
         byId('inherit-title').hidden = !tile.title_protected;
         var index = current.tiles.indexOf(tile);
         byId('up').disabled = index === 0;
@@ -284,24 +305,31 @@
         }
     }
 
-    function run(method, path, data, success) {
+    function run(method, path, data, success, failure) {
         if (busy) { return; }
         busy = true;
         request(method, path, data, function (error, result) {
             busy = false;
-            if (error) { errorMessage(error); }
-            else { success(result); }
+            if (error) {
+                errorMessage(error);
+                if (failure) { failure(); }
+            } else { success(result); }
         });
     }
 
     function newDraft() {
+        if (busy) { return; }
+        var retry = byId('retry-start');
+        function showRetry() { retry.hidden = false; }
+        retry.hidden = true;
+        status('Загрузка редактора…');
         empty('details').hidden = true;
         run('GET', 'state', null, function (state) {
             if (!state.managed) {
                 byId('legacy').hidden = false;
                 byId('actions').hidden = true;
                 byId('workspace').hidden = true;
-                status('Исходная конфигурация', false);
+                status('Редактор станет доступен после миграции YAML.');
                 return;
             }
             byId('legacy').hidden = true;
@@ -311,9 +339,11 @@
                 panel = panel || initialPanel;
                 byId('actions').hidden = false;
                 showModel();
-            });
-        });
+            }, showRetry);
+        }, showRetry);
     }
+
+    byId('retry-start').onclick = newDraft;
 
     function operate(op, fields) {
         var current = selectedSection();
@@ -324,6 +354,7 @@
         run('POST', draftPath('/operation'), {draft_version: model.draft_version, operation: fields}, function (result) {
             model = result;
             issue = null;
+            if (op === 'add_instance') { byId('new-id').value = ''; }
             if (op === 'add_instance' && panel === fields.panel && section === fields.section) {
                 var tiles = selectedSection().tiles;
                 selected = tiles[tiles.length - 1].id;
@@ -356,7 +387,14 @@
         showInstance();
         refreshPreview(true);
     };
-    byId('add').onclick = function () { operate('add_instance', {element: byId('elements').value}); };
+    byId('add').onclick = function () {
+        var source = byId('elements').value;
+        var fields = {element: source};
+        if (model.inline_tiles && source.indexOf('copy:') === 0) { fields = {element: source.slice(5)}; }
+        var id = byId('new-id').value.trim();
+        if (id) { fields.id = id; }
+        operate('add_instance', fields);
+    };
     byId('up').onclick = function () { operate('move_instance', {id: selected, direction: 'up'}); };
     byId('down').onclick = function () { operate('move_instance', {id: selected, direction: 'down'}); };
     byId('remove').onclick = function () {

@@ -93,7 +93,7 @@ class Config:
             return instance
         logical = instance.logical_path
         raw = self.documents.data_at(logical)
-        if field_path[0] not in raw:
+        if field_path[0] not in raw and "element" in raw:
             logical = self.origins["element", raw["element"]].logical_path
         origin = self.documents.origins[logical + field_path]
         return replace(origin, stable_id=stable_id)

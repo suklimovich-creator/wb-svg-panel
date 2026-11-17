@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--config", default=CONFIG_PATH)
     commands = parser.add_subparsers(dest="command", required=True)
     migration = commands.add_parser("migrate", help="проверить миграцию")
+    migration.add_argument("--inline", action="store_true", help="подготовить читаемую schema: 3")
     migration.add_argument("--apply", action="store_true", help="опубликовать миграцию")
     commands.add_parser("history", help="показать историю и восстановить прерванную запись")
     rollback = commands.add_parser("rollback", help="опубликовать ревизию из истории")
@@ -27,7 +28,7 @@ def main():
         elif args.command == "rollback":
             out = asdict(store.rollback(args.revision))
         else:
-            draft = store.migration()
+            draft = store.migration(inline=args.inline)
             if args.apply:
                 out = asdict(store.publish(draft, migrate=True))
             else:

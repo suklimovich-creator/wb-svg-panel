@@ -3,14 +3,14 @@
 from copy import deepcopy
 import math
 import re
-import uuid
 
 import yaml
 from yaml.nodes import MappingNode, ScalarNode, SequenceNode
 
 from . import yamlx
 from .editor_drafts import Changeset
-from .editor_model import PLACEMENT
+from .editor_model import CUSTOM_TILE_ID, PLACEMENT, next_tile_id, reserve_tile_id
+from .editor_migration import _entry_nodes, _mapping, _scalar, block_copy, inline_tile
 from .editor_documents import DocumentError
 
 STR = "tag:yaml.org,2002:str"
@@ -87,7 +87,9 @@ def validate(operation):
         raise OperationError("Требуется структурная операция")
     kind = operation["op"]
     fields = OP_FIELDS.get(kind)
-    if fields is None or operation.keys() != fields | {"op", "panel", "section"}:
+    required = fields | {"op", "panel", "section"} if fields is not None else set()
+    optional = {"id"} if kind == "add_instance" else set()
+    if fields is None or not required <= operation.keys() <= required | optional:
         raise OperationError("Неизвестная операция или лишние поля")
     for key in ("panel", "element", "id"):
         if key not in operation:
@@ -97,6 +99,9 @@ def validate(operation):
             raise OperationError("Требуется непустая строка", key)
         if value.startswith(("/", "\\")) or ".." in value.replace("\\", "/").split("/"):
             raise OperationError("Требуется идентификатор из конфигурации", key)
+    if kind == "add_instance":
+        if "id" in operation and not CUSTOM_TILE_ID.fullmatch(operation["id"]):
+            raise OperationError("ID: до 64 латинских букв, цифр, дефисов и подчёркиваний", "id")
     if operation["section"] is not None and type(operation["section"]) is not int:
         raise OperationError("Требуется номер раздела", "section")
     if kind == "move_instance" and operation["direction"] not in ("up", "down"):
@@ -115,7 +120,7 @@ def apply(config, changeset, operation, originals):
     tiles = container.get("tiles", [])
     list_path = path + ("tiles",)
     stable_id = operation.get("id")
-    if stable_id is not None:
+    if kind != "add_instance":
         try:
             origin = config.tile_origin(stable_id)
         except KeyError:
@@ -123,13 +128,26 @@ def apply(config, changeset, operation, originals):
         if origin.logical_path[:-1] != list_path:
             raise OperationError("Экземпляр находится в другом списке", "id")
         index = origin.logical_path[-1]
+    inline = config.get("schema") == 3
     if kind == "add_instance":
-        element = operation["element"]
-        if element not in expected["elements"]:
-            raise OperationError("Элемент библиотеки не найден", "element")
-        stable_id = "tile_" + uuid.uuid4().hex
-        while ("tile", stable_id) in config.origins:
-            stable_id = "tile_" + uuid.uuid4().hex
+        element = operation.get("element")
+        library = expected.get("elements", {})
+        if element in library:
+            definition = library[element]
+            source_path = ("elements", element)
+        elif inline and ("tile", element) in config.origins:
+            source_path = config.tile_origin(element).logical_path
+            definition = doc.data_at(source_path)
+            if "element" in definition:
+                definition = {**library[definition["element"]], **definition}
+        else:
+            raise OperationError("Источник плитки не найден", "element")
+        occupied = {key for category, key in config.origins if category == "tile"}
+        if stable_id in occupied:
+            raise OperationError("Такой ID уже занят", "id")
+        if stable_id is None:
+            stable_id = next_tile_id(definition, occupied | set(
+                expected.get("last_tile_ids", {}).values()))
     if kind != "update_instance":
         origin = doc.origins.get(list_path) or doc.origins[path]
 
@@ -173,9 +191,19 @@ def apply(config, changeset, operation, originals):
         if not isinstance(node, SequenceNode) or node.tag != SEQ:
             raise OperationError("Размещение должно быть YAML-списком")
         if kind == "add_instance":
-            entry = {"id": stable_id, "element": element}
+            if not inline:
+                entry = {"id": stable_id, "element": element}
+                entry_node = yaml.SafeDumper("").represent_data(entry)
+            else:
+                if source_path[0] == "elements":
+                    fields = list(_entry_nodes(doc, source_path, origin.file.parent))
+                else:
+                    fields = list(inline_tile(config, source_path, origin.file.parent).items())
+                entry_node = _mapping([("id", _scalar(stable_id)), *fields])
+                entry = {"id": stable_id, **{key: value for key, value in definition.items()
+                                             if key not in {"id", "element"}}}
             tiles.append(entry)
-            node.value.append(yaml.SafeDumper("").represent_data(entry))
+            node.value.append(entry_node)
         elif kind == "remove_instance":
             node.value.pop(index)
             tiles.pop(index)
@@ -190,8 +218,20 @@ def apply(config, changeset, operation, originals):
     relative = origin.file.relative_to(doc.root.parent)
     files = dict(changeset._files)
     original = originals.get(relative, doc.files[origin.file])
+    counters = expected.get("last_tile_ids", {})
+    if inline and kind == "add_instance" and reserve_tile_id(counters, stable_id):
+        expected["last_tile_ids"] = counters
+        config_root = root if origin.file == doc.root else yaml.compose(
+            doc.files[doc.root], Loader=yaml.SafeLoader)
+        if not isinstance(config_root, MappingNode) or any(k.value == "<<" for k, _ in config_root.value):
+            raise OperationError("Счётчик ID требует обычный корневой YAML-словарь", "id")
+        config_root.value[:] = [(k, v) for k, v in config_root.value if k.value != "last_tile_ids"]
+        config_root.value.append((_scalar("last_tile_ids"),
+                                  _mapping((k, _scalar(v)) for k, v in counters.items())))
+        if config_root is not root:
+            files[doc.root.relative_to(doc.root.parent)] = _serialize(config_root)
     if expected != doc.data:
-        body = _serialize(root)
+        body = _serialize(block_copy(root, origin.file.parent, origin.file.parent) if inline else root)
         baseline = _serialize(yaml.compose(original, Loader=yaml.SafeLoader))
         if body == baseline:
             files.pop(relative, None)

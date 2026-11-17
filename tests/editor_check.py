@@ -50,6 +50,20 @@ panels:
     store.publish(draft, migrate=True)
     after = Config(path, strict=True)
     assert list(before.all_tiles()) == list(after.all_tiles())
+    assert after.documents.data["elements"]["switch-001"] == {
+        "type": "switch", "channel": "dev/actual", "title": "Actual", "w": 3}
+    assert after.documents.data["panels"]["main"]["tiles"] == [
+        {"id": "switch-001", "element": "switch-001"}]
+    from wbpanel.editor_service import EditorService
+    editor = EditorService(path)
+    model = editor.create()
+    assert model["library"][0]["id"] == "switch-001"
+    updated = editor.operation(model["draft_id"], 0, {"op": "add_instance", "panel": "main",
+        "section": None, "element": "switch-001"})
+    assert updated["panels"][0]["sections"][0]["tiles"][-1] == {
+        "id": "switch-002", "element": "switch-001"}
+    editor.diff(model["draft_id"])
+    editor.publish(model["draft_id"], 1)
     assert after.used_channels() == {"dev/actual"}
     assert screen_layout("main", before) == screen_layout("main", after)
 
@@ -134,8 +148,8 @@ def main(root):
     first, second = origins
     first_rel, second_rel = [o.file.relative_to(root) for o in origins]
     first_bytes, second_bytes = [o.file.read_bytes() for o in origins]
-    draft.changeset = Changeset({first_rel: first_bytes.replace(b"w: 2", b"w: 1"),
-                                 second_rel: second_bytes.replace(b"w: 2", b"w: 1")})
+    draft.changeset = Changeset({first_rel: first_bytes + b"w: 1\n",
+                                 second_rel: second_bytes + b"w: 1\n"})
 
     def failing_replace(target, data, mode=0o600):
         if target == second.file and data != second_bytes:

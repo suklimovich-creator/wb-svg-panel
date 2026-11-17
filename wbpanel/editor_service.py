@@ -83,12 +83,20 @@ class SecretPolicy:
             value = decoded
 
     def label(self, text, fallback="Скрытое значение"):
-        return fallback if isinstance(text, str) and self.contains(text) else text
+        if isinstance(text, (dict, list)) or self.contains(str(text)):
+            return fallback
+        return text
 
     def check(self, content):
         if self.contains(content):
             raise EditorError("protected_output",
-                              "Ответ скрыт, поскольку содержит защищённое значение", 422)
+                              "В данных для показа найдено значение из secrets.yaml. Проверьте ID и отображаемые поля плиток.", 422)
+
+    def check_values(self, value):
+        # DTO keys are fixed by the server. User-controlled names in these
+        # DTOs are values (including element IDs), never mapping keys.
+        for scalar in _secret_strings(value):
+            self.check(scalar)
 
     def rendering_config(self, config):
         def walk(value, key=""):
@@ -223,7 +231,9 @@ class EditorService:
                 "panels": panels, "library": list(library.values()), "themes": palette.names()}
         if inline:
             body["inline_tiles"] = True
-        policy.check(json.dumps(body, ensure_ascii=False))
+        policy.check_values(panels)
+        policy.check_values(body["library"])
+        policy.check_values(body["themes"])
         return body
 
     def model(self, key):
@@ -245,7 +255,7 @@ class EditorService:
             policy = SecretPolicy(candidate)
             try:
                 validate(operation)
-                policy.check(json.dumps(operation, ensure_ascii=False))
+                policy.check_values(operation)
                 changeset, expected, event, path, original = apply(
                     candidate, session.draft.changeset, operation, session.originals)
                 if changeset._files == session.draft.changeset._files:
@@ -297,7 +307,7 @@ class EditorService:
             self._verify(candidate, policy)
             body = {"summary": summary, "operations": session.events[:],
                     "draft_version": session.version, "base_revision": session.draft.base_revision}
-            policy.check(json.dumps(body, ensure_ascii=False))
+            policy.check_values(body["operations"])
             session.checked = session.version
             return body
 

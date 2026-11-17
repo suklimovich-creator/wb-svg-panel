@@ -183,7 +183,7 @@ def _contract(tile, cls, state, expand=None):
     return tile, obj, bind(tile, obj.schema(), state, obj)
 
 
-def publication_errors(config):
+def publication_errors(config, report_tile=None):
     """Count offline configuration errors without exposing resolved values."""
     from math import isfinite
     from .assemble import resolve_sections
@@ -209,6 +209,7 @@ def publication_errors(config):
         sections = list(resolve_sections(panel, config.panels))
         for _title, tiles, _source, _key in sections:
             for conf in tiles:
+                before = count
                 for prop in ("w", "h"):
                     if prop in conf:
                         value = float(conf[prop])
@@ -218,6 +219,8 @@ def publication_errors(config):
                 if not cls:
                     # Service auto-detection needs the broker metadata.
                     count += kind != "unknown" or not conf.get("service") or bool(conf.get("type"))
+                    if report_tile and count != before:
+                        report_tile(conf)
                     continue
                 expand = None
                 if kind == "valve":
@@ -246,6 +249,8 @@ def publication_errors(config):
                     count += not isinstance(definition, dict) or not Camera(name, definition).host
                 if kind == "list":
                     count += str(tile.get("list") or "") not in lists
+                if report_tile and count != before:
+                    report_tile(conf)
     return count
 
 

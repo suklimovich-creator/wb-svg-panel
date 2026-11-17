@@ -118,6 +118,8 @@ def main(root):
             "files": {str(first_rel): store._hash(candidate_bytes)},
         }))
         replace(first.file, candidate_bytes)
+    expect(Conflict, lambda: store.candidate(draft))
+    assert store.journal.exists() and first.file.read_bytes() == candidate_bytes
     assert store.history()[0] == revision and first.file.read_bytes() == first_bytes
 
     with patch.object(store, "_active", wraps=store._active) as active:

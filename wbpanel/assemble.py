@@ -18,7 +18,7 @@ from .tiles import from_registry
 
 # Текущий конфиг. Заполняется в web.main() при старте: сюда сборка плиток
 # заглядывает за общими настройками панели (show_status, interactive).
-# Через параметр их не передать - build_tile вызывается из десятка мест.
+# Кандидат редактора передаётся явно, для остальных вызовов это fallback.
 config = None
 
 
@@ -198,13 +198,15 @@ def _fit(text, width, size):
     return out.rstrip() + "…"
 
 
-def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactive):
+def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactive,
+               *, cfg=None, preview=False):
     """
     Собрать одну плитку: геометрия, данные, команда.
 
     Вынесено из prepare отдельно, потому что ту же плитку нужно уметь
     нарисовать и в произвольном размере - для полноэкранного вида.
     """
+    cfg = config if cfg is None else cfg
     now = time.time()
     tile = {
         "i": index,
@@ -218,8 +220,8 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
         # оранжевую рамку и тумблер, поэтому скрыта.
         "show_status": bool(conf.get("show_status",
                             panel_conf.get("show_status",
-                            (config.get("show_status", False)
-                             if config else False)))),
+                            (cfg.get("show_status", False)
+                             if cfg else False)))),
         "x": x, "y": y, "w": pw, "h": ph,
         # мелкая плитка не вмещает второй строки и крупной цифры
         "compact": pw < CELL * 2,
@@ -244,14 +246,14 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # Вид органов управления (с 1.17): новый по умолчанию, look: classic -
     # прежний. Задаётся у плитки, у панели или для всего config.yaml.
     look = conf.get("look") or (panel_conf or {}).get("look") or (
-        config.get("look") if config else None)
+        cfg.get("look") if cfg else None)
     if look:
         conf["look"] = look
     # Шторы (с 1.20) рисуют вид за окном: где дом, куда смотрит окно и
     # откуда брать погоду. Тоже по цепочке плитка -> панель -> корень;
     # координаты ещё и из theme_auto, чтобы не задавать их дважды.
     if tile["kind"] in ("curtain", "roller"):
-        glob = config or {}
+        glob = cfg or {}
         pc = panel_conf or {}
         conf["sky_location"] = location_of(
             conf.get("location"), pc.get("location"), glob.get("location"),
@@ -262,7 +264,7 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # Тема нужна графику: подписи значений красятся под цвет подложки, а
     # она разная. CSS-переменная тут не подходит - цвет у каждой серии свой.
     conf["theme"] = (panel_conf or {}).get("theme") or (
-        config.get("theme", "light") if config else "light")
+        cfg.get("theme", "light") if cfg else "light")
     style = palette.info(conf["theme"])
     form.use(style)                 # край колёс - для геометрии (form.py)
     inv_kind = conf.get("type") in style["inv_kinds"]
@@ -313,7 +315,7 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
 
     # Ссылка ведёт на другую панель и никуда не пишет, поэтому работает и
     # на панели, где управление выключено.
-    if interactive or tile["kind"] == "link":
+    if not preview and (interactive or tile["kind"] == "link"):
         tile["cmd"], tile["zones"] = build_command(zones, bound, tile, pad,
                                                    pw, ph)
     else:
@@ -332,8 +334,8 @@ def build_tile(conf, index, x, y, pw, ph, panel_conf, state, history, interactiv
     # у плитки, у панели или глобально.
     stale_after = float(conf.get("stale_after",
                         panel_conf.get("stale_after",
-                        (config.get("stale_after", STALE_AFTER)
-                         if config else STALE_AFTER))))
+                        (cfg.get("stale_after", STALE_AFTER)
+                         if cfg else STALE_AFTER))))
     # Плитки, у которых молчание канала - норма (датчик протечки шлёт
     # значение, только когда намок), жёлтой точкой не отмечаются: иначе она
     # висела бы на них всегда. Пропажу прибора по-прежнему видно - серой.
@@ -560,10 +562,11 @@ NAV_GAP = 10
 
 
 def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
-            closed=(), opened=None, mode=None, nav=False):
+            closed=(), opened=None, mode=None, nav=False, *, cfg=None, preview=False):
+    cfg = config if cfg is None else cfg
     big_cols = int(cols or panel_conf.get("cols", 4))
     interactive = bool(panel_conf.get("interactive",
-                       (config.get("interactive", False) if config else False)))
+                       (cfg.get("interactive", False) if cfg else False)))
     cols = big_cols * 2          # дальше всё в мелких ячейках
     sections = resolve_sections(panel_conf, all_panels)
 
@@ -606,7 +609,7 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
     for title, tiles_conf, status_src, key in sections:
         folded = bool(key) and key in hidden
         # плитки-ссылки должны знать, откуда на них нажали
-        if name:
+        if name and not preview:
             for conf in tiles_conf:
                 if isinstance(conf, dict) and conf.get("type") == "link":
                     conf.setdefault("_from", name)
@@ -698,7 +701,7 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
                     conf, index + order.get(id(conf), 0),
                     PAD + col * (CELL + GAP), y_cursor + row * (CELL + GAP),
                     w * CELL + (w - 1) * GAP, h * CELL + (h - 1) * GAP,
-                    panel_conf, state, history, interactive))
+                    panel_conf, state, history, interactive, cfg=cfg, preview=preview))
             if rows:
                 y_cursor += rows * CELL + (rows - 1) * GAP + GAP
 

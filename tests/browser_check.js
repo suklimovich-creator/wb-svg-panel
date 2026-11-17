@@ -38,6 +38,81 @@ async function waitServer() {
 }
 async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'); }
 
+async function editorFlow(browser) {
+  const port = PORT + 1;
+  const base = 'http://127.0.0.1:' + port + '/';
+  const fixture = path.join(ROOT, 'tests/fixtures/editor/managed.yaml');
+  const child = spawn('python3', [path.join(ROOT, 'tools/visual/serve.py'), String(port), fixture],
+                      {cwd: ROOT, stdio: 'ignore'});
+  const context = await browser.newContext({viewport: {width: 700, height: 850}});
+  try {
+    for (let i = 0; i < 60 && (await get(base + 'healthz')).status !== 200; i++) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    const p = await context.newPage();
+    const errors = [];
+    p.on('pageerror', e => errors.push(e.message));
+    p.on('dialog', dialog => dialog.accept());
+    await p.goto(base);
+    await p.getByRole('link', {name: 'Редактор панелей'}).click();
+    await p.selectOption('#panels', 'summary');
+    await p.selectOption('#sections', '1');
+    ok('редактор: импортированный раздел', (await p.locator('#sources').innerText()).includes('room')
+       && await p.locator('#library').isHidden());
+    await p.locator('#sources a').click();
+    await p.fill('#search', 'Выключатель без канала');
+    await p.selectOption('#elements', 'invalid_switch');
+    await p.click('#add');
+    await p.locator('#instances .invalid').waitFor();
+    ok('редактор: ошибка кандидата и плитки', await p.locator('#preview-image').isHidden()
+       && (await p.locator('#instance-error').innerText()).includes('конфигурации кандидата'));
+    await p.click('#remove');
+    await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 3);
+    await p.fill('#search', 'Подсветка');
+    await p.selectOption('#elements', 'light');
+    await p.click('#add');
+    await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 4);
+    const added = await p.locator('#instances li').last().innerText();
+    await p.click('#up');
+    await p.waitForFunction(text => document.querySelectorAll('#instances li')[2].textContent === text, added);
+    await p.fill('#width', '1.5');
+    await p.fill('#height', '1.5');
+    await p.fill('#title', 'Browser LED');
+    await p.locator('#placement button[type=submit]').click();
+    await p.waitForFunction(() => {
+      const img = document.getElementById('preview-image');
+      return !img.hidden && img.naturalWidth > 0 && decodeURIComponent(img.src).includes('Browser LED');
+    });
+    ok('редактор: размеры и название в кандидате', !(await get(base + 'room.svg')).body.includes('Browser LED'));
+    await p.click('#pad');
+    await p.waitForFunction(() => document.getElementById('pad-image').naturalWidth > 0);
+    await p.setViewportSize({width: 390, height: 844});
+    ok('редактор: управление в узком окне', await p.evaluate(() =>
+      document.documentElement.scrollWidth <= innerWidth &&
+      document.querySelector('#up').getBoundingClientRect().width > 0));
+    await p.click('#check');
+    await p.getByRole('heading', {name: 'Изменения черновика'}).waitFor();
+    await p.click('#publish');
+    await p.waitForFunction(() => document.getElementById('status').textContent.includes('Опубликовано'));
+    ok('редактор: публикация', (await get(base + 'room.svg?theme=dark')).body.includes('Browser LED'));
+    await p.click('#restart');
+    await p.locator('#workspace').waitFor();
+    const other = await context.newPage();
+    other.on('dialog', dialog => dialog.accept());
+    await other.goto(base + 'editor/room');
+    await other.click('#history');
+    await other.getByRole('button', {name: 'Откатить к этой ревизии'}).click();
+    await other.waitForFunction(() => document.getElementById('status').textContent.includes('Откат выполнен'));
+    await p.click('#check');
+    await p.waitForFunction(() => document.getElementById('status').textContent.includes('Активная конфигурация изменилась'));
+    ok('редактор: откат и конфликт черновика', !(await get(base + 'room.svg?theme=dark')).body.includes('Browser LED')
+       && errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+    child.kill();
+  }
+}
+
 (async () => {
   const srv = spawn('python3', [path.join(ROOT, 'tools/visual/serve.py'), String(PORT)],
                     {cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe']});
@@ -418,6 +493,7 @@ async function log() { return JSON.parse((await get(BASE + '_log')).body || '[]'
          JSON.stringify({opened, closed, sv, after, before: sw[2]}));
       await p.context().close();
     }
+    await editorFlow(br);
   } catch (e) {
     failed++;
     console.log('FAIL исключение: ' + (e && e.stack || e));

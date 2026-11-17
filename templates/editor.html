@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Редактор панелей</title>
+  <link rel="stylesheet" href="{{ root }}static/editor.css?v={{ version }}">
+</head>
+<body data-root="{{ root }}">
+  <header>
+    <a href="{{ root }}">Все панели</a>
+    <h1>Редактор панелей</h1>
+    <p id="status" role="status" aria-live="polite">Загрузка конфигурации…</p>
+    <p id="legacy" hidden>Для этой конфигурации нужна явная миграция.
+      На контроллере проверьте план командой <code>python3 -m wbpanel.editor_cli migrate</code>
+      и примените его той же командой с <code>--apply</code>.
+    </p>
+    <div id="actions" class="actions" hidden>
+      <button id="restart">Новый черновик</button>
+      <button id="check">Проверить и показать изменения</button>
+      <button id="publish" disabled>Опубликовать</button>
+      <button id="history">История</button>
+    </div>
+  </header>
+  <section id="details" class="card details" hidden aria-label="Проверка и история"></section>
+  <main id="workspace" hidden>
+    <section class="card sidebar">
+      <h2>Панель</h2>
+      <label for="panels">Выбор панели</label><select id="panels"></select>
+      <label for="sections">Раздел</label><select id="sections"></select>
+      <div id="sources"></div>
+      <ol id="instances" aria-label="Порядок экземпляров"></ol>
+      <div id="library">
+        <h2>Библиотека</h2>
+        <label for="search">Поиск по названию, ID или типу</label>
+        <input id="search" type="search" autocomplete="off">
+        <label for="elements">Элемент</label><select id="elements"></select>
+        <button id="add">Добавить экземпляр</button>
+      </div>
+    </section>
+    <section class="card preview">
+      <h2>SVG-предпросмотр</h2>
+      <div class="actions preview-controls">
+        <label>Тема <select id="theme"></select></label>
+        <label>Колонки <input id="cols" type="number" min="1" max="12" step="1"
+                                   placeholder="Из конфига"></label>
+      </div>
+      <p id="preview-status" role="status"></p>
+      <img id="preview-image" alt="SVG панели из черновика" hidden>
+    </section>
+    <section class="card inspector">
+      <h2>Экземпляр</h2>
+      <p id="selection-empty">Выберите экземпляр в списке.</p>
+      <form id="placement" hidden>
+        <p id="identity"></p>
+        <div class="sizes">
+          <label>Ширина <input id="width" type="number" step=".5" min=".5" max="32"></label>
+          <label>Высота <input id="height" type="number" step=".5" min=".5" max="32"></label>
+        </div>
+        <label>Название <input id="title" type="text" maxlength="512"></label>
+        <button id="inherit-title" type="button" hidden>Наследовать название</button>
+        <p class="muted">Размеры в единицах сетки. Пустое поле наследует значение из библиотеки.</p>
+        <p id="instance-error" role="alert" hidden></p>
+        <button type="submit">Применить к черновику</button>
+        <div class="actions order">
+          <button type="button" id="up">↑ Вверх</button>
+          <button type="button" id="down">↓ Вниз</button>
+          <button type="button" id="remove">Удалить</button>
+        </div>
+        <p id="pad-capability"></p>
+        <button type="button" id="pad" hidden>Показать пульт</button>
+        <p id="pad-status" role="status"></p>
+        <img id="pad-image" alt="SVG пульта из черновика" hidden>
+      </form>
+    </section>
+  </main>
+  <script src="{{ root }}static/js/editor.js?v={{ version }}"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# fixture comment to track untouched files byte for byte
+room:
+  title: Комната
+  description: !secret label
+  cols: 3
+  tiles: !include placements.yaml
+summary:
+  title: "Обзор ${label}"
+  sections:
+    - title: Своя секция
+      tiles:
+        - {id: inline_1, element: light}
+        - {id: inline_2, element: light}
+    - title: Из комнаты
+      from: room
+utility:
+  title: Служебная
+  tiles:
+    - {id: utility_1, element: switch}

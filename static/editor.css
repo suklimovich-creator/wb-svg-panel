@@ -1,0 +1,42 @@
+:root { color-scheme: light; font: 16px/1.45 system-ui, sans-serif; color: #17263b; background: #eef2f7; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+header { padding: 1.15rem clamp(1rem, 3vw, 2.5rem); background: #142640; color: #fff; }
+header h1 { margin: .4rem 0; font-size: 1.65rem; }
+header a { color: #b9deff; }
+header p { overflow-wrap: anywhere; margin: .4rem 0 .8rem; }
+main { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(15rem, 2.5fr) minmax(15rem, 1fr); gap: 1rem; padding: 1rem; align-items: start; }
+.card { background: #fff; border: 1px solid #d7e0ed; border-radius: .9rem; padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.details { margin: 1rem; }
+h2 { margin: 0 0 .7rem; font-size: 1.15rem; }
+label { display: block; margin: .55rem 0 .2rem; }
+input, select, button { font: inherit; color: inherit; }
+select, input { display: block; width: 100%; min-width: 0; border: 1px solid #8293aa; border-radius: .5rem; padding: .47rem .55rem; background: #fff; }
+button { border: 1px solid transparent; border-radius: .5rem; padding: .45rem .7rem; background: #e3edfa; color: #173658; cursor: pointer; }
+button:hover { border-color: #6584ac; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #3584cb; outline-offset: 2px; }
+#publish, #add { background: #1663a5; color: #fff; }
+#add { margin-top: .7rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.order { margin-top: .8rem; }
+.sizes { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.preview-controls > label { width: min(45%, 11rem); }
+img { display: block; max-width: 100%; width: 100%; height: auto; }
+ol { padding: 0 0 0 1.45rem; }
+li { margin: .3rem 0; }
+li button { text-align: left; overflow-wrap: anywhere; width: 100%; }
+li button[aria-pressed="true"] { background: #c8e1ff; border-color: #397ab5; }
+li.invalid button { border-color: #a32720; color: #a32720; }
+.muted { font-size: .86rem; color: #4e6076; }
+.error, #instance-error { color: #a32720; }
+header .error { color: #ffc6bf; }
+@media (max-width: 860px) {
+  main { grid-template-columns: minmax(12rem, 1fr) minmax(15rem, 1.7fr); }
+  .preview { grid-column: 2; grid-row: span 2; }
+}
+@media (max-width: 545px) {
+  main { grid-template-columns: 1fr; }
+  .preview { grid-column: 1; grid-row: auto; }
+}

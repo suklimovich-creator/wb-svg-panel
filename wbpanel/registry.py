@@ -252,6 +252,12 @@ class Tile(object):
         return {}
 
 
+def has_pad(kind):
+    """Whether the registered type implements its own pad contract."""
+    cls = REGISTRY.get(kind)
+    return cls is not None and cls.pad is not Tile.pad
+
+
 def resolve_type(conf, state):
     """
     Тип плитки: заданный человеком либо опознанный по службе.

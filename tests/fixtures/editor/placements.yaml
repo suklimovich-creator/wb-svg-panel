@@ -1,0 +1,3 @@
+- !include placement.yaml
+- {id: second, element: light}
+- {id: third, element: switch}

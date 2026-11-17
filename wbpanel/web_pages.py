@@ -148,6 +148,7 @@ def index():
  <a href="docs"><b>Как собирать панели</b></a> ·
  <a href="channels">Список каналов</a> ·
  <a href="check">Проверка конфига</a> ·
+ <a href="editor"><b>Редактор панелей</b></a> ·
  <a href="themes">Темы</a> ·
  <a href="healthz">healthz</a> ·
  плитка ведёт на <code>.html</code> с автообновлением,

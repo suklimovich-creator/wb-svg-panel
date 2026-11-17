@@ -95,19 +95,20 @@ def themes_dir():
     return os.path.join(os.path.dirname(os.path.abspath(CONFIG_PATH)), path)
 
 
-def panel_theme(panel_conf=None):
+def panel_theme(panel_conf=None, *, cfg=None):
     """
     Тема для этого ответа: ?theme= из адреса (выбор на устройстве - у
     телефона и планшета на стене он свой), иначе тема панели, иначе общая.
     Неизвестное имя в адресе молча игнорируется.
     """
+    cfg = config if cfg is None else cfg
     palette.refresh()
     asked = request.args.get("theme") if request else None
     if asked and palette.exists(asked):
         return asked
     # theme: auto - по расписанию theme_auto (день/ночь, восход/закат).
-    return themes.resolve((panel_conf or {}).get("theme", config.get("theme", "light")),
-                          config)
+    return themes.resolve((panel_conf or {}).get("theme", cfg.get("theme", "light")),
+                          cfg)
 
 
 def _source(name):
@@ -126,10 +127,15 @@ def _source(name):
     return panel_conf, state, history, config.panels
 
 
-def render_panel(name, cols=None):
-    config.reload()
-    state.set_watched(config.used_channels(), config.service_prefixes())
-    panel_conf, st, hist, all_panels = _source(name)
+def render_panel(name, cols=None, *, candidate=None):
+    preview = candidate is not None
+    cfg = config if not preview else candidate
+    if preview:
+        panel_conf, st, hist, all_panels = cfg.panels[name], state, history, cfg.panels
+    else:
+        config.reload()
+        state.set_watched(config.used_channels(), config.service_prefixes())
+        panel_conf, st, hist, all_panels = _source(name)
     # Свёрнутые разделы приходят в адресе: панель - цельная картинка с
     # посчитанной геометрией, спрятать плитки на стороне браузера нельзя,
     # останутся дыры. Список свой на каждом устройстве, страница хранит
@@ -153,14 +159,15 @@ def render_panel(name, cols=None):
     # без линзы и отсвета стекла. Для слабых планшетов.
     lite = request.args.get("lite") == "1"
 
-    theme = panel_theme(panel_conf)
+    theme = panel_theme(panel_conf, cfg=cfg)
     # Тема нужна и сборке: подписи графиков красятся под цвет подложки.
     panel_conf = dict(panel_conf, theme=theme)
     tiles, width, height, headers, top_chips, sect = prepare(
         panel_conf, st, hist, cols=cols, all_panels=all_panels,
-        name=name, closed=closed, opened=opened, mode=mode, nav=nav)
+        name=name, closed=closed, opened=opened, mode=mode, nav=nav,
+        cfg=(cfg if preview else None), preview=preview)
     template = _template(panel_conf.get("template", "panel.svg.j2"))
-    wall_img, wall_dim = wall_of(panel_conf, theme)
+    wall_img, wall_dim = wall_of(panel_conf, theme, cfg=cfg)
     # Заставка (1.57) показывает панель картинкой (<img>): внешних файлов
     # такая картинка не грузит - обои стекла кладём внутрь, data:-адресом.
     if wall_img and request.args.get("inline") == "1":
@@ -186,12 +193,12 @@ def render_panel(name, cols=None):
         nav_w=sect["nav_w"],
         nav_r=sect["nav_r"],
         plate_sections=bool(panel_conf.get("section_plate",
-                                           config.get("section_plate", True))),
+                                           cfg.get("section_plate", True))),
         width=width,
         height=height,
         rx=palette.info(theme)["radius"],
         theme=theme,
-        shadows=bool(panel_conf.get("shadows", config.get("shadows", True))) and not lite,
+        shadows=bool(panel_conf.get("shadows", cfg.get("shadows", True))) and not lite,
         lite=lite,
         title=sect["title"] if sect["mode"] == "tabs" else panel_conf.get("title", ""),
         updated=clock_now()[0],
@@ -200,21 +207,22 @@ def render_panel(name, cols=None):
     )
 
 
-def wall_of(panel_conf, theme):
+def wall_of(panel_conf, theme, *, cfg=None):
     """
     Своя картинка обоев стекла (1.50): (адрес, вуаль) или (None, None).
     Вуаль - полупрозрачный слой поверх: на тёмном стекле картинка темнее,
     на дневном светлее, иначе подписи на плитках теряются в фотографии.
     wallpaper_dim - её плотность, 0…1 (по умолчанию 0.3).
     """
+    cfg = config if cfg is None else cfg
     if palette.info(theme)["depth"] != "glass":
         return None, None
-    raw = panel_conf.get("wallpaper", config.get("wallpaper"))
+    raw = panel_conf.get("wallpaper", cfg.get("wallpaper"))
     url = wallpaper.url_for(wallpaper.resolve(raw, BASE_DIR))
     if not url:
         return None, None
     try:
-        dim = float(panel_conf.get("wallpaper_dim", config.get("wallpaper_dim", 0.3)))
+        dim = float(panel_conf.get("wallpaper_dim", cfg.get("wallpaper_dim", 0.3)))
     except (TypeError, ValueError):
         dim = 0.3
     dim = max(0.0, min(dim, 0.9))
@@ -305,8 +313,7 @@ def main():
     # Свои темы (с 1.25): папка themes/ рядом с config.yaml, или своя -
     # themes_dir в конфиге. Перечитывается сама, когда файлы меняются.
     palette.load(themes_dir())
-    # Сборка плиток заглядывает в общие настройки панели, но получить их
-    # параметром неоткуда: build_tile зовётся из десятка мест.
+    # Общие настройки для рабочих вызовов сборки без явного кандидата.
     assemble.config = config
     # Камеры читают адреса и пароли из того же конфига, и тоже
     # вызываются оттуда, куда параметр не передать.
@@ -450,3 +457,4 @@ from .web_api import allowed_topics, api_list, api_publish  # noqa: E402,F401
 from .web_pages import panel_html, panel_order, wrapper_html  # noqa: E402,F401
 from .web_screen import api_screen  # noqa: E402,F401
 from .web_firmware import firmware_file, firmware_manifest  # noqa: E402,F401
+from . import web_editor  # noqa: E402,F401

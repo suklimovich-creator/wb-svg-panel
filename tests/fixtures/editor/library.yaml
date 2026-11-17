@@ -1,0 +1,14 @@
+light:
+  type: dimmer
+  title: Подсветка
+  subtitle: "Тест ${label}"
+  channel: dm/K1
+  channel_brightness: dm/Channel 1
+switch:
+  type: switch
+  title: !secret label
+  channel: !secret channel
+  command_topic: /custom/${site}/set
+invalid_switch:
+  type: switch
+  title: Выключатель без канала

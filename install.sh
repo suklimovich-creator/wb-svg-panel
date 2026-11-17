@@ -54,6 +54,10 @@ done
 # Шаблон разделён на файлы: каркас плюс templates/tiles/. Плоская раскладка,
 # когда panel.svg.j2 лежал рядом с panel.py, больше не годится - подшаблоны
 # ищутся относительно templates/.
+if [ ! -f "$SRC/templates/editor.html" ]; then
+    MISSING="$MISSING templates/editor.html"
+    echo "    НЕТ: templates/editor.html"
+fi
 if [ -f "$SRC/templates/panel.svg.j2" ]; then
     echo "    ok:  templates/panel.svg.j2"
 else
@@ -78,7 +82,7 @@ for f in light dark graphite autumn retro noir; do
 done
 # Стили и скрипты страницы с 1.45 - файлы static/: без них страница
 # панели пустая.
-for f in panel.css js/core.js js/overlay.js js/pads-light.js js/pads-climate.js \
+for f in panel.css editor.css js/editor.js js/core.js js/overlay.js js/pads-light.js js/pads-climate.js \
          js/pads-level.js js/press.js js/pads-media.js js/pads-items.js js/update.js; do
     if [ ! -f "$SRC/static/$f" ]; then
         MISSING="$MISSING static/$f"

@@ -1,0 +1,4 @@
+schema: 2
+interactive: true
+elements: !include library.yaml
+panels: !include panels.yaml

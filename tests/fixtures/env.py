@@ -91,6 +91,11 @@ def setup(config=None, freeze_time=True, history=False):
     with open(cfg_path, "w", encoding="utf-8") as fh:
         fh.write(src + "\nlists_file: %s\n" % json.dumps(os.path.join(tmp, "lists.json")))
     os.environ["WB_PANEL_CONFIG"] = cfg_path
+    if config and os.path.basename(config) == "managed.yaml":
+        fixture_dir = os.path.dirname(os.path.abspath(config))
+        for name in ("library.yaml", "panels.yaml", "placements.yaml", "placement.yaml"):
+            shutil.copy(os.path.join(fixture_dir, name), os.path.join(tmp, name))
+        shutil.copy(os.path.join(fixture_dir, "sentinel.yaml"), os.path.join(tmp, "secrets.yaml"))
     # secrets.yaml и куски !include рядом с настоящим конфигом (1.61)
     if config:
         from wbpanel import yamlx

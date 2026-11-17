@@ -24,6 +24,16 @@ class Conflict(DocumentError):
     """The draft is based on a different active revision or file state."""
 
 
+class ValidationError(DocumentError):
+    def __init__(self, count, origins):
+        super().__init__("Конфигурация не прошла проверку: ошибок %d" % count)
+        self.origins = origins
+
+
+class RevisionNotFound(DocumentError):
+    """The requested revision is outside the visible history."""
+
+
 @dataclass(frozen=True)
 class Revision:
     id: str
@@ -64,7 +74,7 @@ def _json(data):
 
 
 class RevisionStore:
-    def __init__(self, path, directory=None):
+    def __init__(self, path, directory=None, *, create=True):
         supplied = Path(os.path.abspath(path))
         self.path = supplied.resolve()
         if self.path != supplied:
@@ -76,10 +86,11 @@ class RevisionStore:
             raise DocumentError("Каталог истории не должен находиться за symlink")
         if self.root.is_relative_to(self.directory):
             raise DocumentError("Каталог истории не может содержать рабочий конфиг")
-        self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        self.directory.chmod(0o700)
         self.revisions = self.directory / "revisions"
-        self.revisions.mkdir(mode=0o700, exist_ok=True)
+        if create:
+            self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+            self.directory.chmod(0o700)
+            self.revisions.mkdir(mode=0o700, exist_ok=True)
         self.head = self.directory / "HEAD"
         self.journal = self.directory / "journal.json"
         self.lock = self.directory / "lock"
@@ -94,6 +105,16 @@ class RevisionStore:
                 _replace(self.key_path, os.urandom(32))
             self._key = self.key_path.read_bytes()
             self._recover()
+            yield
+
+    @contextmanager
+    def _reading(self):
+        fd = os.open(self.lock, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as lock:
+            fcntl.flock(lock, fcntl.LOCK_SH)
+            if self.journal.exists():
+                raise Conflict("Нужно восстановить незавершённую публикацию")
+            self._key = self.key_path.read_bytes()
             yield
 
     def _target(self, relative):
@@ -192,8 +213,10 @@ class RevisionStore:
             head = revision
         return config, Draft(head, hashes)
 
-    def draft(self):
+    def draft(self, *, managed=False):
         with self._locked():
+            if managed and self._load(self.path).get("schema") != 2:
+                raise DocumentError("Сначала выполните явную миграцию")
             return self._baseline()[1]
 
     def migration(self):
@@ -238,9 +261,19 @@ class RevisionStore:
         from .web_screen import screen_layout
 
         try:
-            errors = publication_errors(candidate)
+            invalid = set()
+            errors = publication_errors(candidate, lambda tile: invalid.add(id(tile)))
             if errors:
-                raise DocumentError("Конфигурация не прошла проверку: ошибок %d" % errors)
+                origins = []
+                for (kind, _stable_id), origin in candidate.origins.items():
+                    if kind != "tile":
+                        continue
+                    value = candidate.data
+                    for part in origin.logical_path:
+                        value = value[part]
+                    if id(value) in invalid:
+                        origins.append(origin)
+                raise ValidationError(errors, origins)
             candidate.used_channels()
             for name in candidate.panels:
                 json.dumps(screen_layout(name, candidate))
@@ -257,7 +290,13 @@ class RevisionStore:
         with self._locked():
             return self._publish(draft, migrate=migrate, preview=True)
 
-    def _publish(self, draft, *, migrate=False, source=None, preview=False):
+    def candidate(self, draft, *, verify=True):
+        """Read the candidate without recovering, publishing or writing history."""
+        with self._reading():
+            return self._publish(draft, candidate_only=True, verify=verify)
+
+    def _publish(self, draft, *, migrate=False, source=None, preview=False,
+                 candidate_only=False, verify=True, managed=False):
         from .editor_migration import verify_migration
 
         def check_base():
@@ -272,7 +311,7 @@ class RevisionStore:
             return config, files
 
         old, active = check_base()
-        if not migrate and not draft._restore and "schema" not in old.data:
+        if (managed or (not migrate and not draft._restore)) and "schema" not in old.data:
             raise DocumentError("Сначала выполните явную миграцию")
         if migrate and "schema" in old.data:
             raise DocumentError("Исходная конфигурация уже мигрирована")
@@ -299,9 +338,13 @@ class RevisionStore:
                 target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 _replace(target, data)
             candidate = self._load(stage / self.path.name)
-            if not draft._restore and candidate.get("schema") != 2:
+            if (managed or not draft._restore) and candidate.get("schema") != 2:
                 raise DocumentError("Публикация требует schema: 2")
-            self._verify(candidate)
+            if verify:
+                self._verify(candidate)
+            if candidate_only:
+                summary = Changeset(changed).summary(old, candidate)
+                return candidate, summary
             if migrate:
                 try:
                     verify_migration(old, candidate)
@@ -346,21 +389,34 @@ class RevisionStore:
                 self._recover()
         return revision
 
-    def history(self):
-        with self._locked():
-            result = []
-            head = self._head()
-            while head:
-                revision = Revision(**self._manifest(head)["revision"])
-                result.append(revision)
-                head = revision.parent
-            return result
+    def _history(self):
+        result = []
+        head = self._head()
+        while head:
+            revision = Revision(**self._manifest(head)["revision"])
+            result.append(revision)
+            head = revision.parent
+        return result
 
-    def rollback(self, revision):
+    def history(self, *, readonly=False):
+        if readonly and not self.head.exists() and not self.lock.exists():
+            return []
+        with (self._reading() if readonly else self._locked()):
+            return self._history()
+
+    def rollback(self, revision, *, managed=False, base_revision=None):
         with self._locked():
-            _config, draft = self._baseline()
+            if managed:
+                if revision not in {entry.id for entry in self._history()}:
+                    raise RevisionNotFound()
+                if self._head() != base_revision:
+                    raise Conflict("История изменилась")
+                manifest = self._manifest(base_revision)
+                draft = Draft(base_revision, manifest["hashes"])
+            else:
+                _config, draft = self._baseline()
             manifest = self._manifest(revision)
             files = self._read_snapshot(revision, manifest)
             draft.changeset = Changeset(dict.fromkeys(map(Path, draft._base_hashes)) | files)
             draft._restore = True
-            return self._publish(draft, source=revision)
+            return self._publish(draft, source=revision, managed=managed)

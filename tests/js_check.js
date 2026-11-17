@@ -34,11 +34,22 @@ function es5(name, src) {
 const wrapper = fs.readFileSync(path.join(ROOT, 'templates/wrapper.html'), 'utf8');
 const order = [];
 wrapper.replace(/<script src="static\/js\/([\w-]+)\.js/g, function (_, n) { order.push(n); });
+const editor = fs.readFileSync(path.join(ROOT, 'templates/editor.html'), 'utf8');
+const editorOrder = [];
+editor.replace(/<script src="\{\{ root \}\}static\/js\/([\w-]+)\.js/g,
+  function (_, name) { editorOrder.push(name); });
+if (editorOrder.join() !== 'editor') {
+  bad++;
+  console.log('Неверный порядок файлов JS редактора: ' + editorOrder.join(', '));
+}
 const onDisk = fs.readdirSync(path.join(ROOT, 'static/js')).filter(f => f.endsWith('.js')).map(f => f.slice(0, -3));
-onDisk.forEach(n => { if (order.indexOf(n) < 0) { bad++; console.log('static/js/' + n + '.js не подключён в wrapper.html'); } });
+onDisk.forEach(n => { if (order.indexOf(n) < 0 && editorOrder.indexOf(n) < 0) { bad++; console.log('static/js/' + n + '.js не подключён в wrapper.html'); } });
 
 es5('templates/wrapper.html (встроенный)', inlineScripts('templates/wrapper.html'));
 es5('templates/themes.html', inlineScripts('templates/themes.html'));
+es5('templates/editor.html', inlineScripts('templates/editor.html'));
+editorOrder.forEach(n => es5('static/js/' + n + '.js',
+  fs.readFileSync(path.join(ROOT, 'static/js', n + '.js'), 'utf8')));
 
 const asts = {}, defs = {};
 order.forEach(n => {

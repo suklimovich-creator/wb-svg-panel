@@ -90,10 +90,12 @@ jobs:
       - name: Камера для настенного экрана и MJPEG
         run: python tests/camera_screen_check.py
 
-      - name: Графики и заставка настенного экрана
+      - name: API настенного экрана
         run: |
           python tests/screen_chart_check.py
           python tests/screen_saver_check.py
+          python tests/screen_tiles_check.py
+          python tests/screen_theme_check.py
 
       - name: Скрипты страницы - ES5 и порядок файлов
         run: |

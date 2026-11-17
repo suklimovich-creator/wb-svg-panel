@@ -126,6 +126,16 @@ COVERED = {"/", "/healthz", "/manifest.webmanifest", "/icon.svg", "/docs",
            "/api/screen/<name>/screensaver/today/<int:index>",
            "/fw/firmware.json", "/fw/<name>.bin"}
 
+# Managed success, malformed payloads and conflict cases are exercised in
+# editor_ui_check.run() below. Keep these routes in the same coverage map.
+COVERED.update({
+    "/editor", "/editor/<name>", "/api/editor/state", "/api/editor/drafts",
+    "/api/editor/drafts/<draft_id>", "/api/editor/drafts/<draft_id>/operation",
+    "/api/editor/drafts/<draft_id>/diff", "/api/editor/drafts/<draft_id>/preview/<name>.svg",
+    "/api/editor/drafts/<draft_id>/tile/<name>/<stable_id>.svg",
+    "/api/editor/drafts/<draft_id>/publish", "/api/editor/revisions", "/api/editor/rollback",
+})
+
 
 def main():
     bad = 0
@@ -208,6 +218,11 @@ def main():
     if _a != ("A", "B") or (_c.data["cams"]["hall"], _c.data["cal"]["home"]) != ("C", "D"):
         print("FAIL секреты:", _a, _c.data)
         bad += 1
+    from editor_ui_check import run as check_editor
+    assert "editor_cli migrate" in client.get("/editor").get_data(as_text=True)
+    assert not client.get("/api/editor/state").get_json()["managed"]
+    assert client.post("/api/editor/drafts", json={}, headers={"X-WB-Editor": "1"}).status_code == 409
+    check_editor()
     print("адресов: %d, проверок: %d%s" % (len(rules), len(CASES),
                                             ", ошибок: %d" % bad if bad else " - всё отвечает"))
     return 1 if bad else 0

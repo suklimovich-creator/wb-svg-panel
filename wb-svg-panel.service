@@ -19,17 +19,19 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
-# Писать демону можно только в data/ - там файл списков. Всё остальное
-# под ProtectSystem=strict только на чтение: состояние в памяти, история
-# читается через MQTT-RPC. Без ReadWritePaths списки жили только в памяти
-# и пропадали при каждом перезапуске (до 1.12.1).
-#
-# Папку создаём до запуска и вне песочницы («+»): systemd не смонтирует
-# на запись то, чего нет, а изнутри песочницы её уже не создать. «-» у
-# ReadWritePaths - не валить запуск, если папки всё же нет; это поймает
-# страница /check.
+# Публикация редактора заменяет YAML через rename, поэтому на запись
+# нужен каталог конфига и его подкаталоги с !include. Код, шаблоны,
+# темы и служебные файлы приложения по-прежнему монтируются read-only.
+# RevisionStore ограничивает изменения деревом управляемых документов.
 ExecStartPre=+/bin/mkdir -p /mnt/data/wb-svg-panel/data
-ReadWritePaths=-/mnt/data/wb-svg-panel/data
+ReadWritePaths=/mnt/data/wb-svg-panel
+ReadOnlyPaths=-/mnt/data/wb-svg-panel/.git -/mnt/data/wb-svg-panel/.github
+ReadOnlyPaths=/mnt/data/wb-svg-panel/wbpanel /mnt/data/wb-svg-panel/templates /mnt/data/wb-svg-panel/static
+ReadOnlyPaths=-/mnt/data/wb-svg-panel/themes -/mnt/data/wb-svg-panel/docs -/mnt/data/wb-svg-panel/tools -/mnt/data/wb-svg-panel/tests -/mnt/data/wb-svg-panel/extras
+ReadOnlyPaths=/mnt/data/wb-svg-panel/panel.py /mnt/data/wb-svg-panel/install.sh /mnt/data/wb-svg-panel/update.sh
+ReadOnlyPaths=-/mnt/data/wb-svg-panel/wb-svg-panel.service -/mnt/data/wb-svg-panel/nginx-panel-location.conf -/mnt/data/wb-svg-panel/nginx-wb-svg-panel.conf
+ReadOnlyPaths=-/mnt/data/wb-svg-panel/close-8080.sh -/mnt/data/wb-svg-panel/check-secrets.sh
+ReadOnlyPaths=-/mnt/data/wb-svg-panel/config.example.yaml -/mnt/data/wb-svg-panel/docs.html
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

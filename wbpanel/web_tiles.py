@@ -45,6 +45,14 @@ def tile_svg(name, index):
     if not 0 <= index < len(tiles):
         abort(404, "плитки %d нет на панели %r" % (index, name))
 
+    svg = render_tile(panel_conf, tiles[index], index, st, hist)
+    return Response(svg, mimetype="image/svg+xml",
+                    headers={"Cache-Control": "no-store"})
+
+
+def render_tile(panel_conf, conf, index, st, hist, *, candidate=None):
+    preview = candidate is not None
+    cfg = candidate if preview else web.config
     try:
         width = max(240, min(int(request.args.get("w") or 700), 3000))
         height = max(200, min(int(request.args.get("h") or 480), 3000))
@@ -52,13 +60,12 @@ def tile_svg(name, index):
         width, height = 700, 480
 
     interactive = bool(panel_conf.get("interactive",
-                       web.config.get("interactive", False)))
-    theme = panel_theme(panel_conf)
+                       cfg.get("interactive", False)))
+    theme = panel_theme(panel_conf, cfg=cfg)
     panel_conf = dict(panel_conf, theme=theme)
-    conf = tiles[index]
     # Пульт кондиционера на весь экран (с 1.16): плитка во весь размер
     # окна, без полей и скруглений, раскладка - по форме экрана.
-    pad = request.args.get("view") == "pad"
+    pad = preview or request.args.get("view") == "pad"
     if pad:
         conf = dict(conf, view="pad")
     # Пояснение к зонам графика на весь экран - по кнопке «i» (с 1.35).
@@ -66,7 +73,8 @@ def tile_svg(name, index):
         conf = dict(conf, info=True)
     edge = 0 if pad else PAD
     tile = build_tile(conf, 0, edge, edge, width, height,
-                      panel_conf, st, hist, interactive)
+                      panel_conf, st, hist, interactive,
+                      cfg=(cfg if preview else None), preview=preview)
     scale = font_scale(height)
     svg = _template(panel_conf.get("template", "panel.svg.j2")).render(
         uid="t%d-" % index,
@@ -78,8 +86,7 @@ def tile_svg(name, index):
     if request.args.get("flat") not in ("0", "false", "no"):
         svg = resolve_css_vars(
             svg, theme, scale)
-    return Response(svg, mimetype="image/svg+xml",
-                    headers={"Cache-Control": "no-store"})
+    return svg
 
 
 @app.route("/chart.svg")

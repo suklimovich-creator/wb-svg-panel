@@ -797,6 +797,107 @@ class Forecast(Tile):
         return [Zone("expand", "all")]
 
 
+#: Высота цифр Inter относительно кегля: по ней центрируются строки
+#: одиночных режимов clock (1.79.1), как и в esp32-panel 0.12.2.
+_CAP = 0.73
+
+
+def _fill_text(text, role, x, y, size, anchor, fit_w, cls, style=""):
+    fit = _fit_weather_text(text, fit_w, size, min(size, 6.5))
+    return {"kind": "text", "text": text, "role": role, "x": round(x, 1),
+            "y": round(y, 1), "size": fit["size"], "anchor": anchor,
+            "fit_w": round(fit_w, 1), "length": fit["length"], "cls": cls,
+            "style": style}
+
+
+def _short_date(date, size, width):
+    """«сб, 14 ноября» -> «сб, 14», если полная дата не помещается."""
+    if text_width(date, size) > width and " " in date:
+        return date.rsplit(" ", 1)[0]
+    return date
+
+
+def _clock_fill(w, h, time_s, date_s, x0=0.0):
+    """Время и дата на всю область w×h, а не блок 1×1 в её центре."""
+    big = "letter-spacing:-1.5px;font-variant-numeric:tabular-nums"
+    if h < 100 and w >= 260:
+        # Низкая широкая: в две строки время было бы мелким - ставим рядом.
+        ds = min(21.0, h * 0.26)
+        dw, gap = text_width(date_s, ds), 14
+        tfit = _fit_weather_text(time_s, w * 0.9 - dw - gap, h * 0.70, 10)
+        tw = text_width(time_s, tfit["size"])
+        left = x0 + (w - tw - gap - dw) / 2.0
+        base = h / 2.0 + _CAP * tfit["size"] / 2.0
+        return [_fill_text(time_s, "time", left, base, tfit["size"], "start",
+                           w * 0.9 - dw - gap, "wnow", big),
+                _fill_text(date_s, "date", left + tw + gap, base, ds, "start",
+                           dw + 0.2, "status", "font-weight:500")]
+    with_date = h >= 56
+    ts = _fit_weather_text(time_s, w * 0.88, h * (0.60 if h < 100 else 0.52), 10)["size"]
+    ds = max(11.0, min(26.0, ts * 0.24)) if with_date else 0
+    gap = 0.26 * ts if with_date else 0
+    block = _CAP * ts + gap + _CAP * ds
+    base = (h - block) / 2.0 + _CAP * ts
+    cx = x0 + w / 2.0
+    out = [_fill_text(time_s, "time", cx, base, ts, "middle", w * 0.88, "wnow", big)]
+    if with_date:
+        date_s = _short_date(date_s, ds, w * 0.9)
+        out.append(_fill_text(date_s, "date", cx, base + gap + _CAP * ds, ds,
+                              "middle", w * 0.9, "status", "font-weight:500"))
+    return out
+
+
+def _weather_row(w, h, want, temp, icon, x0=0.0):
+    """Значок и температура: в низкой области строкой, в высокой - столбиком."""
+    if h >= 100:
+        isz, gap = h * 0.28, h * 0.07
+        fit = _fit_weather_text(temp, w * 0.9, want, 10)
+        top = (h - isz - gap - _CAP * fit["size"]) / 2.0
+        cx = x0 + w / 2.0
+        return [{"kind": "icon", "role": "icon", "name": icon, "x": round(cx - isz / 2, 1),
+                 "y": round(top, 1), "size": round(isz, 1)},
+                _fill_text(temp, "temp", cx, top + isz + gap + _CAP * fit["size"],
+                           fit["size"], "middle", w * 0.9, "wnow", "letter-spacing:-1px")]
+    isz, gap = min(want * 0.7, h * 0.5), want * 0.18
+    fit_w = w * 0.92 - isz - gap
+    fit = _fit_weather_text(temp, fit_w, want, 10)
+    left = x0 + (w - isz - gap - fit["width"]) / 2.0
+    return [{"kind": "icon", "role": "icon", "name": icon, "x": round(left, 1),
+             "y": round(h / 2.0 - isz / 2, 1), "size": round(isz, 1)},
+            _fill_text(temp, "temp", left + isz + gap, h / 2.0 + _CAP * fit["size"] / 2,
+                       fit["size"], "start", fit_w, "wnow", "letter-spacing:-1px")]
+
+
+def _weather_fill(w, h, data, x0=0.0):
+    """
+    Погода на всю область. None - область близка к эталонным блокам
+    low/square, и масштаб уже заполняет её.
+    """
+    temp, icon = data["now_temp"], data.get("icon_now") or "sun"
+    if w < 130 and h < 100:
+        return _weather_row(w, h, h * 0.42, temp, icon, x0)
+    if w < 260 or w / float(h) < 1.6:
+        return None
+    low = h < 100
+    col = w / 2.0
+    out = _weather_row(col, h, h * (0.50 if low else 0.28), temp, icon, x0)
+    lines = []
+    if data.get("weather_desc"):
+        lines.append(("desc", data["weather_desc"]))
+    parts = data.get("extra_parts") or []
+    if low or not parts:
+        lines.append(("extra", data.get("extra") or "—"))
+    else:
+        lines += [("metric", part) for part in parts[:3]]
+    size = h * 0.17 if low else min(21.0, h * 0.11)
+    step = size * 1.45
+    top = (h - step * (len(lines) - 1) - _CAP * size) / 2.0 + _CAP * size
+    for i, (role, text) in enumerate(lines):
+        out.append(_fill_text(text, role, x0 + col + 4, top + i * step, size, "start",
+                              w - col - 16, "status", "font-weight:500"))
+    return out
+
+
 @tile("clock")
 class Clock(Forecast):
     """Крупные часы и текущая погода; раскрытие показывает прогноз."""
@@ -848,6 +949,24 @@ class Clock(Forecast):
         data["clock_metrics"] = [
             {"text": part, "fit": _fit_weather_text(part, 150, 11, 7)}
             for part in (data["extra_parts"] or ["—"])]
+
+        # Одиночные режимы заполняют всю плитку (1.79.1). Комбинированный -
+        # прежняя композиция: 1×1 - два поля 1×0.5, 2×1 - два 1×1,
+        # 2×0.5 - два 1×0.5. Узкая 1×0.5 делится на половины с крупным
+        # временем и строкой погоды, а не уменьшает сборку 2×0.5 вдвое.
+        pw = float(ctx.conf.get("inner_w") or 170)
+        ph = float(ctx.conf.get("inner_h") or 170)
+        data["clock_fill"] = None
+        if data["clock_mode"] == "clock":
+            data["clock_fill"] = _clock_fill(pw, ph, data["clock_time"], data["clock_date"])
+        elif data["clock_mode"] == "weather":
+            data["clock_fill"] = _weather_fill(pw, ph, data)
+        elif layout == "low" and pw < 260:
+            half = pw / 2.0
+            data["clock_fill"] = (
+                _clock_fill(half, ph, data["clock_time"], data["clock_date"])
+                + _weather_fill(half, ph, data, half))
+            data["clock_fill_split"] = round(half, 1)
         return data
 
 

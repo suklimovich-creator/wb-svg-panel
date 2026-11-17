@@ -46,10 +46,11 @@ ORDER = ("light", "sprut", "autumn", "retro", "noir", "neumo", "glass-day", "clo
 
 #: Свойства темы, кроме цветов. Своя тема наследует незаданные.
 PROPS = ("mode", "on_style", "inv_kinds", "sheen", "shadow", "chart", "depth", "edge",
-         "bevel", "radius", "page", "glow")
+         "bevel", "radius", "page", "glow", "screen")
 _PROP_DEFAULTS = {"mode": "light", "on_style": "rim", "inv_kinds": (), "sheen": False,
                   "shadow": None, "chart": None, "depth": "soft", "edge": "teeth",
-                  "bevel": "round", "radius": 24, "page": None, "glow": False}
+                  "bevel": "round", "radius": 24, "page": None, "glow": False,
+                  "screen": None}
 #: Форма - вторая ось темы (с 1.32): глубина плиток и органов управления.
 #: soft - мягкая тень снизу, как было; flat - без теней; neumo -
 #: неоморфизм: плитка из того же материала, что и фон, светлая тень
@@ -1161,3 +1162,141 @@ def to_yaml(data, stamp=""):
 
 
 load()
+
+
+# ------------------------------------------- палитра настенного экрана (1.78)
+# Экран esp32-panel не читает CSS: ему нужны готовые цвета по ролям -
+# «фон плитки», «основной текст», «дорожка ползунка». Роли считаются
+# из переменных темы; прозрачные цвета кладутся на плитку или фон, на
+# экране альфы нет. Свой раздел screen: в файле темы задаёт роли прямо,
+# но только этой теме: наследница с другими цветами плиток пересчитает
+# роли сама, а не получит чужие.
+
+#: Версия формата /api/screen/<имя>/theme.
+SCREEN_VERSION = 1
+#: Без этих ролей экран палитру не примет; остальные он выведет сам.
+SCREEN_BASE = ("panel.background", "tile.background", "tile.border", "text.primary",
+               "text.secondary", "state.active", "state.inactive", "control.track",
+               "control.thumb", "control.accent")
+#: Все роли в порядке документа (docs/SCREEN_THEME.md).
+SCREEN_ROLES = SCREEN_BASE + (
+    "panel.surface", "panel.surface_active", "panel.line",
+    "tile.highlight", "tile.active_background", "tile.active_highlight", "tile.pressed",
+    "text.on_accent", "state.ok", "state.alarm", "state.cool",
+    "control.surface", "control.button", "control.pressed", "control.well",
+    "pad.background", "pad.sheet", "shadow",
+    "chart.grid", "chart.series1", "chart.series2", "chart.series3") + tuple(
+    "chart." + k for k in CHART_KINDS) + (
+    "curtain.fabric", "curtain.shadow", "curtain.sash",
+    "thermostat.heating", "thermostat.cooling", "ac.wheel_track", "ac.wheel_thumb",
+    "light.cct_cold", "light.cct_middle", "light.cct_warm")
+_HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def _screen_roles(name):
+    vars_ = css_vars(name)
+    dark = is_dark(name)
+    tile = _solid(vars_.get("--tile"), vars_, (28, 29, 32) if dark else (217, 217, 220)) or \
+        ((28, 29, 32) if dark else (217, 217, 220))
+    page = _solid(vars_.get("--bg-bottom"), vars_, tile) or tile
+
+    def on_tile(key, fallback):
+        return _solid(vars_.get(key), vars_, tile) or fallback
+
+    ink = on_tile("--ink", (242, 242, 244) if dark else (58, 58, 62))
+    dim = on_tile("--ink-dim", _mix(ink, tile, 0.5))
+    active = on_tile("--active", (242, 162, 58))
+    hi = _WHITE if dark else _BLACK
+    well = on_tile("--well", _mix(tile, _BLACK, 0.42) if dark else _mix(tile, ink, 0.14))
+    tile_on = on_tile("--tile-on", tile)
+    # Включённая плитка: у тем с подкрашенной карточкой (tile-on) - она,
+    # иначе плитка с отсветом акцента, как у графита.
+    if _hex(tile_on) == _hex(tile):
+        on_lo = _mix(tile, active, 0.05 if dark else 0.08)
+        on_hi = _mix(tile, active, 0.2 if dark else 0.18)
+    else:
+        on_lo, on_hi = tile_on, _mix(tile_on, _WHITE, 0.15 if dark else 0.3)
+    chart = chart_colors(name)
+    pal = list(chart.get("palette") or ["#E08A2D", "#3B93C4", "#8E8E93"])
+    series = [_parse(pal[i % len(pal)], {}) or (128, 128, 128) for i in range(3)]
+    shadow = _BLACK if dark else on_tile("--shadow", (52, 52, 60))
+    out = {
+        "panel.background": page,
+        "panel.surface": _mix(page, tile, 0.6) if dark else tile,
+        "panel.surface_active": _mix(tile, ink, 0.08 if dark else 0.12),
+        "panel.line": _mix(page, ink, 0.12),
+        "tile.background": tile,
+        "tile.highlight": _mix(tile, _WHITE, 0.045 if dark else 0.3),
+        "tile.border": on_tile("--edge", _mix(tile, ink, 0.12)),
+        "tile.active_background": on_lo,
+        "tile.active_highlight": on_hi,
+        "tile.pressed": hi,
+        "text.primary": ink,
+        "text.secondary": dim,
+        "text.on_accent": _readable_on(active),
+        "state.active": active,
+        "state.inactive": _mix(tile, ink, 0.6 if dark else 0.4),
+        "state.ok": (78, 154, 107),
+        "state.alarm": (216, 78, 74) if dark else (201, 67, 63),
+        "state.cool": on_tile("--ac-seg-cool", on_tile("--cool", (59, 143, 212))),
+        "control.track": _mix(tile, ink, 0.14),
+        "control.thumb": _WHITE,
+        "control.accent": active,
+        "control.surface": on_tile("--ac-pill", _mix(tile, _WHITE, 0.05) if dark else _mix(tile, ink, 0.07)),
+        "control.button": _mix(tile, ink, 0.12) if dark else on_tile("--key-hi", _mix(tile, _WHITE, 0.6)),
+        "control.pressed": _mix(tile, ink, 0.2),
+        "control.well": well,
+        "pad.background": _mix(page, tile, 0.3) if dark else page,
+        "pad.sheet": _mix(tile, _WHITE, 0.04) if dark else _mix(tile, _WHITE, 0.4),
+        "shadow": shadow,
+        "chart.grid": _mix(tile, ink, 0.2),
+        "chart.series1": series[0], "chart.series2": series[1], "chart.series3": series[2],
+        "curtain.fabric": on_tile("--drape", (64, 63, 59)),
+        "curtain.shadow": shadow,
+        "curtain.sash": on_tile("--sash", well),
+        "thermostat.heating": on_tile("--ac-seg-heat", (255, 154, 61)),
+        "thermostat.cooling": on_tile("--cool", (59, 143, 212)),
+        "ac.wheel_track": ink,
+        "ac.wheel_thumb": ink,
+        "light.cct_cold": (86, 170, 255),
+        "light.cct_middle": (236, 230, 220),
+        "light.cct_warm": (255, 147, 55),
+    }
+    for kind in CHART_KINDS:
+        out["chart." + kind] = _parse(chart.get(kind) or "", {}) or series[0]
+    roles = dict((k, _hex(v)) for k, v in out.items())
+    own = get(name)["props"].get("screen")
+    if isinstance(own, dict):
+        for key, value in own.items():
+            value = str(value).strip()
+            if key in roles and _HEX_RE.match(value):
+                roles[key] = value.upper()
+    return roles
+
+
+def screen_palette(name):
+    """Палитра для экрана: {version, theme, mode, revision, palette}.
+    Ревизия - от самих цветов: та же палитра - та же ревизия, и экран
+    ничего не перерисовывает."""
+    roles = _screen_roles(name)
+    mode = "dark" if is_dark(name) else "light"
+    sig = json.dumps([mode, sorted(roles.items())], separators=(",", ":"))
+    return {"version": SCREEN_VERSION, "theme": get(name)["name"], "mode": mode,
+            "revision": hashlib.sha1(sig.encode("utf-8")).hexdigest()[:10],
+            "palette": dict((k, roles[k]) for k in SCREEN_ROLES)}
+
+
+def screen_problems(name):
+    """Что не так с разделом screen: темы - для /themes и /check."""
+    own = get(name)["props"].get("screen")
+    if own is None:
+        return []
+    if not isinstance(own, dict):
+        return ["screen: ожидался словарь роль: цвет"]
+    out = []
+    for key, value in own.items():
+        if key not in SCREEN_ROLES:
+            out.append("screen.%s: такой роли нет" % key)
+        elif not _HEX_RE.match(str(value).strip()):
+            out.append("screen.%s: %r - нужен цвет #RRGGBB" % (key, value))
+    return out

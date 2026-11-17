@@ -14,6 +14,42 @@ on_style: rim   # rim - рамка у включённой; card - тёмная 
 inv_kinds: []   # типы плиток, у которых карточка тёмная всегда
 sheen: true   # отсвет из угла плитки (тёмные темы)
 shadow: null   # тени плиток не рисуются
+# Роли настенного экрана (esp32-panel 0.12+): графит - его родная тема,
+# цвета ровно как в прошивке без сервера. Остальное считается из vars.
+# Раздел не наследуется: тема на основе графита пересчитает роли сама.
+screen:
+  panel.background: "#0E0F13"
+  panel.surface: "#181A21"
+  panel.surface_active: "#23262F"
+  panel.line: "#2A2D36"
+  tile.highlight: "#26272B"
+  tile.border: "#303135"
+  tile.active_background: "#24211D"
+  tile.active_highlight: "#4D3B22"
+  text.on_accent: "#17130D"
+  state.inactive: "#9A9BA0"
+  state.cool: "#6CC4FF"
+  control.track: "#3A3B40"
+  control.surface: "#27282C"
+  control.button: "#35363B"
+  control.pressed: "#4A4B50"
+  control.well: "#111214"
+  pad.background: "#111214"
+  pad.sheet: "#26272A"
+  chart.grid: "#4A4B50"
+  # Кривые - как экран рисовал их до тем (цвета, что сервер слал в color).
+  chart.series1: "#E08A2D"
+  chart.series2: "#3B93C4"
+  chart.series3: "#4E9A6B"
+  chart.temperature: "#E08A2D"
+  chart.humidity: "#3B93C4"
+  chart.co2: "#4E9A6B"
+  chart.voc: "#8E6BC4"
+  chart.pressure: "#7A7F8C"
+  chart.power: "#C4553B"
+  curtain.sash: "#111214"
+  thermostat.heating: "#FF9A3D"
+  thermostat.cooling: "#3B8FD4"
 vars:
   bg-top: "#151618"
   bg-bottom: "#0B0C0D"

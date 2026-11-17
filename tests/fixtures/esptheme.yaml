@@ -1,0 +1,29 @@
+mqtt:
+  host: 127.0.0.1
+theme: graphite
+theme_auto:
+  day: light
+  night: graphite
+  day_from: "07:00"
+  night_from: "21:00"
+  channel: panel/night
+screens:
+  wall-light: {panel: esptheme, theme: light}
+  wall-auto: {panel: esptheme, theme: auto}
+  wall-dark: esptheme
+panels:
+  esptheme:
+    title: Тема экрана
+    hidden: true
+    tiles:
+    - type: chart
+      title: Воздух
+      series:
+      - {channel: msw/Temperature, unit: °C, color: '#E08A2D'}
+      - {channel: msw/CO2, unit: ppm, digits: 0}
+      - {channel: msw/Humidity, unit: '%', label: Влажность}
+  esppanellight:
+    title: Своя тема у панели
+    hidden: true
+    theme: light
+    tiles: []

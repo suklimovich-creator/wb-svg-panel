@@ -191,6 +191,37 @@
   </g>
 {% endmacro %}
 
+{% macro fill_items(items) %}
+  {% for it in items %}
+    {% if it.kind == 'icon' %}
+    <use href="#{{ uid }}ic-{{ it.name }}" xlink:href="#{{ uid }}ic-{{ it.name }}"
+         x="{{ it.x }}" y="{{ it.y }}" width="{{ it.size }}" height="{{ it.size }}" class="icon"/>
+    {% else %}
+    <text x="{{ it.x }}" y="{{ it.y }}" text-anchor="{{ it.anchor }}" class="{{ it.cls }}"
+          data-clock-{{ it.role }}="true" data-clock-fit="{{ it.fit_w }}"
+          style="font-size:{{ it.size }}px;{{ it.style }}"
+          {% if it.length %}textLength="{{ it.length }}" lengthAdjust="spacingAndGlyphs"{% endif %}>{{ it.text }}</text>
+    {% endif %}
+  {% endfor %}
+{% endmacro %}
+
+{#- Одиночный режим на всю плитку (1.79.1): кегли и места строк посчитаны
+    в Clock.prepare по реальному размеру плитки. -#}
+{% macro clock_fill(t) %}
+  <g data-clock-layout="single-{{ t.clock_mode }}" data-clock-mode="{{ t.clock_mode }}">
+    <g data-clock-block="{{ 'clock' if t.clock_mode == 'clock' else 'weather' }}-fill">{{ fill_items(t.clock_fill) }}</g>
+  </g>
+{% endmacro %}
+
+{#- Комбинированный 1×0.5: две половины на всю высоту. -#}
+{% macro clock_narrow(t) %}
+  <g data-clock-layout="low" data-clock-mode="clock_weather">
+    <g data-clock-block="clock-fill">{{ fill_items(t.clock_fill | selectattr('role', 'in', ['time', 'date']) | list) }}</g>
+    <g data-clock-block="weather-fill">{{ fill_items(t.clock_fill | rejectattr('role', 'in', ['time', 'date']) | list) }}</g>
+    <line x1="{{ t.clock_fill_split }}" y1="6" x2="{{ t.clock_fill_split }}" y2="{{ t.h - 6 }}" class="tick" style="stroke-width:1px;opacity:.35"/>
+  </g>
+{% endmacro %}
+
 {% macro clock_single(t) %}
   {% if t.clock_layout == 'low' %}
     {% set bw, bh = 177, 75 %}
@@ -256,7 +287,9 @@
     {{ tile_forecast(t) }}
   {% else %}
     {{ base.plate(t) }}
-    {% if t.clock_mode == 'clock_weather' %}{{ clock_composite(t) }}{% else %}{{ clock_single(t) }}{% endif %}
+    {% if t.clock_mode == 'clock_weather' %}
+      {% if t.clock_fill %}{{ clock_narrow(t) }}{% else %}{{ clock_composite(t) }}{% endif %}
+    {% elif t.clock_fill %}{{ clock_fill(t) }}{% else %}{{ clock_single(t) }}{% endif %}
     {% if t.stale_forecast %}
     <circle cx="{{ t.w - 12 }}" cy="12" r="3.5" class="dot-warn"/>
     {% endif %}

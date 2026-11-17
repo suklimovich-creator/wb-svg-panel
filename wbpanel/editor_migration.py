@@ -27,6 +27,18 @@ def _serialize(node):
     return yaml.serialize(node, Dumper=yaml.SafeDumper, allow_unicode=True).encode("utf-8")
 
 
+def _effective_pairs(node):
+    # Documents flattens YAML merges in precedence order. The last value
+    # wins, but keep the original nodes so tags and references survive.
+    loader = yaml.SafeLoader("")
+    try:
+        pairs = {loader.construct_object(key, deep=True): (key, value)
+                 for key, value in node.value}
+        return pairs.values()
+    finally:
+        loader.dispose()
+
+
 def migration_files(config):
     """Return new YAML bytes without modifying the active legacy tree."""
     docs = config.documents
@@ -66,7 +78,7 @@ def migration_files(config):
             instance = [("id", _scalar(stable_id)), ("element", _scalar(ref))]
             body = copy(node)
             body.value = []
-            for key, value in node.value:
+            for key, value in _effective_pairs(node):
                 if key.value in PLACEMENT:
                     instance.append((key.value, value))
                 elif key.value != "id":

@@ -30,6 +30,30 @@ def put(path, contents):
     return path
 
 
+def check_merge_overrides(root):
+    path = put(root / "config.yaml", """
+defaults: &defaults {type: switch, channel: dev/default, title: Default, w: 2}
+panels:
+  main:
+    tiles:
+    - <<: *defaults
+      channel: dev/actual
+      title: Actual
+      w: 3
+""")
+    legacy = path.read_bytes()
+    before = Config(path)
+    store = RevisionStore(path)
+    draft = store.migration()
+    store.inspect(draft, migrate=True)
+    assert path.read_bytes() == legacy
+    store.publish(draft, migrate=True)
+    after = Config(path, strict=True)
+    assert list(before.all_tiles()) == list(after.all_tiles())
+    assert after.used_channels() == {"dev/actual"}
+    assert screen_layout("main", before) == screen_layout("main", after)
+
+
 def main(root):
     legacy = {
         "config.yaml": "# keep this comment exactly\npanels: !include rooms/panels.yaml\n",
@@ -159,3 +183,4 @@ def main(root):
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as directory:
         main(Path(directory))
+        check_merge_overrides(Path(directory) / "merge")

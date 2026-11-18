@@ -4,11 +4,12 @@ from copy import copy, deepcopy
 from pathlib import Path
 import os
 import re
+import uuid
 
 import yaml
 
 from .editor_documents import DocumentError
-from .editor_model import next_tile_id, reserve_tile_id, tile_lists
+from .editor_model import PLACEMENT, next_tile_id, reserve_tile_id, tile_lists
 
 MAP = "tag:yaml.org,2002:map"
 STR = "tag:yaml.org,2002:str"
@@ -48,10 +49,8 @@ def migration_files(config):
     replacements = {}
     files = {}
     library = []
-    lists = list(tile_lists(config.panels, legacy=True))
-    occupied = {tile["id"] for _, _, tiles in lists for tile in tiles
-                if isinstance(tile.get("id"), str) and tile["id"].strip()}
-    used = set()
+    occupied = set()
+    namespace = uuid.UUID("3122b73f-bba9-49f9-87c4-99bb2a863420")
 
     def add_file(path, node):
         if path in files or (root / path).exists() or (root / path).is_symlink():
@@ -62,29 +61,29 @@ def migration_files(config):
     def include(path, parent):
         return _scalar(os.path.relpath(path, parent), "!include")
 
-    for path, _container, tiles in lists:
+    for path, _container, tiles in tile_lists(config.panels, legacy=True):
         for index, tile in enumerate(tiles):
             logical = path + (index,)
             node = docs.nodes[logical]
             if not isinstance(node, yaml.MappingNode):
                 raise DocumentError("Для миграции плитка должна быть YAML-словарём")
-            id_node = docs.nodes.get(logical + ("id",))
-            if id_node is not None and (id_node.tag == "!secret" or
-                    isinstance(id_node.value, str) and "${" in id_node.value):
-                raise DocumentError("ID плитки должен быть задан открытым текстом")
             raw_id = tile.get("id")
             stable_id = (raw_id if isinstance(raw_id, str) and raw_id.strip()
-                         else next_tile_id(tile, occupied))
-            if stable_id in used:
+                         else "tile_" + uuid.uuid5(namespace, repr(logical)).hex)
+            if stable_id in occupied:
                 raise DocumentError("Повторяющийся исходный id плитки")
-            used.add(stable_id)
             occupied.add(stable_id)
-            suffix = stable_id if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", stable_id) else str(len(used))
-            ref = stable_id
+            suffix = uuid.uuid5(namespace, stable_id).hex
+            ref = "element_" + suffix
             parent = docs.origins[logical].file.parent
             instance = [("id", _scalar(stable_id)), ("element", _scalar(ref))]
-            body = _mapping((key.value, block_copy(value, parent, parent))
-                            for key, value in _effective_pairs(node) if key.value != "id")
+            body = copy(node)
+            body.value = []
+            for key, value in _effective_pairs(node):
+                if key.value in PLACEMENT:
+                    instance.append((key.value, value))
+                elif key.value != "id":
+                    body.value.append((key, value))
             if parent == root:
                 library.append((ref, body))
             else:
@@ -105,7 +104,7 @@ def migration_files(config):
                 origin, _ = origins[index]
                 parent = (docs.origins[logical].file.parent if index == len(origins) - 1
                           else origins[index + 1][0].file.parent)
-                suffix = "%03d" % (len(files) + 1)
+                suffix = uuid.uuid5(namespace, repr((logical, index))).hex
                 path = parent.relative_to(root) / ("editor-include-" + suffix + ".yaml")
                 transformed = include(add_file(path, transformed), origin.file.parent)
             return transformed

@@ -13,7 +13,7 @@ from werkzeug.exceptions import HTTPException
 from . import __version__, web
 from .editor_documents import DocumentError
 from .editor_revisions import Conflict
-from .editor_service import EditorError, EditorService, preview_tile
+from .editor_service import EditorError, EditorService, SecretPolicy, preview_tile
 from .web import app
 from .web_tiles import render_tile
 
@@ -248,6 +248,7 @@ def editor_history():
     editor = _service()
     history = editor.history()
     body = {"revisions": history, "head": history[0]["id"] if history else None}
+    SecretPolicy(editor.active()).check(json.dumps(body, ensure_ascii=False))
     return body
 
 

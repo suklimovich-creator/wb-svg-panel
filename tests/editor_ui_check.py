@@ -223,6 +223,8 @@ def run():
     assert policy.contains("TEST-Private-&amp;-\\u0441екрет")
     verified = get(first + "/diff").get_json()
     assert verified["summary"]["writes"] == 3 and verified["summary"]["instances"]["added"] == 2
+    assert any("file" not in event for event in verified["operations"])
+    assert "panels.yaml" not in repr(verified["operations"])
     assert verified == get(first + "/diff").get_json()
     assert not store.journal.exists() and len(get("/revisions").get_json()["revisions"]) == 1
     assert all(p.read_bytes() == original for p, original in expected_files.items())

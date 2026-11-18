@@ -313,7 +313,11 @@ class EditorService:
             candidate, summary = self._candidate(session)
             policy = SecretPolicy(candidate)
             self._verify(candidate, policy)
-            body = {"summary": summary, "operations": session.events[:],
+            operations = [dict(event) for event in session.events]
+            for event in operations:
+                if policy.contains(event["file"]):
+                    event.pop("file")
+            body = {"summary": summary, "operations": operations,
                     "draft_version": session.version, "base_revision": session.draft.base_revision}
             policy.check_values(body["operations"])
             session.checked = session.version

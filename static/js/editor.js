@@ -490,7 +490,7 @@
                 list.style.gridTemplateColumns = 'repeat(' + (2 * cols) + ', minmax(0, 1fr))';
             diff.operations.forEach(function (op) {
                 list.appendChild(node('li', operationNames[op.op] + ' · ' + op.panel + ' · ' +
-                                      (op.element || op.id) + ' · ' + op.file + (op.fields ? ' · ' + op.fields.join(', ') : '')));
+                                      (op.element || op.id) + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
             });
             target.appendChild(list);
             progress();

@@ -3,3 +3,4 @@ channel: /editor-sentinel/private/state
 site: test-editor-token-abc
 
 protocol_collision: draft_version
+login_collision: panel

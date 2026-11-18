@@ -4,6 +4,7 @@ from contextvars import ContextVar
 from functools import wraps
 import json
 import logging
+import re
 import threading
 from xml.dom import Node, minidom
 from xml.parsers.expat import ExpatError
@@ -165,6 +166,10 @@ def _query_int(name, minimum, maximum):
     raise EditorError("preview_option", "Некорректная настройка предпросмотра")
 
 
+# Keep quoted CSS strings and escaped characters intact while dropping comments.
+_CSS_TOKENS = re.compile(r"""("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|/\*.*?\*/)""", re.S)
+
+
 def _svg(value, policy):
     if policy.contains(value):
         # The active renderer also emits interaction metadata. An editor
@@ -179,6 +184,11 @@ def _svg(value, policy):
                     for attr in list(node.attributes.values()):
                         if (attr.name.startswith("data-") or attr.localName == "href") and policy.contains(attr.value):
                             node.removeAttributeNode(attr)
+                    if node.localName == "style":
+                        for child in node.childNodes:
+                            if child.nodeType in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE):
+                                child.data = _CSS_TOKENS.sub(
+                                    lambda m: " " if m[0].startswith("/*") else m[0], child.data)
                     if node.localName in ("text", "tspan", "title", "desc"):
                         for child in node.childNodes:
                             if child.nodeType in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE) and policy.contains(child.data):

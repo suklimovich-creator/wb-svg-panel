@@ -5,6 +5,8 @@ from functools import wraps
 import json
 import logging
 import threading
+from xml.dom import Node, minidom
+from xml.parsers.expat import ExpatError
 from urllib.parse import urlsplit
 
 from flask import Response, request
@@ -13,7 +15,7 @@ from werkzeug.exceptions import HTTPException
 from . import __version__, web
 from .editor_documents import DocumentError
 from .editor_revisions import Conflict
-from .editor_service import EditorError, EditorService, SecretPolicy, preview_tile
+from .editor_service import EditorError, EditorService, preview_tile
 from .web import app
 from .web_tiles import render_tile
 
@@ -164,7 +166,30 @@ def _query_int(name, minimum, maximum):
 
 
 def _svg(value, policy):
-    policy.check(value)
+    if policy.contains(value):
+        # The active renderer also emits interaction metadata. An editor
+        # image can omit private links and mask visible labels independently.
+        try:
+            if "<!DOCTYPE" in value:
+                raise ExpatError("DTD")
+            document = minidom.parseString(value)
+            root = document.documentElement
+            if root.namespaceURI == "http://www.w3.org/2000/svg" and root.localName == "svg":
+                for node in document.getElementsByTagName("*"):
+                    for attr in list(node.attributes.values()):
+                        if (attr.name.startswith("data-") or attr.localName == "href") and policy.contains(attr.value):
+                            node.removeAttributeNode(attr)
+                    if node.localName in ("text", "tspan", "title", "desc"):
+                        for child in node.childNodes:
+                            if child.nodeType in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE) and policy.contains(child.data):
+                                child.data = "•••"
+                value = root.toxml()
+        except ExpatError:
+            pass
+        if policy.contains(value):
+            raise EditorError("protected_output",
+                              "Предпросмотр скрыт: в SVG осталось закрытое значение. "
+                              "Редактирование панели доступно.", 422)
     return Response(value, mimetype="image/svg+xml", headers={
         "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"})
 
@@ -248,7 +273,6 @@ def editor_history():
     editor = _service()
     history = editor.history()
     body = {"revisions": history, "head": history[0]["id"] if history else None}
-    SecretPolicy(editor.active()).check(json.dumps(body, ensure_ascii=False))
     return body
 
 

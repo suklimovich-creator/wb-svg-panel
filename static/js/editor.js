@@ -149,6 +149,7 @@
 
         }
         byId('library-title').textContent = model.inline_tiles ? 'Добавить плитку' : 'Библиотека';
+        byId('custom-id').hidden = !model.inline_tiles;
         byId('add').disabled = !menu.options.length;
     }
 
@@ -215,7 +216,7 @@
             }
             current.tiles.forEach(function (tile) {
                 var li = node('li', '');
-                var button = node('button', (tile.title || (tile.element ? libraryItem(tile.element).title : tile.type)) + ' · ' + tile.id);
+                var button = node('button', (tile.title || (tile.element ? libraryItem(tile.element).title : tile.type)) + ' · ' + (tile.implicit_id ? tile.element : tile.id));
                 button.setAttribute('aria-pressed', String(selected === tile.id));
                 button.onclick = function () {
                     selected = tile.id;
@@ -246,9 +247,11 @@
             return;
         }
         var element = tile.element ? libraryItem(tile.element) : tile;
-        byId('identity').textContent = 'ID ' + tile.id + (tile.element ? ' · элемент ' + element.id : '') + ' · ' + element.type;
+        byId('identity').textContent = (tile.implicit_id ? 'Элемент ' + tile.element : 'ID ' + tile.id + (tile.element ? ' · элемент ' + element.id : '')) + ' · ' + element.type;
         byId('width').value = tile.w == null ? '' : tile.w;
         byId('height').value = tile.h == null ? '' : tile.h;
+        byId('width').placeholder = element.w == null ? 'Авто' : String(element.w);
+        byId('height').placeholder = element.h == null ? 'Авто' : String(element.h);
         byId('title').value = tile.title || '';
         byId('title').placeholder = tile.title_protected ? 'Защищённое название' : (element.title || element.type);
         byId('inherit-title').hidden = !tile.title_protected;
@@ -392,13 +395,13 @@
         var fields = {element: source};
         if (model.inline_tiles && source.indexOf('copy:') === 0) { fields = {element: source.slice(5)}; }
         var id = byId('new-id').value.trim();
-        if (id) { fields.id = id; }
+        if (model.inline_tiles && id) { fields.id = id; }
         operate('add_instance', fields);
     };
     byId('up').onclick = function () { operate('move_instance', {id: selected, direction: 'up'}); };
     byId('down').onclick = function () { operate('move_instance', {id: selected, direction: 'down'}); };
     byId('remove').onclick = function () {
-        if (window.confirm('Удалить экземпляр ' + selected + '?')) { operate('remove_instance', {id: selected}); }
+        if (window.confirm('Убрать с панели ' + (currentTile().element || selected) + '?')) { operate('remove_instance', {id: selected}); }
     };
     byId('inherit-title').onclick = function () {
         operate('update_instance', {id: selected, fields: {title: ''}});
@@ -432,7 +435,7 @@
             var list = node('ul', '');
             diff.operations.forEach(function (op) {
                 list.appendChild(node('li', operationNames[op.op] + ' · ' + op.panel + ' · ' +
-                                      op.id + ' · ' + op.file + (op.fields ? ' · ' + op.fields.join(', ') : '')));
+                                      (op.element || op.id) + ' · ' + op.file + (op.fields ? ' · ' + op.fields.join(', ') : '')));
             });
             target.appendChild(list);
             progress();
@@ -454,13 +457,14 @@
             if (!history.revisions.length) { target.appendChild(node('p', 'Ревизий пока нет.')); }
             history.revisions.forEach(function (item) {
                 var row = node('p', item.timestamp + ' · ' + item.id + ' · ' + item.action + ' ');
-                if (item.id !== history.head && item.id !== 'legacy-0') {
-                    var button = node('button', 'Откатить к этой ревизии');
+                if (item.id !== history.head) {
+                    var original = item.id === 'legacy-0';
+                    var button = node('button', original ? 'Вернуть конфигурацию до миграции' : 'Откатить к этой ревизии');
                     button.onclick = function () {
-                        if (!window.confirm('Восстановить ' + item.id + ' как новую ревизию?')) { return; }
+                        if (!window.confirm(original ? 'Восстановить исходные файлы? Панели вернутся к состоянию до миграции. Для дальнейшего редактирования потребуется миграция через терминал.' : 'Восстановить ' + item.id + ' как новую ревизию?')) { return; }
                         run('POST', 'rollback', {revision: item.id, base_revision: history.head, confirm: true}, function (rev) {
                             receivedRevision(rev, 'Откат выполнен');
-                            byId('history').click();
+                            if (original) { newDraft(); } else { byId('history').click(); }
                         });
                     };
                     row.appendChild(button);

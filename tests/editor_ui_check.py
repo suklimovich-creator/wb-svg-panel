@@ -87,7 +87,7 @@ def run():
     assert not store.directory.exists()
     allowed = safe(client.post(PREFIX + "/drafts", json={},
                                headers={**cloud, "Sec-Fetch-Site": "same-origin"}))
-    assert allowed.status_code == 201
+    assert allowed.status_code == 201, (allowed.status_code, (allowed.get_json() or {}).get("error", {}).get("code"))
     post("/drafts", {"path": "../outside.yaml", "_files": {}}, 400)
     get("/drafts/missing", 404)
     get("/drafts/missing/diff", 404)
@@ -121,6 +121,11 @@ def run():
     from wbpanel import web_editor
     with patch.object(web_editor, "render_tile", return_value="<svg>" + quote(PRIVATE[0]) + "</svg>"):
         assert get(first + "/tile/room/first.svg", 422).get_json()["error"]["code"] == "protected_output"
+    redacted = ('<svg xmlns="http://www.w3.org/2000/svg"><text>TEST-Private-&amp;-секрет</text>'
+                '<g data-topic="' + quote(PRIVATE[0]) + '"><text>Дом</text></g></svg>')
+    with patch.object(web, "render_panel", return_value=redacted):
+        clean = ElementTree.fromstring(get(first + "/preview/room.svg").data)
+        assert "Дом" in "".join(clean.itertext()) and "data-topic" not in clean[1].attrib
     second, original = draft()
     state = get(first).get_json()
     assert state == initial and state["draft_id"] != original["draft_id"]

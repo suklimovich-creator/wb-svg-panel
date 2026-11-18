@@ -16,7 +16,7 @@ from . import palette, yamlx
 from .assemble import _from_names
 from .config import Config
 from .editor_documents import DocumentError, _Loader
-from .editor_model import MANAGED_SCHEMAS, PLACEMENT
+from .editor_model import MANAGED_SCHEMAS, PLACEMENT, placement_id
 from .editor_operations import OperationError, apply, list_at, validate
 from .editor_revisions import Conflict, RevisionNotFound, RevisionStore, ValidationError
 from .registry import has_pad, resolve_type
@@ -83,12 +83,20 @@ class SecretPolicy:
             value = decoded
 
     def label(self, text, fallback="Скрытое значение"):
-        return fallback if isinstance(text, str) and self.contains(text) else text
+        if isinstance(text, (dict, list)) or self.contains(str(text)):
+            return fallback
+        return text
 
     def check(self, content):
         if self.contains(content):
             raise EditorError("protected_output",
-                              "Ответ скрыт, поскольку содержит защищённое значение", 422)
+                              "В данных для показа найдено значение из secrets.yaml. Проверьте ID и отображаемые поля плиток.", 422)
+
+    def check_values(self, value):
+        # DTO keys are fixed by the server. User-controlled names in these
+        # DTOs are values (including element IDs), never mapping keys.
+        for scalar in _secret_strings(value):
+            self.check(scalar)
 
     def rendering_config(self, config):
         def walk(value, key=""):
@@ -181,6 +189,10 @@ class EditorService:
             kind = resolve_type(value, state)
             library[name] = {"id": name, "type": kind, "pad": has_pad(kind),
                              "title": policy.label(value.get("title") or name)}
+            for field in ("w", "h"):
+                size = value.get(field)
+                if type(size) in (int, float) and not policy.contains(str(size)):
+                    library[name][field] = size
         panels = []
         for name, panel in docs.data["panels"].items():
             sections = []
@@ -192,7 +204,9 @@ class EditorService:
                                  if k in tile}
                     if "title" in tile and placement["title"] != tile["title"]:
                         placement["title_protected"] = True
-                    item = {"id": tile["id"], **placement}
+                    item = {"id": placement_id(name, tile), **placement}
+                    if "id" not in tile:
+                        item["implicit_id"] = True
                     if "element" in tile:
                         item["element"] = tile["element"]
                     else:
@@ -223,7 +237,9 @@ class EditorService:
                 "panels": panels, "library": list(library.values()), "themes": palette.names()}
         if inline:
             body["inline_tiles"] = True
-        policy.check(json.dumps(body, ensure_ascii=False))
+        policy.check_values(panels)
+        policy.check_values(body["library"])
+        policy.check_values(body["themes"])
         return body
 
     def model(self, key):
@@ -245,7 +261,7 @@ class EditorService:
             policy = SecretPolicy(candidate)
             try:
                 validate(operation)
-                policy.check(json.dumps(operation, ensure_ascii=False))
+                policy.check_values(operation)
                 changeset, expected, event, path, original = apply(
                     candidate, session.draft.changeset, operation, session.originals)
                 if changeset._files == session.draft.changeset._files:
@@ -297,7 +313,7 @@ class EditorService:
             self._verify(candidate, policy)
             body = {"summary": summary, "operations": session.events[:],
                     "draft_version": session.version, "base_revision": session.draft.base_revision}
-            policy.check(json.dumps(body, ensure_ascii=False))
+            policy.check_values(body["operations"])
             session.checked = session.version
             return body
 

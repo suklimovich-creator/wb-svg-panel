@@ -337,7 +337,8 @@ class RevisionStore:
                 target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 _replace(target, data)
             candidate = self._load(stage / self.path.name)
-            if (managed or not draft._restore) and candidate.get("schema") not in MANAGED_SCHEMAS:
+            restoring_original = draft._restore and source == "legacy-0" and "schema" not in candidate.data
+            if (managed or not draft._restore) and not restoring_original and candidate.get("schema") not in MANAGED_SCHEMAS:
                 raise DocumentError("Публикация требует управляемую schema")
             if verify:
                 self._verify(candidate)

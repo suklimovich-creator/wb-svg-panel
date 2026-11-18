@@ -16,9 +16,9 @@
       <p>Эта конфигурация ещё не подготовлена для редактирования. Откройте терминал контроллера.</p>
       <p>Перейдите в каталог проекта и выполните пробную миграцию.</p>
       <pre><code>cd /mnt/data/wb-svg-panel
-python3 -m wbpanel.editor_cli migrate --inline</code></pre>
+python3 -m wbpanel.editor_cli migrate</code></pre>
       <p>Если проверка прошла, примените изменения и обновите эту страницу.</p>
-      <pre><code>python3 -m wbpanel.editor_cli migrate --inline --apply</code></pre>
+      <pre><code>python3 -m wbpanel.editor_cli migrate --apply</code></pre>
     </div>
     <div id="actions" class="actions" hidden>
       <button id="restart">Новый черновик</button>
@@ -40,7 +40,7 @@ python3 -m wbpanel.editor_cli migrate --inline</code></pre>
         <label for="search">Поиск по названию, ID или типу</label>
         <input id="search" type="search" autocomplete="off">
         <label for="elements">Элемент</label><select id="elements"></select>
-        <label for="new-id">ID (необязательно)</label><input id="new-id" maxlength="64" placeholder="Автоматически">
+        <div id="custom-id" hidden><label for="new-id">ID новой плитки (необязательно)</label><input id="new-id" maxlength="64" placeholder="Автоматически"></div>
         <button id="add">Добавить экземпляр</button>
       </div>
     </section>
@@ -60,6 +60,7 @@ python3 -m wbpanel.editor_cli migrate --inline</code></pre>
       <form id="placement" hidden>
         <p id="identity"></p>
         <div class="sizes">
+          <p>Размер в ячейках на выбранной панели. Пустое поле наследует размер плитки.</p>
           <label>Ширина <input id="width" type="number" step=".5" min=".5" max="32"></label>
           <label>Высота <input id="height" type="number" step=".5" min=".5" max="32"></label>
         </div>

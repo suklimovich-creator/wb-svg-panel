@@ -66,7 +66,13 @@ async function editorFlow(browser) {
     const retry = p.getByRole('button', {name: 'Повторить загрузку редактора'});
     await retry.waitFor();
     ok('редактор: подсказка о доступе', (await p.locator('#status').innerText()).includes('адрес страницы'));
-    await retry.click();
+    const [draft] = await Promise.all([
+      p.waitForResponse(r => r.url() === base + 'api/editor/drafts' && r.request().method() === 'POST'),
+      retry.click()
+    ]);
+    if (draft.status() !== 201) {
+      throw new Error('Повторное создание черновика: HTTP ' + draft.status() + ', ожидался 201');
+    }
     await p.selectOption('#panels', 'summary');
     await p.selectOption('#sections', '1');
     ok('редактор: импортированный раздел', (await p.locator('#sources').innerText()).includes('room')

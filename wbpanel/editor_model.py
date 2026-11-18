@@ -3,6 +3,8 @@
 from copy import deepcopy
 from dataclasses import replace
 
+import hashlib
+import json
 import re
 
 from .editor_documents import DocumentError
@@ -11,6 +13,13 @@ from .registry import REGISTRY, resolve_type
 MANAGED_SCHEMAS = (2, 3)
 CUSTOM_TILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 NUMBERED_TILE_ID = re.compile(r"([A-Za-z0-9][A-Za-z0-9_-]*)-([0-9]{1,18})")
+
+
+def placement_id(panel, item):
+    if "id" in item or not isinstance(item.get("element"), str):
+        return item.get("id")
+    pair = json.dumps([panel, item["element"]], ensure_ascii=True)
+    return "ref-" + hashlib.sha256(pair.encode("ascii")).hexdigest()
 
 
 def next_tile_id(tile, occupied):
@@ -101,7 +110,7 @@ def resolve(documents):
             _mapping(item, "Экземпляр")
             if (not inline or "element" in item) and item.keys() - PLACEMENT - {"id", "element"}:
                 raise DocumentError("Экземпляр содержит запрещённое переопределение")
-            stable_id, ref = item.get("id"), item.get("element")
+            stable_id, ref = placement_id(path[1], item), item.get("element")
             if not isinstance(stable_id, str) or not stable_id.strip():
                 raise DocumentError("Экземпляру нужен стабильный id")
             key = ("tile", stable_id)

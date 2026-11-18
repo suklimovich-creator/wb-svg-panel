@@ -40,6 +40,7 @@ panels:
       channel: dev/actual
       title: Actual
       w: 3
+  other: {tiles: []}
 """)
     legacy = path.read_bytes()
     before = Config(path)
@@ -50,6 +51,41 @@ panels:
     store.publish(draft, migrate=True)
     after = Config(path, strict=True)
     assert list(before.all_tiles()) == list(after.all_tiles())
+    assert after.documents.data["elements"]["switch-001"] == {
+        "type": "switch", "channel": "dev/actual", "title": "Actual", "w": 3}
+    assert after.documents.data["panels"]["main"]["tiles"] == [
+        {"element": "switch-001"}]
+    from wbpanel.editor_service import EditorService
+    editor = EditorService(path)
+    model = editor.create()
+    assert model["library"][0]["id"] == "switch-001"
+    updated = editor.operation(model["draft_id"], 0, {"op": "add_instance", "panel": "main",
+        "section": None, "element": "switch-001"})
+    assert updated["panels"][0]["sections"][0]["tiles"][-1] == {
+        "id": "switch-002", "element": "switch-001"}
+    another = editor.operation(model["draft_id"], 1, {"op": "add_instance", "panel": "other",
+        "section": None, "element": "switch-001"})
+    second = another["panels"][1]["sections"][0]["tiles"][0]["id"]
+    assert second != model["panels"][0]["sections"][0]["tiles"][0]["id"]
+    editor.operation(model["draft_id"], 2, {"op": "update_instance", "panel": "other",
+        "section": None, "id": second, "fields": {"w": 1.5, "h": 2}})
+    editor.diff(model["draft_id"])
+    editor.publish(model["draft_id"], 3)
+    published = Config(path)
+    assert published.documents.data["panels"]["other"]["tiles"] == [
+        {"element": "switch-001", "w": 1.5, "h": 2}]
+    assert published.panels["main"]["tiles"][0]["w"] == 3
+    with patch.object(web, "config", published):
+        client = web.app.test_client()
+        args = {"revision": "legacy-0", "base_revision": store.history()[0].id, "confirm": False}
+        def rollback():
+            return client.post("/api/editor/rollback", json=args, headers={"X-WB-Editor": "1"})
+        assert rollback().status_code == 400
+        args["confirm"] = True
+        assert rollback().status_code == 200
+        assert not client.get("/api/editor/state").json["managed"]
+    assert path.read_bytes() == legacy
+    store.publish(store.migration(), migrate=True)
     assert after.used_channels() == {"dev/actual"}
     assert screen_layout("main", before) == screen_layout("main", after)
 
@@ -134,8 +170,8 @@ def main(root):
     first, second = origins
     first_rel, second_rel = [o.file.relative_to(root) for o in origins]
     first_bytes, second_bytes = [o.file.read_bytes() for o in origins]
-    draft.changeset = Changeset({first_rel: first_bytes.replace(b"w: 2", b"w: 1"),
-                                 second_rel: second_bytes.replace(b"w: 2", b"w: 1")})
+    draft.changeset = Changeset({first_rel: first_bytes + b"w: 1\n",
+                                 second_rel: second_bytes + b"w: 1\n"})
 
     def failing_replace(target, data, mode=0o600):
         if target == second.file and data != second_bytes:

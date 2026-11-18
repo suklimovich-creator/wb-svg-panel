@@ -9,7 +9,7 @@ from yaml.nodes import MappingNode, ScalarNode, SequenceNode
 
 from . import yamlx
 from .editor_drafts import Changeset
-from .editor_model import CUSTOM_TILE_ID, PLACEMENT, next_tile_id, reserve_tile_id
+from .editor_model import CUSTOM_TILE_ID, PLACEMENT, next_tile_id, placement_id, reserve_tile_id
 from .editor_migration import _entry_nodes, _mapping, _scalar, block_copy, inline_tile
 from .editor_documents import DocumentError
 
@@ -145,8 +145,12 @@ def apply(config, changeset, operation, originals):
         occupied = {key for category, key in config.origins if category == "tile"}
         if stable_id in occupied:
             raise OperationError("Такой ID уже занят", "id")
-        if stable_id is None:
-            stable_id = next_tile_id(definition, occupied | set(
+        compact_id = placement_id(panel, {"element": element})
+        compact = not inline and stable_id is None and compact_id not in occupied
+        if compact:
+            stable_id = compact_id
+        elif stable_id is None:
+            stable_id = next_tile_id(definition, occupied | set(library) | set(
                 expected.get("last_tile_ids", {}).values()))
     if kind != "update_instance":
         origin = doc.origins.get(list_path) or doc.origins[path]
@@ -161,6 +165,10 @@ def apply(config, changeset, operation, originals):
         raise OperationError("Размещение с таким YAML-тегом доступно только для чтения")
 
     event = {"op": kind, "panel": panel, "section": section, "id": stable_id}
+    if kind == "add_instance" and compact:
+        event["element"] = element
+    elif kind != "add_instance" and "id" not in tiles[index]:
+        event["element"] = tiles[index]["element"]
     if kind == "update_instance":
         if not isinstance(node, MappingNode) or node.tag != MAP:
             raise OperationError("Экземпляр должен быть YAML-словарём")
@@ -192,7 +200,7 @@ def apply(config, changeset, operation, originals):
             raise OperationError("Размещение должно быть YAML-списком")
         if kind == "add_instance":
             if not inline:
-                entry = {"id": stable_id, "element": element}
+                entry = {"element": element} if compact else {"id": stable_id, "element": element}
                 entry_node = yaml.SafeDumper("").represent_data(entry)
             else:
                 if source_path[0] == "elements":

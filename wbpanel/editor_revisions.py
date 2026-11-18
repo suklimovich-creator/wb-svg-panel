@@ -214,11 +214,14 @@ class RevisionStore:
             head = revision
         return config, Draft(head, hashes)
 
-    def draft(self, *, managed=False):
+    def draft_with_config(self, *, managed=False):
         with self._locked():
             if managed and self._load(self.path).get("schema") not in MANAGED_SCHEMAS:
                 raise DocumentError("Сначала выполните явную миграцию")
-            return self._baseline()[1]
+            return self._baseline()
+
+    def draft(self, *, managed=False):
+        return self.draft_with_config(managed=managed)[1]
 
     def migration(self, *, inline=False):
         from .editor_migration import inline_migration_files, migration_files

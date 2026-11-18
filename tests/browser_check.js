@@ -77,6 +77,19 @@ async function editorFlow(browser) {
     await p.selectOption('#sections', '1');
     ok('редактор: импортированный раздел', (await p.locator('#sources').innerText()).includes('room')
        && await p.locator('#library').isHidden());
+    const slowPreview = '**/preview/summary.svg*';
+    let attempts = 0;
+    await p.route(slowPreview, async route => {
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 13000));
+      await route.fulfill({status: 422, json: {error: {code: 'protected_output', message: 'SVG скрыт'}}});
+    });
+    await p.locator('#cols').fill('2');
+    await p.locator('#cols').dispatchEvent('change');
+    await p.locator('#preview-status li').first().waitFor();
+    ok('редактор: медленный SVG, список плиток и отдельный повтор', attempts === 1
+       && await p.getByRole('button', {name: 'Повторить предпросмотр'}).isVisible());
+    await p.unroute(slowPreview);
     await p.locator('#sources a').click();
     await p.fill('#search', 'Выключатель без канала');
     await p.selectOption('#elements', 'invalid_switch');

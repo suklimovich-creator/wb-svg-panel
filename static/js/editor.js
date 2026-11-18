@@ -4,6 +4,8 @@
     var api = root + 'api/editor/';
     var model, panel, section, selected, busy, padOpen;
     var previewToken = 0;
+    var previewPending = 0;
+    var previewStopped = false;
     var issue;
     var initialPanel = '';
     if (root === '../') {
@@ -58,7 +60,8 @@
                     'Сервер не смог обработать запрос (HTTP ' + xhr.status + ').'});
             }
         };
-        xhr.onerror = xhr.ontimeout = function () { done({message: 'Контроллер не ответил. Проверьте подключение и повторите действие.'}); };
+        xhr.onerror = function () { done({message: 'Связь с редактором прервалась.'}); };
+        xhr.ontimeout = function () { done({message: 'За 25 секунд браузер не получил ответ.'}); };
         xhr.send(data ? JSON.stringify(data) : null);
     }
 
@@ -105,7 +108,7 @@
     function progress() {
         if (!model) { return; }
         if (!model.draft_version) {
-            status('Редактор готов. Выберите панель и внесите изменения.');
+            status('Черновик открыт. Пока изменений нет.');
         } else if (model.checked) {
             status('Проверка прошла. Изменения можно опубликовать.');
         } else {
@@ -263,6 +266,26 @@
         byId('pad').textContent = padOpen ? 'Скрыть пульт' : 'Показать пульт';
     }
 
+    function showTileList(target, current, visited) {
+        if (!current || visited.indexOf(current.id) >= 0) { return; }
+        var branch = visited.concat(current.id);
+        current.sections.forEach(function (part) {
+            if (part.tiles.length) {
+                target.appendChild(node('strong', current.title + ' · ' + part.title));
+                var list = node('ul', '');
+                part.tiles.forEach(function (tile) {
+                    var item = tile.element && libraryItem(tile.element);
+                    list.appendChild(node('li', tile.title || (item && item.title) || tile.id));
+                });
+                target.appendChild(list);
+            }
+            (part.sources || []).forEach(function (source) {
+                var panelSource = model.panels.filter(function (entry) { return entry.id === source; })[0];
+                showTileList(target, panelSource, branch);
+            });
+        });
+    }
+
     function image(path, id, message, token, clear) {
         var target = byId(id);
         var feedback = byId(message);
@@ -271,13 +294,25 @@
             target.removeAttribute('src');
             feedback.textContent = 'Загрузка SVG…';
         }
+        previewPending += 1;
         request('GET', draftPath(path), null, function (error, svg) {
+            previewPending -= 1;
             if (token !== previewToken) { return; }
             if (error || typeof svg !== 'string') {
                 target.hidden = true;
                 target.removeAttribute('src');
                 feedback.textContent = error ? error.message : 'Получен некорректный SVG';
-                if (error) { markIssue(error); }
+                if (error) {
+                    previewStopped = true;
+                    feedback.textContent = 'Предпросмотр: ' + error.message;
+                    var retryImage = node('button', 'Повторить предпросмотр');
+                    retryImage.onclick = function () { refreshPreview(true); };
+                    feedback.appendChild(retryImage);
+                    if (id === 'preview-image' && error.code === 'protected_output') {
+                        showTileList(feedback, selectedPanel(), []);
+                    }
+                    markIssue(error);
+                }
                 return;
             }
             target.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -288,6 +323,8 @@
 
     function refreshPreview(clear) {
         if (!model || !selectedPanel()) { return; }
+        if (!clear && (previewPending || previewStopped)) { return; }
+        if (clear) { previewStopped = false; }
         var token = ++previewToken;
         var theme = byId('theme').value;
         var cols = byId('cols');
@@ -315,7 +352,7 @@
             busy = false;
             if (error) {
                 errorMessage(error);
-                if (failure) { failure(); }
+                if (failure) { failure(error); }
             } else { success(result); }
         });
     }
@@ -325,25 +362,23 @@
         var retry = byId('retry-start');
         function showRetry() { retry.hidden = false; }
         retry.hidden = true;
-        status('Загрузка редактора…');
+        status('Создаётся черновик текущей конфигурации…');
         empty('details').hidden = true;
-        run('GET', 'state', null, function (state) {
-            if (!state.managed) {
+        run('POST', 'drafts', {}, function (result) {
+            model = result;
+            issue = null;
+            panel = panel || initialPanel;
+            byId('legacy').hidden = true;
+            byId('actions').hidden = false;
+            showModel();
+        }, function (error) {
+            if (error.code === 'legacy') {
                 byId('legacy').hidden = false;
                 byId('actions').hidden = true;
                 byId('workspace').hidden = true;
                 status('Редактор станет доступен после миграции YAML.');
-                return;
-            }
-            byId('legacy').hidden = true;
-            run('POST', 'drafts', {}, function (result) {
-                model = result;
-                issue = null;
-                panel = panel || initialPanel;
-                byId('actions').hidden = false;
-                showModel();
-            }, showRetry);
-        }, showRetry);
+            } else { showRetry(); }
+        });
     }
 
     byId('retry-start').onclick = newDraft;

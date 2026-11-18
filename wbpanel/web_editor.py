@@ -188,8 +188,8 @@ def _svg(value, policy):
             pass
         if policy.contains(value):
             raise EditorError("protected_output",
-                              "Предпросмотр скрыт: в SVG осталось закрытое значение. "
-                              "Редактирование панели доступно.", 422)
+                              "В изображении найден текст, совпадающий со значением из secrets.yaml. "
+                              "Изображение скрыто. Черновик открыт, плитки можно редактировать.", 422)
     return Response(value, mimetype="image/svg+xml", headers={
         "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"})
 

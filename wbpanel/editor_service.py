@@ -153,8 +153,7 @@ class EditorService:
             if len(self.sessions) >= 128:
                 raise EditorError("draft_limit", "Достигнут предел открытых черновиков", 429)
             store = self.store(create=True)
-            draft = store.draft(managed=True)
-            candidate, _summary = store.candidate(draft, verify=False)
+            candidate, draft = store.draft_with_config(managed=True)
             key = secrets.token_urlsafe(24)
             session = Session(draft)
             result = self._model(key, session, candidate)

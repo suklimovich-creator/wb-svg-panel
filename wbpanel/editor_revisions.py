@@ -259,7 +259,7 @@ class RevisionStore:
         self.journal.unlink()
         _sync_dir(self.directory)
 
-    def _verify(self, candidate):
+    def _verify(self, candidate, *, verify_screens=True):
         from .checkup import publication_errors
         from . import web  # noqa: F401  registers screen routes
         from .web_screen import screen_layout
@@ -278,6 +278,8 @@ class RevisionStore:
                     if id(value) in invalid:
                         origins.append(origin)
                 raise ValidationError(errors, origins)
+            if not verify_screens:
+                return
             candidate.used_channels()
             for name in candidate.panels:
                 json.dumps(screen_layout(name, candidate))

@@ -41,3 +41,6 @@ header .error { color: #ffc6bf; }
   main { grid-template-columns: 1fr; }
   .preview { grid-column: 1; grid-row: auto; }
 }
+
+.layout-grid { display: grid; grid-auto-rows: 2rem; gap: .3rem; margin: .5rem 0 1rem; }
+.layout-grid > div { display: flex; align-items: center; padding: .45rem; border: 1px solid #b9cce1; background: #edf4fc; color: #183553; border-radius: .5rem; overflow: hidden; overflow-wrap: anywhere; }

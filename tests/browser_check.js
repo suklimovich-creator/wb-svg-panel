@@ -86,7 +86,8 @@ async function editorFlow(browser) {
     });
     await p.locator('#cols').fill('2');
     await p.locator('#cols').dispatchEvent('change');
-    await p.locator('#preview-status li').first().waitFor();
+    await p.locator('#layout .layout-grid > div').first().waitFor();
+    await p.getByRole('button', {name: 'Повторить предпросмотр'}).waitFor();
     ok('редактор: медленный SVG, список плиток и отдельный повтор', attempts === 1
        && await p.getByRole('button', {name: 'Повторить предпросмотр'}).isVisible());
     await p.unroute(slowPreview);

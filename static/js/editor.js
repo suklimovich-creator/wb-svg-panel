@@ -151,7 +151,7 @@
             });
 
         }
-        byId('library-title').textContent = model.inline_tiles ? 'Добавить плитку' : 'Библиотека';
+        byId('library-title').textContent = 'Добавить плитку из библиотеки';
         byId('custom-id').hidden = !model.inline_tiles;
         byId('add').disabled = !menu.options.length;
     }
@@ -224,7 +224,12 @@
                 button.onclick = function () {
                     selected = tile.id;
                     padOpen = false;
-                    showSection();
+                    var buttons = instances.querySelectorAll('button');
+                    for (var i = 0; i < buttons.length; i++) {
+                        buttons[i].setAttribute('aria-pressed', String(buttons[i] === button));
+                    }
+                    showInstance();
+                    markIssue(issue);
                 };
                 li.setAttribute('data-instance', tile.id);
                 li.appendChild(button);
@@ -272,10 +277,16 @@
         current.sections.forEach(function (part) {
             if (part.tiles.length) {
                 target.appendChild(node('strong', current.title + ' · ' + part.title));
-                var list = node('ul', '');
+                var list = node('div', '');
+                var cols = Math.max(1, Math.min(12, Number(byId('cols').value) || selectedPanel().cols || 4));
+                list.className = 'layout-grid';
+                list.style.gridTemplateColumns = 'repeat(' + (2 * cols) + ', minmax(0, 1fr))';
                 part.tiles.forEach(function (tile) {
                     var item = tile.element && libraryItem(tile.element);
-                    list.appendChild(node('li', tile.title || (item && item.title) || tile.id));
+                    var cell = node('div', tile.title || (item && item.title) || tile.id);
+                    cell.style.gridColumn = 'span ' + Math.min(cols * 2, Math.max(1, Math.round(2 * (tile.w || (item && item.w) || 1))));
+                    cell.style.gridRow = 'span ' + Math.max(1, Math.round(2 * (tile.h || (item && item.h) || 1)));
+                    list.appendChild(cell);
                 });
                 target.appendChild(list);
             }
@@ -308,13 +319,13 @@
                     var retryImage = node('button', 'Повторить предпросмотр');
                     retryImage.onclick = function () { refreshPreview(true); };
                     feedback.appendChild(retryImage);
-                    if (id === 'preview-image' && error.code === 'protected_output') {
-                        showTileList(feedback, selectedPanel(), []);
-                    }
+                    if (id === 'preview-image') { byId('layout').hidden = false; }
                     markIssue(error);
                 }
                 return;
             }
+            if (id === 'pad-image' && !padOpen) { return; }
+            if (id === 'preview-image') { byId('layout').hidden = true; }
             target.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
             target.hidden = false;
             feedback.textContent = '';
@@ -324,7 +335,13 @@
     function refreshPreview(clear) {
         if (!model || !selectedPanel()) { return; }
         if (!clear && (previewPending || previewStopped)) { return; }
-        if (clear) { previewStopped = false; }
+        if (clear) {
+            previewStopped = false;
+            var layout = empty('layout');
+            layout.hidden = false;
+            layout.appendChild(node('h3', 'Схема плиток'));
+            showTileList(layout, selectedPanel(), []);
+        }
         var token = ++previewToken;
         var theme = byId('theme').value;
         var cols = byId('cols');
@@ -467,7 +484,10 @@
             target.appendChild(node('p', 'Файлы к записи · ' + s.writes + '. Экземпляры: добавлено ' +
                                     s.instances.added + ', удалено ' + s.instances.removed +
                                     ', изменено ' + s.instances.changed + '.'));
-            var list = node('ul', '');
+            var list = node('div', '');
+                var cols = Math.max(1, Math.min(12, Number(byId('cols').value) || selectedPanel().cols || 4));
+                list.className = 'layout-grid';
+                list.style.gridTemplateColumns = 'repeat(' + (2 * cols) + ', minmax(0, 1fr))';
             diff.operations.forEach(function (op) {
                 list.appendChild(node('li', operationNames[op.op] + ' · ' + op.panel + ' · ' +
                                       (op.element || op.id) + ' · ' + op.file + (op.fields ? ' · ' + op.fields.join(', ') : '')));

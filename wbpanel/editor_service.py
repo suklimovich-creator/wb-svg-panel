@@ -229,8 +229,11 @@ class EditorService:
                                  "title": policy.label(section.get("title") or "Раздел"),
                                  "readonly": readonly, "sources": sources,
                                  "tiles": [] if readonly else instances(section["tiles"])})
+            panel_cols = panel.get("cols", 4)
             panels.append({"id": name, "title": policy.label(panel.get("title") or name),
                            "sections": sections})
+            if type(panel_cols) is int and 1 <= panel_cols <= 12 and not policy.contains(str(panel_cols)):
+                panels[-1]["cols"] = panel_cols
         body = {"draft_id": key, "base_revision": session.draft.base_revision,
                 "draft_version": session.version, "checked": session.checked == session.version,
                 "panels": panels, "library": list(library.values()), "themes": palette.names()}
@@ -290,9 +293,9 @@ class EditorService:
             session.events.append(event)
             return result
 
-    def _verify(self, candidate, policy):
+    def _verify(self, candidate, policy, *, verify_screens=True):
         try:
-            self.store()._verify(candidate)
+            self.store()._verify(candidate, verify_screens=verify_screens)
         except ValidationError as exc:
             details = {}
             for origin in exc.origins:
@@ -323,7 +326,7 @@ class EditorService:
             if draft_version is not None:
                 self._expect(key, session, draft_version, candidate)
         policy = SecretPolicy(candidate)
-        self._verify(candidate, policy)
+        self._verify(candidate, policy, verify_screens=False)
         return candidate, policy.rendering_config(candidate), policy
 
     def publish(self, key, version):

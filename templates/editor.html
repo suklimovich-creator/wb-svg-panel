@@ -34,33 +34,32 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <label for="panels">Выбор панели</label><select id="panels"></select>
       <label for="sections">Раздел</label><select id="sections"></select>
       <div id="sources"></div>
-      <ol id="instances" aria-label="Порядок экземпляров"></ol>
+      <h3>Плитки этого раздела</h3><ol id="instances" aria-label="Порядок экземпляров"></ol>
       <div id="library">
         <h2 id="library-title">Библиотека</h2>
         <label for="search">Поиск по названию, ID или типу</label>
         <input id="search" type="search" autocomplete="off">
         <label for="elements">Элемент</label><select id="elements"></select>
         <div id="custom-id" hidden><label for="new-id">ID новой плитки (необязательно)</label><input id="new-id" maxlength="64" placeholder="Автоматически"></div>
-        <button id="add">Добавить экземпляр</button>
+        <button id="add">Добавить на панель</button>
       </div>
     </section>
     <section class="card preview">
-      <h2>SVG-предпросмотр</h2>
+      <h2>Предпросмотр панели</h2>
       <div class="actions preview-controls">
         <label>Тема <select id="theme"></select></label>
         <label>Колонки <input id="cols" type="number" min="1" max="12" step="1"
                                    placeholder="Из конфига"></label>
       </div>
-      <div id="preview-status" role="status"></div>
+      <div id="layout"></div><div id="preview-status" role="status"></div>
       <img id="preview-image" alt="SVG панели из черновика" hidden>
     </section>
     <section class="card inspector">
-      <h2>Экземпляр</h2>
-      <p id="selection-empty">Выберите экземпляр в списке.</p>
+      <h2>Настройки плитки</h2>
+      <p id="selection-empty">Выберите плитку слева, чтобы изменить её размер или название.</p>
       <form id="placement" hidden>
         <p id="identity"></p>
         <div class="sizes">
-          <p>Размер в ячейках на выбранной панели. Пустое поле наследует размер плитки.</p>
           <label>Ширина <input id="width" type="number" step=".5" min=".5" max="32"></label>
           <label>Высота <input id="height" type="number" step=".5" min=".5" max="32"></label>
         </div>
@@ -68,7 +67,7 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
         <button id="inherit-title" type="button" hidden>Наследовать название</button>
         <p class="muted">Размеры в единицах сетки. Пустое поле наследует значение из библиотеки.</p>
         <p id="instance-error" role="alert" hidden></p>
-        <button type="submit">Применить к черновику</button>
+        <button type="submit">Сохранить в черновике</button>
         <div class="actions order">
           <button type="button" id="up">↑ Вверх</button>
           <button type="button" id="down">↓ Вниз</button>

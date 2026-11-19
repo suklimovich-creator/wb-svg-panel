@@ -212,7 +212,8 @@ def run():
     get(first + "/preview/room.svg?cols=0", 400)
     get(first + "/preview/room.svg?draft_version=0", 409)
     get(first + "/tile/summary/first.svg", 404)
-    svg = get(first + "/preview/room.svg?cols=3&theme=dark").get_data(as_text=True)
+    with patch.object(RevisionStore, "candidate", side_effect=AssertionError("preview rebuilt YAML")):
+        svg = get(first + "/preview/room.svg?cols=3&theme=dark").get_data(as_text=True)
     assert "Новая плитка" in svg and "Первая" not in svg
     ElementTree.fromstring(svg)
     pad = get(first + "/tile/room/first.svg").data

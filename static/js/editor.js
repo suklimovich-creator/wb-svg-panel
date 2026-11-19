@@ -112,9 +112,9 @@
         } else if (model.checked) {
             status('Проверка прошла. Изменения можно опубликовать.');
         } else {
-            status('Изменения пока в черновике. Проверьте их перед публикацией.');
+            status('Сохранено в черновике. Нажмите «Опубликовать», чтобы проверить и применить изменения.');
         }
-        byId('publish').disabled = !model.checked || !model.draft_version;
+        byId('publish').disabled = !model.draft_version;
         byId('check').disabled = false;
     }
 
@@ -402,7 +402,8 @@
 
     function operate(op, fields) {
         var current = selectedSection();
-        if (!current || current.readonly || !model) { return; }
+        if (!current || current.readonly || !model || busy) { return; }
+        status('Сохранение изменений в черновике…');
         fields.op = op;
         fields.panel = panel;
         fields.section = section;
@@ -472,6 +473,7 @@
         });
         if (byId('title').value !== (tile.title || '')) { fields.title = byId('title').value; }
         if (Object.keys(fields).length) { operate('update_instance', {id: selected, fields: fields}); }
+        else { status('Поля плитки не изменились.'); }
     };
     byId('check').onclick = function () {
         run('GET', draftPath('/diff'), null, function (diff) {
@@ -484,10 +486,7 @@
             target.appendChild(node('p', 'Файлы к записи · ' + s.writes + '. Экземпляры: добавлено ' +
                                     s.instances.added + ', удалено ' + s.instances.removed +
                                     ', изменено ' + s.instances.changed + '.'));
-            var list = node('div', '');
-                var cols = Math.max(1, Math.min(12, Number(byId('cols').value) || selectedPanel().cols || 4));
-                list.className = 'layout-grid';
-                list.style.gridTemplateColumns = 'repeat(' + (2 * cols) + ', minmax(0, 1fr))';
+            var list = node('ul', '');
             diff.operations.forEach(function (op) {
                 list.appendChild(node('li', operationNames[op.op] + ' · ' + op.panel + ' · ' +
                                       (op.element || op.id) + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
@@ -498,10 +497,25 @@
         });
     };
     byId('publish').onclick = function () {
-        if (!model || !window.confirm('Опубликовать проверенные изменения этого черновика?')) { return; }
-        run('POST', draftPath('/publish'), {draft_version: model.draft_version}, function (revision) {
-            empty('details').hidden = true;
-            receivedRevision(revision, 'Опубликовано');
+        if (!model || busy) { return; }
+        function confirmPublish() {
+            if (!window.confirm('Применить проверенные изменения на рабочих панелях?')) { progress(); return; }
+            status('Публикация изменений…');
+            run('POST', draftPath('/publish'), {draft_version: model.draft_version}, function (revision) {
+                empty('details').hidden = true;
+                receivedRevision(revision, 'Опубликовано');
+            });
+        }
+        if (model.checked) { confirmPublish(); return; }
+        status('Проверка черновика перед публикацией…');
+        run('GET', draftPath('/diff'), null, function (diff) {
+            if (!diff.summary.writes && !diff.summary.deletes) {
+                status('Черновик совпадает с рабочей конфигурацией.');
+                byId('publish').disabled = true;
+                return;
+            }
+            model.checked = model.draft_version === diff.draft_version;
+            if (model.checked) { confirmPublish(); }
         });
     };
     byId('history').onclick = function () {

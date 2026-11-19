@@ -122,8 +122,6 @@ async function editorFlow(browser) {
     ok('редактор: управление в узком окне', await p.evaluate(() =>
       document.documentElement.scrollWidth <= innerWidth &&
       document.querySelector('#up').getBoundingClientRect().width > 0));
-    await p.click('#check');
-    await p.getByRole('heading', {name: 'Изменения черновика'}).waitFor();
     await p.click('#publish');
     await p.waitForFunction(() => document.getElementById('status').textContent.includes('Опубликовано'));
     ok('редактор: публикация', (await get(base + 'room.svg?theme=dark')).body.includes('Browser LED'));

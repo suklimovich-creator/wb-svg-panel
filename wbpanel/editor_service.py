@@ -116,6 +116,8 @@ class SecretPolicy:
 @dataclass
 class Session:
     draft: object
+    candidate: object = field(default=None, repr=False)
+    preview_verified: bool = False
     version: int = 0
     checked: int = -1
     closed: bool = False
@@ -155,7 +157,7 @@ class EditorService:
             store = self.store(create=True)
             candidate, draft = store.draft_with_config(managed=True)
             key = secrets.token_urlsafe(24)
-            session = Session(draft)
+            session = Session(draft, candidate=candidate)
             result = self._model(key, session, candidate)
             self.sessions[key] = session
             return result
@@ -284,6 +286,8 @@ class EditorService:
                 details = {k: supplied[k] for k in ("panel", "id") if k in supplied
                            and isinstance(supplied[k], str) and not policy.contains(supplied[k])}
                 raise EditorError("operation", str(exc), field=exc.field, **details) from None
+            session.candidate = updated
+            session.preview_verified = False
             session.draft = draft
             session.version = staged.version
             if path in changeset._files:
@@ -326,11 +330,16 @@ class EditorService:
     def preview(self, key, draft_version):
         session = self.get(key)
         with session.mutex:
-            candidate, _summary = self._candidate(session)
+            if session.closed:
+                raise EditorError("draft_closed", "Черновик уже опубликован", 409)
+            self.store().verify_preview_base(session.draft, session.candidate.documents)
+            candidate = session.candidate
             if draft_version is not None:
                 self._expect(key, session, draft_version, candidate)
-        policy = SecretPolicy(candidate)
-        self._verify(candidate, policy, verify_screens=False)
+            policy = SecretPolicy(candidate)
+            if not session.preview_verified:
+                self._verify(candidate, policy, verify_screens=False)
+                session.preview_verified = True
         return candidate, policy.rendering_config(candidate), policy
 
     def publish(self, key, version):

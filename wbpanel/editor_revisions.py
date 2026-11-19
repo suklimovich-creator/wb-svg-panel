@@ -15,6 +15,7 @@ import stat
 import tempfile
 import uuid
 
+from . import yamlx
 from .editor_model import MANAGED_SCHEMAS
 from .config import Config
 from .editor_documents import DocumentError
@@ -296,6 +297,23 @@ class RevisionStore:
         with self._locked():
             return self._publish(draft, migrate=migrate, preview=True)
 
+    def verify_preview_base(self, draft, docs):
+        """Detect external edits without parsing YAML or staging a candidate."""
+        with self._reading():
+            if self._head() != draft.base_revision:
+                raise Conflict("Активная ревизия изменилась")
+            try:
+                secret_paths = docs.secret_files | {docs.root.parent / yamlx.SECRETS_NAME}
+                for path in secret_paths:
+                    relative = path.relative_to(docs.root.parent)
+                    if str(relative) not in draft._base_hashes and self._target(relative).exists():
+                        raise Conflict("Набор файлов конфигурации изменился")
+                for name, digest in draft._base_hashes.items():
+                    if self._hash(self._target(Path(name)).read_bytes()) != digest:
+                        raise Conflict("Файлы изменились после создания черновика")
+            except (DocumentError, OSError):
+                raise Conflict("Активная конфигурация изменилась") from None
+
     def candidate(self, draft, *, verify=True):
         """Read the candidate without recovering, publishing or writing history."""
         with self._reading():
@@ -340,7 +358,8 @@ class RevisionStore:
             for path, data in files.items():
                 target = stage / path
                 target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-                _replace(target, data)
+                # Private temporary inputs are never used for crash recovery.
+                target.write_bytes(data)
             candidate = self._load(stage / self.path.name)
             restoring_original = draft._restore and source == "legacy-0" and "schema" not in candidate.data
             if (managed or not draft._restore) and not restoring_original and candidate.get("schema") not in MANAGED_SCHEMAS:

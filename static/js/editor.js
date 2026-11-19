@@ -223,14 +223,14 @@
             if (current.readonly && !sources.childNodes.length) {
                 sources.appendChild(node('p', 'Раздел доступен только для чтения.'));
             }
-            current.tiles.forEach(function (tile) {
+            current.tiles.forEach(function (tile, index) {
                 var li = node('li', '');
                 var button = node('button', (tile.title || (tile.element ? libraryItem(tile.element).title : tile.type)) + ' · ' + (tile.implicit_id ? tile.element : tile.id));
                 button.setAttribute('aria-pressed', String(selected === tile.id));
                 button.onclick = function () {
                     selected = tile.id;
                     padOpen = false;
-                    var buttons = instances.querySelectorAll('button');
+                    var buttons = instances.querySelectorAll('[aria-pressed]');
                     for (var i = 0; i < buttons.length; i++) {
                         buttons[i].setAttribute('aria-pressed', String(buttons[i] === button));
                     }
@@ -238,7 +238,24 @@
                     markIssue(issue);
                 };
                 li.setAttribute('data-instance', tile.id);
-                li.appendChild(button);
+                var row = node('div', '');
+                row.className = 'instance-row';
+                row.appendChild(button);
+                ['up', 'down'].forEach(function (direction) {
+                    var up = direction === 'up';
+                    var arrow = node('button', up ? '↑' : '↓');
+                    arrow.type = 'button';
+                    arrow.setAttribute('data-direction', direction);
+                    arrow.setAttribute('aria-label', (up ? 'Поднять ' : 'Опустить ') + button.textContent);
+                    arrow.disabled = up ? index === 0 : index === current.tiles.length - 1;
+                    arrow.onclick = function () {
+                        if (busy) { return; }
+                        button.click();
+                        operate('move_instance', {id: tile.id, direction: direction});
+                    };
+                    row.appendChild(arrow);
+                });
+                li.appendChild(row);
                 instances.appendChild(li);
             });
         }
@@ -269,9 +286,6 @@
         byId('title').value = tile.title || '';
         byId('title').placeholder = tile.title_protected ? 'Защищённое название' : (element.title || element.type);
         byId('inherit-title').hidden = !tile.title_protected;
-        var index = current.tiles.indexOf(tile);
-        byId('up').disabled = index === 0;
-        byId('down').disabled = index === current.tiles.length - 1;
         byId('pad-capability').textContent = element.pad ? 'У типа есть полноэкранный пульт.' : 'У типа нет собственного пульта.';
         byId('pad').hidden = !element.pad;
         byId('pad').textContent = padOpen ? 'Скрыть пульт' : 'Показать пульт';
@@ -340,8 +354,9 @@
 
     function refreshPreview(clear) {
         if (!model || !selectedPanel()) { return; }
-        if (!clear && (previewPending || previewStopped)) { return; }
+        if (!clear && (previewPending || previewStopped || !byId('refresh-preview').hidden)) { return; }
         if (clear) {
+            byId('refresh-preview').hidden = true;
             previewStopped = false;
             var layout = empty('layout');
             layout.hidden = false;
@@ -417,8 +432,18 @@
         fields.op = op;
         fields.panel = panel;
         fields.section = section;
-        run('POST', draftPath('/operation'), {draft_version: model.draft_version, operation: fields}, function (result) {
-            model = result;
+        var sizeOnly = op === 'update_instance' && !('title' in fields.fields);
+        var editedTile = sizeOnly && currentTile();
+        var url = draftPath('/operation') + (sizeOnly ? '?result=version' : '');
+        run('POST', url, {draft_version: model.draft_version, operation: fields}, function (result) {
+            if (sizeOnly) {
+                Object.keys(fields.fields).forEach(function (key) {
+                    if (fields.fields[key] == null) { delete editedTile[key]; }
+                    else { editedTile[key] = fields.fields[key]; }
+                });
+                model.draft_version = result.draft_version;
+                model.checked = result.checked;
+            } else { model = result; }
             issue = null;
             if (op === 'add_instance') { byId('new-id').value = ''; }
             if (op === 'add_instance' && panel === fields.panel && section === fields.section) {
@@ -426,7 +451,14 @@
                 selected = tiles[tiles.length - 1].id;
             }
             empty('details').hidden = true;
-            showModel();
+            if (sizeOnly && panel === fields.panel && section === fields.section) {
+                previewToken += 1;
+                byId('preview-status').textContent = 'Размер сохранён. Предпросмотр показывает предыдущую раскладку.';
+                byId('refresh-preview').hidden = false;
+                markIssue(null);
+                progress();
+                status('Размер плитки сохранён в черновике.');
+            } else { showModel(); }
         });
     }
 
@@ -448,6 +480,7 @@
     byId('search').oninput = search;
     byId('theme').onchange = function () { refreshPreview(true); };
     byId('cols').onchange = function () { refreshPreview(true); };
+    byId('refresh-preview').onclick = function () { refreshPreview(true); };
     byId('pad').onclick = function () {
         padOpen = !padOpen;
         showInstance();
@@ -461,8 +494,6 @@
         if (model.inline_tiles && id) { fields.id = id; }
         operate('add_instance', fields);
     };
-    byId('up').onclick = function () { operate('move_instance', {id: selected, direction: 'up'}); };
-    byId('down').onclick = function () { operate('move_instance', {id: selected, direction: 'down'}); };
     byId('remove').onclick = function () {
         if (window.confirm('Убрать с панели ' + (currentTile().element || selected) + '?')) { operate('remove_instance', {id: selected}); }
     };
@@ -567,6 +598,15 @@
                         });
                     };
                     row.appendChild(button);
+                    var remove = node('button', 'Удалить ревизию');
+                    remove.onclick = function () {
+                        if (!window.confirm('Удалить снимок ' + item.id + '? Откат к нему станет недоступен.')) { return; }
+                        run('POST', 'revisions/delete', {revision: item.id, base_revision: history.head, confirm: true}, function () {
+                            status('Ревизия удалена.');
+                            byId('history').click();
+                        });
+                    };
+                    row.appendChild(remove);
                 }
                 target.appendChild(row);
             });

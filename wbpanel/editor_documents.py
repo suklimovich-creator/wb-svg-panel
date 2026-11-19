@@ -19,6 +19,10 @@ class _Loader(yaml.SafeLoader):
     }
 
 
+class _SnapshotLoader(getattr(yaml, "CSafeLoader", yaml.SafeLoader)):
+    yaml_constructors = _Loader.yaml_constructors
+
+
 class DocumentError(ValueError):
     """An invalid configuration document."""
 
@@ -32,10 +36,11 @@ class Origin:
 
 
 class Documents:
-    def __init__(self, path, strict=False, confined=False):
+    def __init__(self, path, strict=False, confined=False, *, snapshot=None):
         self.root = Path(path).absolute()
         self.strict = strict
         self.confined = confined
+        self._snapshot = snapshot
         self.files = {}
         self.origins = {}
         self.duplicates = []
@@ -48,7 +53,7 @@ class Documents:
         self.stack = []
         self.data = self._read(self.root, ())
         root_secrets = self.root.parent / yamlx.SECRETS_NAME
-        if yamlx.use_secrets and root_secrets.is_file():
+        if yamlx.use_secrets and (root_secrets in snapshot if snapshot is not None else root_secrets.is_file()):
             self._bytes(root_secrets)
         if strict or isinstance(self.data, dict) and self.data.get("schema") in (2, 3):
             if self.duplicates:
@@ -71,6 +76,11 @@ class Documents:
         return path
 
     def _bytes(self, path):
+        if self._snapshot is not None:
+            if path not in self._snapshot:
+                raise FileNotFoundError(path)
+            self.files[path] = self._snapshot[path]
+            return self.files[path]
         path = self._path(path)
         if path not in self.files:
             self.files[path] = path.read_bytes()
@@ -78,14 +88,14 @@ class Documents:
 
     def _read(self, path, logical):
         path = Path(os.path.abspath(path))
-        real = path.resolve()
+        real = path if self._snapshot is not None else path.resolve()
         if real in self.stack:
             raise DocumentError("Цикл !include: " + " → ".join(
                 p.name for p in [*self.stack, real]))
         self.stack.append(real)
         try:
             raw = self._bytes(path)
-            loader = _Loader(raw)
+            loader = (_SnapshotLoader if self._snapshot is not None else _Loader)(raw)
             try:
                 node = loader.get_single_node()
                 self._physical[loader] = {}
@@ -142,7 +152,7 @@ class Documents:
             if self.confined and reference.is_absolute():
                 raise DocumentError("Абсолютный !include нельзя опубликовать")
             path = origin.file.parent / reference
-            if not path.exists() and yamlx.extra_dir and not self.confined:
+            if not self.confined and yamlx.extra_dir and not path.exists():
                 path = Path(yamlx.extra_dir) / reference
             self.includes.setdefault(logical, []).append((origin, node))
             return self._read(path, logical)

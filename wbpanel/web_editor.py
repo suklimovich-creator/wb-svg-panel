@@ -15,7 +15,7 @@ from werkzeug.exceptions import HTTPException
 
 from . import __version__, web
 from .editor_documents import DocumentError
-from .editor_revisions import Conflict
+from .editor_revisions import Conflict, RevisionNotFound
 from .editor_service import EditorError, EditorService, preview_tile
 from .web import app
 from .web_tiles import render_tile
@@ -237,7 +237,8 @@ def editor_model(draft_id):
 @_route
 def editor_operation(draft_id):
     body = _payload({"draft_version", "operation"})
-    return _service().operation(draft_id, _version(body["draft_version"]), body["operation"])
+    return _service().operation(draft_id, _version(body["draft_version"]), body["operation"],
+                                compact=request.args.get("result") == "version")
 
 
 @app.route("/api/editor/drafts/<draft_id>/diff")
@@ -290,6 +291,25 @@ def editor_history():
     history = editor.history()
     body = {"revisions": history, "head": history[0]["id"] if history else None}
     return body
+
+
+@app.route("/api/editor/revisions/delete", methods=["POST"])
+@_route
+def editor_delete_revision():
+    body = _payload({"revision", "base_revision", "confirm"})
+    if body["confirm"] is not True or any(not isinstance(body[k], str) or not body[k]
+                                          for k in ("revision", "base_revision")):
+        raise EditorError("confirmation", "Подтвердите удаление ревизии")
+    if body["revision"] == body["base_revision"]:
+        raise EditorError("active_revision", "Нельзя удалить активную ревизию", 409)
+    store = _service().store()
+    try:
+        if not store.lock.exists():
+            raise RevisionNotFound()
+        store.delete_revision(body["revision"], body["base_revision"])
+    except RevisionNotFound:
+        raise EditorError("revision_unknown", "Ревизия не найдена", 404) from None
+    return {"deleted": True}
 
 
 @app.route("/api/editor/rollback", methods=["POST"])

@@ -14,6 +14,7 @@ from .editor_migration import _entry_nodes, _mapping, _scalar, block_copy, inlin
 from .editor_documents import DocumentError
 
 STR = "tag:yaml.org,2002:str"
+NODE_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 MAP = "tag:yaml.org,2002:map"
 SEQ = "tag:yaml.org,2002:seq"
 _INVALID_TEXT = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
@@ -157,7 +158,7 @@ def apply(config, changeset, operation, originals):
 
     if origin.file.name == yamlx.SECRETS_NAME:
         raise OperationError("Файл секретов доступен только для чтения")
-    root = yaml.compose(doc.files[origin.file], Loader=yaml.SafeLoader)
+    root = yaml.compose(doc.files[origin.file], Loader=NODE_LOADER)
     node = _node_at(root, origin.physical_path)
     logical = origin.logical_path
     actual = doc.nodes[logical]
@@ -230,7 +231,7 @@ def apply(config, changeset, operation, originals):
     if inline and kind == "add_instance" and reserve_tile_id(counters, stable_id):
         expected["last_tile_ids"] = counters
         config_root = root if origin.file == doc.root else yaml.compose(
-            doc.files[doc.root], Loader=yaml.SafeLoader)
+            doc.files[doc.root], Loader=NODE_LOADER)
         if not isinstance(config_root, MappingNode) or any(k.value == "<<" for k, _ in config_root.value):
             raise OperationError("Счётчик ID требует обычный корневой YAML-словарь", "id")
         config_root.value[:] = [(k, v) for k, v in config_root.value if k.value != "last_tile_ids"]
@@ -240,7 +241,7 @@ def apply(config, changeset, operation, originals):
             files[doc.root.relative_to(doc.root.parent)] = _serialize(config_root)
     if expected != doc.data:
         body = _serialize(block_copy(root, origin.file.parent, origin.file.parent) if inline else root)
-        baseline = _serialize(yaml.compose(original, Loader=yaml.SafeLoader))
+        baseline = _serialize(yaml.compose(original, Loader=NODE_LOADER))
         if body == baseline:
             files.pop(relative, None)
         else:

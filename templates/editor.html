@@ -43,6 +43,7 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
                                    placeholder="Из конфига"></label>
       </div>
       <div id="layout"></div><div id="preview-status" role="status"></div>
+      <button type="button" id="refresh-preview" hidden>Обновить предпросмотр</button>
       <img id="preview-image" alt="SVG панели из черновика" hidden>
     </section>
     <section class="card components">
@@ -71,8 +72,6 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
         <p id="instance-error" role="alert" hidden></p>
         <button type="submit">Сохранить в черновике</button>
         <div class="actions order">
-          <button type="button" id="up">↑ Вверх</button>
-          <button type="button" id="down">↓ Вниз</button>
           <button type="button" id="remove">Удалить</button>
         </div>
         <p id="pad-capability"></p>

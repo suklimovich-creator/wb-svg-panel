@@ -41,3 +41,6 @@ header .error { color: #ffc6bf; }
 
 .layout-grid { display: grid; grid-auto-rows: 2rem; gap: .3rem; margin: .5rem 0 1rem; }
 .layout-grid > div { display: flex; align-items: center; padding: .45rem; border: 1px solid #b9cce1; background: #edf4fc; color: #183553; border-radius: .5rem; overflow: hidden; overflow-wrap: anywhere; }
+
+.instance-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .3rem; }
+.instance-row [data-direction] { min-width: 2.4rem; text-align: center; }

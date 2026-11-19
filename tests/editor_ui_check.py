@@ -168,6 +168,14 @@ def run():
     operation(undone, undone_state, "move_instance", id="first", direction="up")
     assert get(undone + "/diff").get_json()["summary"]["writes"] == 0
 
+    sized, size_state = draft()
+    with patch.object(RevisionStore, "candidate", side_effect=AssertionError("disk staging")), \
+         patch.object(editor_revisions.tempfile, "TemporaryDirectory", side_effect=AssertionError("disk staging")):
+        ack = post(sized + "/operation?result=version", {"draft_version": 0, "operation": {
+            "op": "update_instance", "panel": "room", "section": None, "id": "first", "fields": {"w": 3}}})
+    assert ack == {"draft_version": 1, "checked": False}
+    assert get(sized).json["panels"][0]["sections"][0]["tiles"][0]["w"] == 3
+
     raced, open_state = draft()
 
     def simultaneous(title):
@@ -352,6 +360,19 @@ def run():
                                   "confirm": True})
     assert reverted["source"] == restored["id"] and cfg.get("schema") == 2
     assert inline_published["parent"] == migrated.id
+    delete = {"revision": published["id"], "base_revision": reverted["id"], "confirm": True}
+    post("/revisions/delete", {**delete, "confirm": False}, 400)
+    post("/revisions/delete", {**delete, "revision": reverted["id"]}, 409)
+    post("/revisions/delete", {**delete, "base_revision": restored["id"]}, 409)
+    with patch.object(editor_revisions.shutil, "rmtree", side_effect=OSError("simulated interruption")):
+        post("/revisions/delete", delete, 500)
+    assert store.pending_delete.exists()
+    draft()  # The next locked operation finishes removing the files.
+    assert not store.pending_delete.exists()
+    assert not (store.revisions / published["id"] / "files").exists()
+    remaining = [row["id"] for row in get("/revisions").json["revisions"]]
+    assert published["id"] not in remaining and restored["id"] in remaining
+    post("/rollback", delete, 404)
     print("editor HTTP: операции, SVG, секреты, конфликты, восстановление и история OK")
 
 

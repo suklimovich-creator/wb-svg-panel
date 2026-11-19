@@ -104,9 +104,13 @@ async function editorFlow(browser) {
     await p.selectOption('#elements', 'light');
     await p.click('#add');
     await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 4);
-    const added = await p.locator('#instances li').last().innerText();
-    await p.click('#up');
-    await p.waitForFunction(text => document.querySelectorAll('#instances li')[2].textContent === text, added);
+    const added = await p.locator('#instances li').last().getAttribute('data-instance');
+    await p.locator('#instances li [aria-pressed]').first().click();
+    await p.locator('#instances li').last().locator('[data-direction=up]').click();
+    await p.waitForFunction(text => document.querySelectorAll('#instances li')[2].dataset.instance === text, added);
+    await p.locator('#instances li').nth(2).locator('[data-direction=down]').click();
+    await p.waitForFunction(id => document.querySelectorAll('#instances li')[3].dataset.instance === id, added);
+    ok('редактор: обе стрелки перемещают свою плитку', await p.locator('#instances li').last().locator('[data-direction=down]').isDisabled());
     await p.fill('#width', '1.5');
     await p.fill('#height', '1.5');
     await p.fill('#title', 'Browser LED');
@@ -116,6 +120,12 @@ async function editorFlow(browser) {
       return !img.hidden && img.naturalWidth > 0 && decodeURIComponent(img.src).includes('Browser LED');
     });
     ok('редактор: размеры и название в кандидате', !(await get(base + 'room.svg')).body.includes('Browser LED'));
+    await p.fill('#width', '2');
+    const previousImage = await p.locator('#preview-image').getAttribute('src');
+    await p.locator('#placement button[type=submit]').click();
+    await p.locator('#refresh-preview').waitFor();
+    ok('редактор: размер сохранён без пересборки SVG', previousImage === await p.locator('#preview-image').getAttribute('src'));
+    await p.click('#refresh-preview');
     await p.click('#pad');
     await p.waitForFunction(() => document.getElementById('pad-image').naturalWidth > 0);
     await p.setViewportSize({width: 390, height: 844});
@@ -125,7 +135,7 @@ async function editorFlow(browser) {
         'card sidebar|card preview|card components|card inspector' &&
         sections.every((el, i) => !i || el.offsetTop >= sections[i - 1].offsetTop + sections[i - 1].offsetHeight) &&
         getComputedStyle(document.querySelector('#actions')).position === 'sticky' &&
-        document.documentElement.scrollWidth <= innerWidth && document.querySelector('#up').offsetWidth > 0;
+        document.documentElement.scrollWidth <= innerWidth && document.querySelector('[data-direction=up]').offsetWidth > 0;
     }));
     await p.route('**/publish', async route => {
       const response = await route.fetch();
@@ -144,6 +154,11 @@ async function editorFlow(browser) {
     await other.click('#history');
     await other.getByRole('button', {name: 'Откатить к этой ревизии'}).click();
     await other.waitForFunction(() => document.getElementById('status').textContent.includes('Откат выполнен'));
+    const deletes = other.getByRole('button', {name: 'Удалить ревизию'});
+    await deletes.first().waitFor();
+    const snapshots = await deletes.count();
+    await deletes.first().click();
+    await other.waitForFunction(count => Array.from(document.querySelectorAll('#details button')).filter(b => b.textContent === 'Удалить ревизию').length === count - 1, snapshots);
     await p.click('#check');
     await p.waitForFunction(() => document.getElementById('status').textContent.includes('Активная конфигурация изменилась'));
     ok('редактор: откат и конфликт черновика', !(await get(base + 'room.svg?theme=dark')).body.includes('Browser LED')

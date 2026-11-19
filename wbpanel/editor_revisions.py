@@ -99,6 +99,7 @@ class RevisionStore:
             self.revisions.mkdir(mode=0o700, exist_ok=True)
         self.head = self.directory / "HEAD"
         self.journal = self.directory / "journal.json"
+        self.pending_delete = self.directory / "delete.json"
         self.lock = self.directory / "lock"
         self.key_path = self.directory / "key"
 
@@ -111,6 +112,7 @@ class RevisionStore:
                 _replace(self.key_path, os.urandom(32))
             self._key = self.key_path.read_bytes()
             self._recover()
+            self._finish_deletion()
             yield
 
     @contextmanager
@@ -198,6 +200,8 @@ class RevisionStore:
                 shutil.rmtree(stage)
 
     def _read_snapshot(self, revision, manifest):
+        if manifest.get("deleted"):
+            raise RevisionNotFound()
         directory = self._location(revision) / "files"
         files = {Path(path): (directory / path).read_bytes() for path in manifest["hashes"]}
         if self._hashes(files) != manifest["hashes"]:
@@ -427,8 +431,10 @@ class RevisionStore:
         result = []
         head = self._head()
         while head:
-            revision = Revision(**self._manifest(head)["revision"])
-            result.append(revision)
+            manifest = self._manifest(head)
+            revision = Revision(**manifest["revision"])
+            if not manifest.get("deleted"):
+                result.append(revision)
             head = revision.parent
         return result
 
@@ -437,6 +443,37 @@ class RevisionStore:
             return []
         with (self._reading() if readonly else self._locked()):
             return self._history()
+
+    def delete_revision(self, revision, base_revision):
+        with self._locked():
+            head = self._head()
+            if head != base_revision:
+                raise Conflict("История изменилась")
+            if revision == head:
+                raise DocumentError("Нельзя удалить активную ревизию")
+            if not self._location(revision).is_dir():
+                raise RevisionNotFound()
+            if revision not in {entry.id for entry in self._history()}:
+                raise RevisionNotFound()
+            _replace(self.pending_delete, _json(revision))
+            self._finish_deletion()
+
+    def _finish_deletion(self):
+        if not self.pending_delete.exists():
+            return
+        revision = json.loads(self.pending_delete.read_bytes())
+        if revision == self._head():
+            raise Conflict("Нельзя удалить активную ревизию")
+        directory = self._location(revision)
+        manifest = self._manifest(revision)
+        # Retain the parent link so older snapshots remain reachable.
+        if not manifest.get("deleted"):
+            _replace(directory / "manifest.json",
+                     _json({"revision": manifest["revision"], "deleted": True}), 0o400)
+        if (directory / "files").exists():
+            shutil.rmtree(directory / "files")
+        _sync_dir(directory)
+        _replace(self.pending_delete, None)
 
     def rollback(self, revision, *, managed=False, base_revision=None):
         with self._locked():

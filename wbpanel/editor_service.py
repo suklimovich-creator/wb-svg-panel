@@ -15,8 +15,8 @@ import yaml
 from . import palette, yamlx
 from .assemble import _from_names
 from .config import Config
-from .editor_documents import DocumentError, _Loader
-from .editor_model import PLACEMENT, placement_id
+from .editor_documents import DocumentError, Documents, _Loader
+from .editor_model import PLACEMENT, placement_id, resolve
 from .editor_operations import OperationError, apply, list_at, validate
 from .editor_revisions import Conflict, LegacyConfiguration, RevisionNotFound, RevisionStore, ValidationError
 from .registry import has_pad, resolve_type
@@ -119,6 +119,7 @@ class Session:
     candidate: object = field(default=None, repr=False)
     preview_verified: bool = False
     version: int = 0
+    baseline: object = field(default=None, repr=False)
     summary: dict = field(default_factory=dict)
     checked: int = -1
     closed: bool = False
@@ -156,7 +157,7 @@ class EditorService:
         except LegacyConfiguration as exc:
             raise EditorError("legacy", str(exc), 409) from None
         key = secrets.token_urlsafe(24)
-        session = Session(draft, candidate=candidate)
+        session = Session(draft, candidate=candidate, baseline=candidate)
         session.summary = draft.changeset.summary(candidate, candidate)
         result = self._model(key, session, candidate)
         with self.mutex:
@@ -262,7 +263,7 @@ class EditorService:
             raise EditorError("draft_version", "Версия черновика изменилась", 409,
                               current=self._model(key, session, candidate))
 
-    def operation(self, key, version, operation):
+    def operation(self, key, version, operation, *, compact=False):
         session = self.get(key)
         with session.mutex:
             candidate, _summary = self._candidate(session)
@@ -271,13 +272,30 @@ class EditorService:
             try:
                 validate(operation)
                 policy.check_values(operation)
+                dimensions_only = (operation["op"] == "update_instance"
+                                   and operation["fields"].keys() <= {"w", "h"})
+                brief = compact and dimensions_only
                 changeset, expected, event, path, original = apply(
                     candidate, session.draft.changeset, operation, session.originals)
                 if changeset._files == session.draft.changeset._files:
+                    if brief:
+                        return {"draft_version": version, "checked": session.checked == version}
                     return self._model(key, session, candidate)
                 draft = replace(session.draft, changeset=changeset)
                 try:
-                    updated, summary = self.store().candidate(draft, verify=False)
+                    baseline = session.baseline
+                    files = baseline.documents.files.copy()
+                    for relative, data in changeset._files.items():
+                        target = baseline.documents.root.parent / relative
+                        if data is None:
+                            files.pop(target, None)
+                        else:
+                            files[target] = data
+                    updated = copy(baseline)
+                    updated.documents = Documents(baseline.path, strict=True, confined=True, snapshot=files)
+                    updated.data, updated.origins = resolve(updated.documents)
+                    updated._channels_cache = None
+                    summary = changeset.summary(baseline, updated)
                 except Conflict:
                     raise
                 except DocumentError:
@@ -285,7 +303,8 @@ class EditorService:
                 if updated.documents.data != expected:
                     raise OperationError("Ссылка или YAML alias затрагивает другие объекты")
                 staged = replace(session, draft=draft, version=session.version + 1)
-                result = self._model(key, staged, updated)
+                result = ({"draft_version": staged.version, "checked": False} if brief
+                          else self._model(key, staged, updated))
             except OperationError as exc:
                 supplied = operation if isinstance(operation, dict) else {}
                 details = {k: supplied[k] for k in ("panel", "id") if k in supplied
@@ -293,7 +312,7 @@ class EditorService:
                 raise EditorError("operation", str(exc), field=exc.field, **details) from None
             session.summary = summary
             session.candidate = updated
-            session.preview_verified = False
+            session.preview_verified = session.preview_verified and dimensions_only
             session.draft = draft
             session.version = staged.version
             if path in changeset._files:

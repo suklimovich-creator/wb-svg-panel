@@ -50,7 +50,13 @@
             var result = xhr.responseText;
             if ((xhr.getResponseHeader('Content-Type') || '').indexOf('image/svg+xml') < 0) {
                 try { result = JSON.parse(result); }
-                catch (err) { result = {}; }
+                catch (err) {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        done({message: 'Сервер вернул неожиданный ответ.'});
+                        return;
+                    }
+                    result = {};
+                }
             }
             if (xhr.status >= 200 && xhr.status < 300) {
                 done(null, result);
@@ -374,12 +380,12 @@
         });
     }
 
-    function newDraft() {
+    function newDraft(published) {
         if (busy) { return; }
         var retry = byId('retry-start');
         function showRetry() { retry.hidden = false; }
         retry.hidden = true;
-        status('Создаётся черновик текущей конфигурации…');
+        status(published === true ? 'Опубликовано. Открывается следующий черновик…' : 'Создаётся черновик текущей конфигурации…');
         empty('details').hidden = true;
         run('POST', 'drafts', {}, function (result) {
             model = result;
@@ -388,13 +394,17 @@
             byId('legacy').hidden = true;
             byId('actions').hidden = false;
             showModel();
+            if (published === true) { status('Опубликовано. Можно продолжать редактирование в новом черновике.'); }
         }, function (error) {
             if (error.code === 'legacy') {
                 byId('legacy').hidden = false;
                 byId('actions').hidden = true;
                 byId('workspace').hidden = true;
                 status('Редактор станет доступен после миграции YAML.');
-            } else { showRetry(); }
+            } else {
+                if (published === true) { status('Опубликовано. Новый черновик открыть не удалось. ' + error.message, true); }
+                showRetry();
+            }
         });
     }
 
@@ -501,9 +511,29 @@
         function confirmPublish() {
             if (!window.confirm('Применить проверенные изменения на рабочих панелях?')) { progress(); return; }
             status('Публикация изменений…');
-            run('POST', draftPath('/publish'), {draft_version: model.draft_version}, function (revision) {
+            previewToken += 1;
+            function continueEditing(revision) {
                 empty('details').hidden = true;
                 receivedRevision(revision, 'Опубликовано');
+                newDraft(true);
+            }
+            var receipt = draftPath('/publication');
+            run('POST', draftPath('/publish'), {draft_version: model.draft_version}, continueEditing, function (error) {
+                if (error.code && error.code !== 'editor_failure') { return; }
+                status('Ответ о публикации не получен. Проверяется результат…');
+                busy = true;
+                function checkResult() {
+                    request('GET', receipt, null, function (problem, result) {
+                        if (!problem && result.pending) {
+                            window.setTimeout(checkResult, 1500);
+                            return;
+                        }
+                        busy = false;
+                        if (!problem && result.revision) { continueEditing(result.revision); }
+                        else { status('Публикация не подтверждена. Откройте историю и проверьте рабочую панель.', true); }
+                    });
+                }
+                checkResult();
             });
         }
         if (model.checked) { confirmPublish(); return; }

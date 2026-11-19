@@ -20,13 +20,13 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <p>Если проверка прошла, примените изменения и обновите эту страницу.</p>
       <pre><code>python3 -m wbpanel.editor_cli migrate --apply</code></pre>
     </div>
+  </header>
     <div id="actions" class="actions" hidden>
       <button id="restart">Новый черновик</button>
       <button id="check">Проверить и показать изменения</button>
       <button id="publish" disabled>Опубликовать</button>
       <button id="history">История</button>
     </div>
-  </header>
   <section id="details" class="card details" hidden aria-label="Проверка и история"></section>
   <main id="workspace" hidden>
     <section class="card sidebar">
@@ -34,15 +34,6 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <label for="panels">Выбор панели</label><select id="panels"></select>
       <label for="sections">Раздел</label><select id="sections"></select>
       <div id="sources"></div>
-      <h3>Плитки этого раздела</h3><ol id="instances" aria-label="Порядок экземпляров"></ol>
-      <div id="library">
-        <h2 id="library-title">Библиотека</h2>
-        <label for="search">Поиск по названию, ID или типу</label>
-        <input id="search" type="search" autocomplete="off">
-        <label for="elements">Элемент</label><select id="elements"></select>
-        <div id="custom-id" hidden><label for="new-id">ID новой плитки (необязательно)</label><input id="new-id" maxlength="64" placeholder="Автоматически"></div>
-        <button id="add">Добавить на панель</button>
-      </div>
     </section>
     <section class="card preview">
       <h2>Предпросмотр панели</h2>
@@ -54,9 +45,20 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <div id="layout"></div><div id="preview-status" role="status"></div>
       <img id="preview-image" alt="SVG панели из черновика" hidden>
     </section>
+    <section class="card components">
+      <h3>Плитки этого раздела</h3><ol id="instances" aria-label="Порядок экземпляров"></ol>
+      <div id="library">
+        <h2 id="library-title">Библиотека</h2>
+        <label for="search">Поиск по названию, ID или типу</label>
+        <input id="search" type="search" autocomplete="off">
+        <label for="elements">Элемент</label><select id="elements"></select>
+        <div id="custom-id" hidden><label for="new-id">ID новой плитки (необязательно)</label><input id="new-id" maxlength="64" placeholder="Автоматически"></div>
+        <button id="add">Добавить на панель</button>
+      </div>
+    </section>
     <section class="card inspector">
       <h2>Настройки плитки</h2>
-      <p id="selection-empty">Выберите плитку слева, чтобы изменить её размер или название.</p>
+      <p id="selection-empty">Выберите плитку в списке, чтобы изменить её размер или название.</p>
       <form id="placement" hidden>
         <p id="identity"></p>
         <div class="sizes">

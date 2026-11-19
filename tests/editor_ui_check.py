@@ -270,7 +270,9 @@ def run():
     assert all(p.read_bytes() == content for p, content in expected_files.items())
     assert store.head.read_text() == state["base_revision"] and not store.journal.exists()
 
+    assert get(first + "/publication").get_json() == {"revision": None}
     published = post(first + "/publish", {"draft_version": state["draft_version"]})
+    assert get(first + "/publication").get_json() == {"revision": published}
     assert "Новая плитка" in client.get("/room.svg").get_data(as_text=True)
     assert cfg.tile_origin("first").logical_path[-1] == 1
     assert cfg.tile_origin("first").file == physical

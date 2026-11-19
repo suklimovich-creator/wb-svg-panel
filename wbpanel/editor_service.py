@@ -16,9 +16,9 @@ from . import palette, yamlx
 from .assemble import _from_names
 from .config import Config
 from .editor_documents import DocumentError, _Loader
-from .editor_model import MANAGED_SCHEMAS, PLACEMENT, placement_id
+from .editor_model import PLACEMENT, placement_id
 from .editor_operations import OperationError, apply, list_at, validate
-from .editor_revisions import Conflict, RevisionNotFound, RevisionStore, ValidationError
+from .editor_revisions import Conflict, LegacyConfiguration, RevisionNotFound, RevisionStore, ValidationError
 from .registry import has_pad, resolve_type
 
 
@@ -119,6 +119,7 @@ class Session:
     candidate: object = field(default=None, repr=False)
     preview_verified: bool = False
     version: int = 0
+    summary: dict = field(default_factory=dict)
     checked: int = -1
     closed: bool = False
     events: list = field(default_factory=list)
@@ -131,6 +132,7 @@ class EditorService:
     def __init__(self, path):
         self.path = path
         self.sessions = {}
+        self.published = {}
         self.mutex = threading.Lock()
 
     def store(self, *, create=False):
@@ -148,17 +150,19 @@ class EditorService:
                     session.mutex.release()
 
     def create(self):
-        if self.active().get("schema") not in MANAGED_SCHEMAS:
-            raise EditorError("legacy", "Сначала выполните явную миграцию через editor_cli", 409)
+        store = self.store(create=True)
+        try:
+            candidate, draft = store.draft_with_config(managed=True)
+        except LegacyConfiguration as exc:
+            raise EditorError("legacy", str(exc), 409) from None
+        key = secrets.token_urlsafe(24)
+        session = Session(draft, candidate=candidate)
+        session.summary = draft.changeset.summary(candidate, candidate)
+        result = self._model(key, session, candidate)
         with self.mutex:
             self._expire(time.monotonic())
             if len(self.sessions) >= 128:
                 raise EditorError("draft_limit", "Достигнут предел открытых черновиков", 429)
-            store = self.store(create=True)
-            candidate, draft = store.draft_with_config(managed=True)
-            key = secrets.token_urlsafe(24)
-            session = Session(draft, candidate=candidate)
-            result = self._model(key, session, candidate)
             self.sessions[key] = session
             return result
 
@@ -176,7 +180,8 @@ class EditorService:
         if session.closed:
             raise EditorError("draft_closed", "Черновик уже опубликован", 409,
                               draft_version=session.version)
-        return self.store().candidate(session.draft, verify=False)
+        self.store().verify_preview_base(session.draft, session.candidate.documents)
+        return session.candidate, session.summary
 
     def _model(self, key, session, candidate):
         from .state import state
@@ -272,7 +277,7 @@ class EditorService:
                     return self._model(key, session, candidate)
                 draft = replace(session.draft, changeset=changeset)
                 try:
-                    updated, _summary = self.store().candidate(draft, verify=False)
+                    updated, summary = self.store().candidate(draft, verify=False)
                 except Conflict:
                     raise
                 except DocumentError:
@@ -286,6 +291,7 @@ class EditorService:
                 details = {k: supplied[k] for k in ("panel", "id") if k in supplied
                            and isinstance(supplied[k], str) and not policy.contains(supplied[k])}
                 raise EditorError("operation", str(exc), field=exc.field, **details) from None
+            session.summary = summary
             session.candidate = updated
             session.preview_verified = False
             session.draft = draft
@@ -316,7 +322,8 @@ class EditorService:
         with session.mutex:
             candidate, summary = self._candidate(session)
             policy = SecretPolicy(candidate)
-            self._verify(candidate, policy)
+            if session.checked != session.version:
+                self._verify(candidate, policy)
             operations = [dict(event) for event in session.events]
             for event in operations:
                 if policy.contains(event["file"]):
@@ -353,8 +360,26 @@ class EditorService:
             session.closed = True
             session.version += 1
             with self.mutex:
+                self.published[key] = asdict(revision)
+                if len(self.published) > 128:
+                    del self.published[next(iter(self.published))]
                 self.sessions.pop(key, None)
             return asdict(revision)
+
+    def publication_status(self, key):
+        with self.mutex:
+            if key in self.published:
+                return {"revision": self.published[key]}
+            session = self.sessions.get(key)
+        if session is None:
+            raise EditorError("draft_unknown", "Результат недоступен. Проверьте историю ревизий.", 404)
+        if not session.mutex.acquire(blocking=False):
+            return {"pending": True}
+        try:
+            with self.mutex:
+                return {"revision": self.published.get(key)}
+        finally:
+            session.mutex.release()
 
     def history(self):
         return [asdict(revision) for revision in self.store().history(readonly=True)]

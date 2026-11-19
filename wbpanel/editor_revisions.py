@@ -26,6 +26,10 @@ class Conflict(DocumentError):
     """The draft is based on a different active revision or file state."""
 
 
+class LegacyConfiguration(DocumentError):
+    pass
+
+
 class ValidationError(DocumentError):
     def __init__(self, count, origins):
         super().__init__("Конфигурация не прошла проверку: ошибок %d" % count)
@@ -200,10 +204,12 @@ class RevisionStore:
             raise DocumentError("Нарушена целостность снимка")
         return files
 
-    def _baseline(self):
+    def _baseline(self, *, managed=False):
         head = self._head()
         known = self._manifest(head)["hashes"] if head else {}
         config, files = self._active(known)
+        if managed and config.get("schema") not in MANAGED_SCHEMAS:
+            raise LegacyConfiguration("Сначала выполните явную миграцию")
         hashes = self._hashes(files)
         if head is None or known != hashes:
             legacy = "schema" not in config.data
@@ -217,9 +223,7 @@ class RevisionStore:
 
     def draft_with_config(self, *, managed=False):
         with self._locked():
-            if managed and self._load(self.path).get("schema") not in MANAGED_SCHEMAS:
-                raise DocumentError("Сначала выполните явную миграцию")
-            return self._baseline()
+            return self._baseline(managed=managed)
 
     def draft(self, *, managed=False):
         return self.draft_with_config(managed=managed)[1]
@@ -300,19 +304,22 @@ class RevisionStore:
     def verify_preview_base(self, draft, docs):
         """Detect external edits without parsing YAML or staging a candidate."""
         with self._reading():
-            if self._head() != draft.base_revision:
-                raise Conflict("Активная ревизия изменилась")
-            try:
-                secret_paths = docs.secret_files | {docs.root.parent / yamlx.SECRETS_NAME}
-                for path in secret_paths:
-                    relative = path.relative_to(docs.root.parent)
-                    if str(relative) not in draft._base_hashes and self._target(relative).exists():
-                        raise Conflict("Набор файлов конфигурации изменился")
-                for name, digest in draft._base_hashes.items():
-                    if self._hash(self._target(Path(name)).read_bytes()) != digest:
-                        raise Conflict("Файлы изменились после создания черновика")
-            except (DocumentError, OSError):
-                raise Conflict("Активная конфигурация изменилась") from None
+            self._check_files(draft, docs)
+
+    def _check_files(self, draft, docs):
+        if self._head() != draft.base_revision:
+            raise Conflict("Активная ревизия изменилась")
+        try:
+            secret_paths = docs.secret_files | {docs.root.parent / yamlx.SECRETS_NAME}
+            for path in secret_paths:
+                relative = path.relative_to(docs.root.parent)
+                if str(relative) not in draft._base_hashes and self._target(relative).exists():
+                    raise Conflict("Набор файлов конфигурации изменился")
+            for name, digest in draft._base_hashes.items():
+                if self._hash(self._target(Path(name)).read_bytes()) != digest:
+                    raise Conflict("Файлы изменились после создания черновика")
+        except (DocumentError, OSError):
+            raise Conflict("Активная конфигурация изменилась") from None
 
     def candidate(self, draft, *, verify=True):
         """Read the candidate without recovering, publishing or writing history."""
@@ -382,7 +389,7 @@ class RevisionStore:
                     summary["tile_ids"] = id_changes(old, candidate)
                 return summary
 
-            check_base()
+            self._check_files(draft, old.documents)
             modes = self._modes(active)
             if draft._restore:
                 modes.update(self._manifest(source)["modes"])

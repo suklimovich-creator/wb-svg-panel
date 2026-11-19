@@ -7,7 +7,7 @@ header h1 { margin: .4rem 0; font-size: 1.65rem; }
 header a { color: #b9deff; }
 header pre { overflow-x: auto; }
 header p { overflow-wrap: anywhere; margin: .4rem 0 .8rem; }
-main { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(15rem, 2.5fr) minmax(15rem, 1fr); gap: 1rem; padding: 1rem; align-items: start; }
+main { display: grid; max-width: 70rem; margin: auto; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; align-items: start; }
 .card { background: #fff; border: 1px solid #d7e0ed; border-radius: .9rem; padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
 .details { margin: 1rem; }
 h2 { margin: 0 0 .7rem; font-size: 1.15rem; }
@@ -33,13 +33,10 @@ li.invalid button { border-color: #a32720; color: #a32720; }
 .muted { font-size: .86rem; color: #4e6076; }
 .error, #instance-error { color: #a32720; }
 header .error { color: #ffc6bf; }
-@media (max-width: 860px) {
-  main { grid-template-columns: minmax(12rem, 1fr) minmax(15rem, 1.7fr); }
-  .preview { grid-column: 2; grid-row: span 2; }
-}
-@media (max-width: 545px) {
-  main { grid-template-columns: 1fr; }
-  .preview { grid-column: 1; grid-row: auto; }
+#actions { position: sticky; top: 0; z-index: 2; background: #142640; padding: .5rem clamp(1rem, 3vw, 2.5rem); }
+@media (max-width: 680px) {
+  #actions { gap: .3rem; padding: .4rem; }
+  #actions button { font-size: .86rem; }
 }
 
 .layout-grid { display: grid; grid-auto-rows: 2rem; gap: .3rem; margin: .5rem 0 1rem; }

@@ -119,14 +119,25 @@ async function editorFlow(browser) {
     await p.click('#pad');
     await p.waitForFunction(() => document.getElementById('pad-image').naturalWidth > 0);
     await p.setViewportSize({width: 390, height: 844});
-    ok('редактор: управление в узком окне', await p.evaluate(() =>
-      document.documentElement.scrollWidth <= innerWidth &&
-      document.querySelector('#up').getBoundingClientRect().width > 0));
+    ok('редактор: порядок разделов и закреплённые действия в узком окне', await p.evaluate(() => {
+      const sections = Array.from(document.querySelectorAll('main > section'));
+      return sections.map(el => el.className).join('|') ===
+        'card sidebar|card preview|card components|card inspector' &&
+        sections.every((el, i) => !i || el.offsetTop >= sections[i - 1].offsetTop + sections[i - 1].offsetHeight) &&
+        getComputedStyle(document.querySelector('#actions')).position === 'sticky' &&
+        document.documentElement.scrollWidth <= innerWidth && document.querySelector('#up').offsetWidth > 0;
+    }));
+    await p.route('**/publish', async route => {
+      const response = await route.fetch();
+      if (response.status() !== 200) throw new Error('Публикация: HTTP ' + response.status());
+      await route.abort('failed');
+    });
     await p.click('#publish');
     await p.waitForFunction(() => document.getElementById('status').textContent.includes('Опубликовано'));
     ok('редактор: публикация', (await get(base + 'room.svg?theme=dark')).body.includes('Browser LED'));
-    await p.click('#restart');
-    await p.locator('#workspace').waitFor();
+    await p.waitForFunction(() => document.getElementById('status').textContent.includes('Можно продолжать'));
+    ok('редактор: продолжение после потери ответа', await p.locator('#panels').inputValue() === 'room'
+       && await p.locator('#publish').isDisabled());
     const other = await context.newPage();
     other.on('dialog', dialog => dialog.accept());
     await other.goto(base + 'editor/room');

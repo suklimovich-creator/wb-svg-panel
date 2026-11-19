@@ -277,6 +277,12 @@ def editor_publish(draft_id):
     return revision
 
 
+@app.route("/api/editor/drafts/<draft_id>/publication")
+@_route
+def editor_publication_status(draft_id):
+    return _service().publication_status(draft_id)
+
+
 @app.route("/api/editor/revisions")
 @_route
 def editor_history():

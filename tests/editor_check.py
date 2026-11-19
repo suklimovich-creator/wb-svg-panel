@@ -211,7 +211,7 @@ def main(root):
 
     with patch.object(store, "_active", wraps=store._active) as active:
         subsequent = store.publish(draft)
-        assert active.call_count == 3
+        assert active.call_count == 2  # До записи и после неё. Перед заменой сверяются байты.
     current.reload()
     assert [tile["w"] for tile in current.all_tiles()] == [1, 1]
     expect(Conflict, lambda: store.publish(draft))

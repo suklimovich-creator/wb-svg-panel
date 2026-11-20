@@ -33,18 +33,8 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <h2>Панель</h2>
       <label for="panels">Выбор панели</label><select id="panels"></select>
       <label for="sections">Раздел</label><select id="sections"></select>
+      <div class="actions order"><button id="panel-settings" type="button">Настройки панели</button><button id="section-settings" type="button" hidden>Настройки раздела</button></div>
       <div id="sources"></div>
-    </section>
-    <section class="card preview">
-      <h2>Предпросмотр панели</h2>
-      <div class="actions preview-controls">
-        <label>Тема <select id="theme"></select></label>
-        <label>Колонки <input id="cols" type="number" min="1" max="12" step="1"
-                                   placeholder="Из конфига"></label>
-      </div>
-      <div id="layout"></div><div id="preview-status" role="status"></div>
-      <button type="button" id="refresh-preview" hidden>Обновить предпросмотр</button>
-      <img id="preview-image" alt="SVG панели из черновика" hidden>
     </section>
     <section class="card components">
       <h3>Плитки этого раздела</h3><ol id="instances" aria-label="Порядок экземпляров"></ol>
@@ -57,8 +47,21 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
         <button id="add">Добавить на панель</button>
       </div>
     </section>
-    <section class="card inspector">
-      <h2>Настройки плитки</h2>
+    <section class="card preview">
+      <h2>Предпросмотр панели</h2>
+      <div class="actions preview-controls">
+        <label>Тема <select id="theme"></select></label>
+        <label>Колонки <input id="cols" type="number" min="1" max="12" step="1"
+                                   placeholder="Из конфига"></label>
+      </div>
+      <div id="layout"></div><div id="preview-status" role="status"></div>
+      <button type="button" id="refresh-preview" hidden>Обновить предпросмотр</button>
+      <img id="preview-image" alt="SVG панели из черновика" hidden>
+    </section>
+    <section class="card inspector" id="inspector" aria-labelledby="inspector-title" tabindex="-1">
+      <div class="inspector-heading"><h2 id="inspector-title">Настройки плитки</h2><button id="close-inspector" type="button" aria-label="Закрыть настройки">✕</button></div>
+      <p id="edit-status" role="status" aria-live="polite"></p>
+      <form id="settings-form" hidden></form>
       <p id="selection-empty">Выберите плитку в списке, чтобы изменить её размер или название.</p>
       <form id="placement" hidden>
         <p id="identity"></p>
@@ -81,6 +84,7 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       </form>
     </section>
   </main>
+  <div id="inspector-backdrop" hidden></div>
   <script src="{{ root }}static/js/editor.js?v={{ version }}"></script>
 </body>
 </html>

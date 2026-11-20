@@ -238,7 +238,8 @@ def editor_model(draft_id):
 def editor_operation(draft_id):
     body = _payload({"draft_version", "operation"})
     return _service().operation(draft_id, _version(body["draft_version"]), body["operation"],
-                                compact=request.args.get("result") == "version")
+                                compact=request.args.get("result") == "version",
+                                panel_only=request.args.get("result") == "panel")
 
 
 @app.route("/api/editor/drafts/<draft_id>/diff")

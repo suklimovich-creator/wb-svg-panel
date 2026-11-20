@@ -19,6 +19,7 @@ from .editor_documents import DocumentError, Documents, _Loader
 from .editor_model import PLACEMENT, placement_id, resolve
 from .editor_operations import OperationError, apply, list_at, validate
 from .editor_revisions import Conflict, LegacyConfiguration, RevisionNotFound, RevisionStore, ValidationError
+from .editor_settings import settings_model, SECTION_FIELDS
 from .registry import has_pad, resolve_type
 
 
@@ -120,7 +121,8 @@ class Session:
     preview_verified: bool = False
     version: int = 0
     baseline: object = field(default=None, repr=False)
-    summary: dict = field(default_factory=dict)
+    summary: object = None
+    policy: object = field(default=None, repr=False)
     checked: int = -1
     closed: bool = False
     events: list = field(default_factory=list)
@@ -157,8 +159,7 @@ class EditorService:
         except LegacyConfiguration as exc:
             raise EditorError("legacy", str(exc), 409) from None
         key = secrets.token_urlsafe(24)
-        session = Session(draft, candidate=candidate, baseline=candidate)
-        session.summary = draft.changeset.summary(candidate, candidate)
+        session = Session(draft, candidate=candidate, baseline=candidate, policy=SecretPolicy(candidate))
         result = self._model(key, session, candidate)
         with self.mutex:
             self._expire(time.monotonic())
@@ -184,15 +185,15 @@ class EditorService:
         self.store().verify_preview_base(session.draft, session.candidate.documents)
         return session.candidate, session.summary
 
-    def _model(self, key, session, candidate):
+    def _model(self, key, session, candidate, panel_id=None):
         from .state import state
 
         docs = candidate.documents
-        policy = SecretPolicy(candidate)
+        policy = session.policy
         elements = docs.data.get("elements", {})
         inline = candidate.get("schema") == 3
         library = {}
-        for name, value in elements.items():
+        for name, value in (elements.items() if panel_id is None else []):
             kind = resolve_type(value, state)
             library[name] = {"id": name, "type": kind, "pad": has_pad(kind),
                              "title": policy.label(value.get("title") or name)}
@@ -202,6 +203,8 @@ class EditorService:
                     library[name][field] = size
         panels = []
         for name, panel in docs.data["panels"].items():
+            if panel_id is not None and name != panel_id:
+                continue
             sections = []
 
             def instances(tiles):
@@ -236,15 +239,26 @@ class EditorService:
                 sections.append({"section": index,
                                  "title": policy.label(section.get("title") or "Раздел"),
                                  "readonly": readonly, "sources": sources,
-                                 "tiles": [] if readonly else instances(section["tiles"])})
+                                 "tiles": [] if readonly else instances(section["tiles"]),
+                                 "settings": {k: section[k] for k in SECTION_FIELDS if k in section}})
             panel_cols = panel.get("cols", 4)
             panels.append({"id": name, "title": policy.label(panel.get("title") or name),
-                           "sections": sections})
+                           "sections": sections, "settings": settings_model(panel)})
             if type(panel_cols) is int and 1 <= panel_cols <= 12 and not policy.contains(str(panel_cols)):
                 panels[-1]["cols"] = panel_cols
+        def redact(value):
+            if isinstance(value, dict):
+                return {k: redact(v) for k, v in value.items()}
+            return policy.label(value, None)
+
+        for entry in panels:
+            entry["settings"] = redact(entry["settings"])
+            for part in entry["sections"]:
+                if "settings" in part:
+                    part["settings"] = redact(part["settings"])
         body = {"draft_id": key, "base_revision": session.draft.base_revision,
                 "draft_version": session.version, "checked": session.checked == session.version,
-                "panels": panels, "library": list(library.values()), "themes": palette.names()}
+                "panels": panels, "library": list(library.values()), "themes": palette.names() if panel_id is None else []}
         if inline:
             body["inline_tiles"] = True
         policy.check_values(panels)
@@ -263,15 +277,15 @@ class EditorService:
             raise EditorError("draft_version", "Версия черновика изменилась", 409,
                               current=self._model(key, session, candidate))
 
-    def operation(self, key, version, operation, *, compact=False):
+    def operation(self, key, version, operation, *, compact=False, panel_only=False):
         session = self.get(key)
         with session.mutex:
             candidate, _summary = self._candidate(session)
             self._expect(key, session, version, candidate)
-            policy = SecretPolicy(candidate)
+            policy = session.policy
             try:
                 validate(operation)
-                policy.check_values(operation)
+                policy.check_values({k: v for k, v in operation.items() if k not in ("op", "direction")})
                 dimensions_only = (operation["op"] == "update_instance"
                                    and operation["fields"].keys() <= {"w", "h"})
                 brief = compact and dimensions_only
@@ -280,7 +294,8 @@ class EditorService:
                 if changeset._files == session.draft.changeset._files:
                     if brief:
                         return {"draft_version": version, "checked": session.checked == version}
-                    return self._model(key, session, candidate)
+                    return self._model(key, session, candidate,
+                                       panel_id=operation["panel"] if panel_only else None)
                 draft = replace(session.draft, changeset=changeset)
                 try:
                     baseline = session.baseline
@@ -295,7 +310,6 @@ class EditorService:
                     updated.documents = Documents(baseline.path, strict=True, confined=True, snapshot=files)
                     updated.data, updated.origins = resolve(updated.documents)
                     updated._channels_cache = None
-                    summary = changeset.summary(baseline, updated)
                 except Conflict:
                     raise
                 except DocumentError:
@@ -304,13 +318,14 @@ class EditorService:
                     raise OperationError("Ссылка или YAML alias затрагивает другие объекты")
                 staged = replace(session, draft=draft, version=session.version + 1)
                 result = ({"draft_version": staged.version, "checked": False} if brief
-                          else self._model(key, staged, updated))
+                          else self._model(key, staged, updated,
+                                           panel_id=operation["panel"] if panel_only else None))
             except OperationError as exc:
                 supplied = operation if isinstance(operation, dict) else {}
                 details = {k: supplied[k] for k in ("panel", "id") if k in supplied
                            and isinstance(supplied[k], str) and not policy.contains(supplied[k])}
                 raise EditorError("operation", str(exc), field=exc.field, **details) from None
-            session.summary = summary
+            session.summary = None
             session.candidate = updated
             session.preview_verified = session.preview_verified and dimensions_only
             session.draft = draft
@@ -340,7 +355,10 @@ class EditorService:
         session = self.get(key)
         with session.mutex:
             candidate, summary = self._candidate(session)
-            policy = SecretPolicy(candidate)
+            if summary is None:
+                summary = session.draft.changeset.summary(session.baseline, candidate)
+                session.summary = summary
+            policy = session.policy
             if session.checked != session.version:
                 self._verify(candidate, policy)
             operations = [dict(event) for event in session.events]
@@ -349,7 +367,8 @@ class EditorService:
                     event.pop("file")
             body = {"summary": summary, "operations": operations,
                     "draft_version": session.version, "base_revision": session.draft.base_revision}
-            policy.check_values(body["operations"])
+            policy.check_values([{k: v for k, v in event.items() if k not in ("op", "fields")}
+                                 for event in operations])
             session.checked = session.version
             return body
 
@@ -362,7 +381,7 @@ class EditorService:
             candidate = session.candidate
             if draft_version is not None:
                 self._expect(key, session, draft_version, candidate)
-            policy = SecretPolicy(candidate)
+            policy = session.policy
             if not session.preview_verified:
                 self._verify(candidate, policy, verify_screens=False)
                 session.preview_verified = True

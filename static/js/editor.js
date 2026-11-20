@@ -4,8 +4,10 @@
     var api = root + 'api/editor/';
     var model, panel, section, selected, busy, padOpen;
     var previewToken = 0;
-    var previewPending = 0;
-    var previewStopped = false;
+    var previewRequest, padRequest, padToken = 0;
+    var libraryIndex = {};
+    var inspectorMode = "tile", returnFocus, savedScroll = 0;
+    var mobile = window.matchMedia("(max-width: 760px)");
     var issue;
     var initialPanel = '';
     if (root === '../') {
@@ -14,7 +16,8 @@
     }
     var operationNames = {
         add_instance: 'Добавлен', remove_instance: 'Удалён',
-        move_instance: 'Перемещён', update_instance: 'Изменён'
+        move_instance: 'Перемещён', update_instance: 'Изменён',
+        update_panel: 'Настройки панели', update_section: 'Настройки раздела'
     };
 
     function byId(id) { return document.getElementById(id); }
@@ -69,6 +72,7 @@
         xhr.onerror = function () { done({message: 'Связь с редактором прервалась.'}); };
         xhr.ontimeout = function () { done({message: 'За 25 секунд браузер не получил ответ.'}); };
         xhr.send(data ? JSON.stringify(data) : null);
+        return xhr;
     }
 
     function draftPath(suffix) {
@@ -79,6 +83,8 @@
         var target = byId('status');
         target.className = failed ? 'error' : '';
         target.textContent = text;
+        byId('edit-status').textContent = text;
+        byId('edit-status').className = failed ? 'error' : '';
     }
 
     function errorMessage(error) {
@@ -131,7 +137,7 @@
     }
 
     function libraryItem(id) {
-        return model.library.filter(function (item) { return item.id === id; })[0];
+        return libraryIndex[id];
     }
 
     function label(item) { return item.title + ' · ' + item.id + ' · ' + item.type; }
@@ -163,6 +169,8 @@
     }
 
     function showModel() {
+        libraryIndex = Object.create(null);
+        model.library.forEach(function (item) { libraryIndex[item.id] = item; });
         var menu = empty('panels');
         model.panels.forEach(function (item) { option(menu, item.id, item.title + ' · ' + item.id); });
         if (model.panels.some(function (item) { return item.id === panel; })) {
@@ -198,7 +206,8 @@
     function showSection() {
         var current = selectedSection();
         var sources = empty('sources');
-        var instances = empty('instances');
+        empty('instances');
+        byId('section-settings').hidden = !current || current.section == null || !current.settings;
         byId('library').hidden = !current || current.readonly;
         if (current) {
             section = current.section;
@@ -211,6 +220,9 @@
                 a.href = root + 'editor/' + encodeURIComponent(name);
                 a.onclick = function (event) {
                     event.preventDefault();
+                    if (busy || !leaveEdits()) { return; }
+                    closeInspector(true); inspectorMode = 'tile';
+                    byId('preview-image').hidden = true;
                     byId('panels').value = name;
                     panel = name;
                     selected = null;
@@ -223,41 +235,7 @@
             if (current.readonly && !sources.childNodes.length) {
                 sources.appendChild(node('p', 'Раздел доступен только для чтения.'));
             }
-            current.tiles.forEach(function (tile, index) {
-                var li = node('li', '');
-                var button = node('button', (tile.title || (tile.element ? libraryItem(tile.element).title : tile.type)) + ' · ' + (tile.implicit_id ? tile.element : tile.id));
-                button.setAttribute('aria-pressed', String(selected === tile.id));
-                button.onclick = function () {
-                    selected = tile.id;
-                    padOpen = false;
-                    var buttons = instances.querySelectorAll('[aria-pressed]');
-                    for (var i = 0; i < buttons.length; i++) {
-                        buttons[i].setAttribute('aria-pressed', String(buttons[i] === button));
-                    }
-                    showInstance();
-                    markIssue(issue);
-                };
-                li.setAttribute('data-instance', tile.id);
-                var row = node('div', '');
-                row.className = 'instance-row';
-                row.appendChild(button);
-                ['up', 'down'].forEach(function (direction) {
-                    var up = direction === 'up';
-                    var arrow = node('button', up ? '↑' : '↓');
-                    arrow.type = 'button';
-                    arrow.setAttribute('data-direction', direction);
-                    arrow.setAttribute('aria-label', (up ? 'Поднять ' : 'Опустить ') + button.textContent);
-                    arrow.disabled = up ? index === 0 : index === current.tiles.length - 1;
-                    arrow.onclick = function () {
-                        if (busy) { return; }
-                        button.click();
-                        operate('move_instance', {id: tile.id, direction: direction});
-                    };
-                    row.appendChild(arrow);
-                });
-                li.appendChild(row);
-                instances.appendChild(li);
-            });
+            syncInstances();
         }
         showInstance();
         markIssue(issue);
@@ -265,12 +243,128 @@
         refreshPreview(true);
     }
 
+    function syncInstances() {
+        var current = selectedSection();
+        var list = byId('instances');
+        var existing = {};
+        Array.prototype.forEach.call(list.children, function (li) { existing[li.getAttribute('data-instance')] = li; });
+        (current ? current.tiles : []).forEach(function (tile, index) {
+            var li = existing[tile.id];
+            var item = tile.element && libraryItem(tile.element);
+            var title = (tile.title || (item && item.title) || tile.type) + ' · ' + (tile.implicit_id ? tile.element : tile.id);
+            if (!li) {
+                li = node('li', '');
+                li.setAttribute('data-instance', tile.id);
+                var row = node('div', '');
+                row.className = 'instance-row';
+                var select = node('button', '');
+                select.type = 'button';
+                select.onclick = function () {
+                    if (busy || !leaveEdits()) { return; }
+                    selected = tile.id;
+                    padOpen = false;
+                    syncInstances();
+                    inspectorMode = 'tile';
+                    showInstance();
+                    markIssue(issue);
+                    openInspector(select);
+                };
+                row.appendChild(select);
+                ['up', 'down'].forEach(function (direction) {
+                    var arrow = node('button', direction === 'up' ? '↑' : '↓');
+                    arrow.type = 'button';
+                    arrow.setAttribute('data-direction', direction);
+                    arrow.onclick = function () { operate('move_instance', {id: tile.id, direction: direction}); };
+                    row.appendChild(arrow);
+                });
+                li.appendChild(row);
+            }
+            var buttons = li.querySelectorAll('button');
+            buttons[0].textContent = title;
+            buttons[0].setAttribute('aria-pressed', String(selected === tile.id));
+            buttons[1].disabled = current.readonly || index === 0;
+            buttons[2].disabled = current.readonly || index === current.tiles.length - 1;
+            buttons[1].setAttribute('aria-label', 'Поднять ' + title);
+            buttons[2].setAttribute('aria-label', 'Опустить ' + title);
+            if (list.children[index] !== li) { list.insertBefore(li, list.children[index] || null); }
+            delete existing[tile.id];
+        });
+        Object.keys(existing).forEach(function (id) { list.removeChild(existing[id]); });
+    }
+
+    function dirtyTile() {
+        var tile = currentTile();
+        if (inspectorMode !== 'tile' || !tile) { return false; }
+        return byId('title').value !== (tile.title || '') ||
+            byId('width').value !== (tile.w == null ? '' : String(tile.w)) ||
+            byId('height').value !== (tile.h == null ? '' : String(tile.h));
+    }
+
+    function leaveEdits() {
+        return !(dirtyTile() || (inspectorMode !== 'tile' && settingsDirty())) || window.confirm('Не сохранять введённые изменения?');
+    }
+
+    function openInspector(trigger) {
+        returnFocus = trigger || document.activeElement;
+        if (!mobile.matches) { return; }
+        if (!byId('inspector').classList.contains('open')) {
+            savedScroll = window.pageYOffset;
+            document.body.style.position = 'fixed';
+            document.body.style.top = '-' + savedScroll + 'px';
+            document.body.style.width = '100%';
+        }
+        byId('inspector').classList.add('open');
+        byId('inspector').setAttribute('role', 'dialog');
+        byId('inspector').setAttribute('aria-modal', 'true');
+        byId('inspector-backdrop').hidden = false;
+        byId('inspector').focus({preventScroll: true});
+    }
+
+    function closeInspector(force) {
+        if (!force && (busy || !leaveEdits())) { return; }
+        var wasOpen = byId('inspector').classList.contains('open');
+        byId('inspector').classList.remove('open');
+        byId('inspector').removeAttribute('role');
+        byId('inspector').removeAttribute('aria-modal');
+        byId('inspector-backdrop').hidden = true;
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        if (wasOpen) {
+            window.scrollTo(0, savedScroll);
+            if (returnFocus && document.contains(returnFocus)) { returnFocus.focus({preventScroll: true}); }
+        }
+        if (!force) {
+            if (inspectorMode === 'tile') { showInstance(); }
+            else { showSettings(inspectorMode); }
+        }
+    }
+
+    byId('close-inspector').onclick = function () { closeInspector(false); };
+    byId('inspector-backdrop').onclick = function () { closeInspector(false); };
+    mobile.addListener(function () { if (!mobile.matches) { closeInspector(true); } });
+    byId('inspector').onkeydown = function (event) {
+        if (!mobile.matches || !byId('inspector').classList.contains('open')) { return; }
+        if (event.key === 'Escape') { event.preventDefault(); closeInspector(false); }
+        if (event.key === 'Tab') {
+            var controls = Array.prototype.filter.call(byId('inspector').querySelectorAll('button, input, select'), function (el) { return !el.disabled && el.getClientRects().length; });
+            var first = controls[0], last = controls[controls.length - 1];
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === byId('inspector'))) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && (document.activeElement === last || document.activeElement === byId('inspector'))) { event.preventDefault(); first.focus(); }
+        }
+    };
+
     function showInstance() {
+        if (inspectorMode !== 'tile') { return; }
+        byId('inspector-title').textContent = 'Настройки плитки';
+        byId('settings-form').hidden = true;
         var current = selectedSection();
         var tile = currentTile();
         byId('placement').hidden = !tile;
         byId('selection-empty').hidden = !!tile;
         byId('instance-error').hidden = true;
+        padToken += 1;
+        if (padRequest) { padRequest.abort(); }
         byId('pad-status').textContent = '';
         byId('pad-image').hidden = true;
         if (!tile) {
@@ -290,6 +384,119 @@
         byId('pad').hidden = !element.pad;
         byId('pad').textContent = padOpen ? 'Скрыть пульт' : 'Показать пульт';
     }
+
+    var settingsInitial = {};
+
+    function rememberSettings() {
+        settingsInitial = {};
+        Array.prototype.forEach.call(byId('settings-form').querySelectorAll('[data-setting]'), function (el) {
+            settingsInitial[el.getAttribute('data-setting')] = el.value;
+        });
+    }
+
+    function settingsDirty() {
+        return Array.prototype.some.call(byId('settings-form').querySelectorAll('[data-setting]'), function (el) {
+            return el.value !== settingsInitial[el.getAttribute('data-setting')];
+        });
+    }
+
+    function showSettings(mode) {
+        inspectorMode = mode;
+        padOpen = false;
+        refreshPad();
+        byId('placement').hidden = true;
+        byId('selection-empty').hidden = true;
+        byId('inspector-title').textContent = mode === 'panel' ? 'Настройки панели' : 'Настройки раздела';
+        var form = empty('settings-form');
+        form.hidden = false;
+        var values = (mode === 'panel' ? selectedPanel() : selectedSection()).settings || {};
+        function field(key, title, choices, type) {
+            var label = node('label', title);
+            var control = node(choices ? 'select' : 'input', '');
+            control.id = 'setting-' + key;
+            control.setAttribute('data-setting', key);
+            if (choices) { choices.forEach(function (choice) { option(control, choice[0], choice[1]); }); }
+            else { control.type = type || 'text'; }
+            var value = values[key] == null ? '' : String(values[key]);
+            control.value = value;
+            if (choices && control.value !== value) { option(control, value, value); control.value = value; }
+            label.appendChild(control);
+            form.appendChild(label);
+            return control;
+        }
+        field('title', 'Название').maxLength = 512;
+        var booleanChoices = [['', 'Наследовать'], ['true', 'Да'], ['false', 'Нет']];
+        if (mode === 'panel') {
+            field('hidden', 'Скрыть из списка панелей', booleanChoices);
+            var cols = field('cols', 'Колонки (пусто — из общих настроек)', null, 'number');
+            cols.min = '1'; cols.max = '12'; cols.step = '1';
+            field('theme', 'Тема панели', [['', 'Из общих настроек']].concat(model.themes.map(function (name) { return [name, name]; })));
+            field('tabs', 'Вкладки разделов', booleanChoices);
+            field('accordion', 'Сворачиваемые разделы', booleanChoices);
+            field('swipe', 'Перелистывание на ESP32', booleanChoices);
+            field('pad_close', 'Закрытие пульта при бездействии (например, 30s или 2m)');
+        }
+        var saver = values.screensaver;
+        var saverMode = saver == null ? '' : (saver === 0 || saver === 'none' || (typeof saver === 'object' && (saver.after === 0 || saver.after === 'none')) ? 'off' : 'on');
+        var choices = mode === 'panel' ? [['', 'Из общих настроек'], ['off', 'Выключена'], ['on', 'Свои настройки']] :
+            [['', 'Обычный раздел'], ['off', 'Служебный раздел без автопоказа'], ['on', 'Раздел заставки ESP32']];
+        var saverSelect = field('saver_mode', mode === 'panel' ? 'Браузерная заставка' : 'Назначение раздела', choices);
+        saverSelect.value = saverMode;
+        var after = field('saver_after', mode === 'panel' ? 'Бездействие до заставки (например, 1m)' : 'Интервал заставки ESP32 (например, 30s)');
+        after.value = saver && typeof saver === 'object' ? (saver.after == null ? '' : String(saver.after)) : (saverMode === 'on' ? String(saver) : '');
+        var destination;
+        if (mode === 'panel') {
+            destination = field('saver_panel', 'Панель заставки', [['', 'Не переопределять панель']].concat(model.panels.filter(function (p) { return p.id !== panel; }).map(function (p) { return [p.id, p.title + ' · ' + p.id]; })));
+            destination.value = saver && typeof saver === 'object' ? (saver.panel || '') : '';
+            if (saver && typeof saver === 'object' && saver.panel && !destination.value) { option(destination, saver.panel, saver.panel); destination.value = saver.panel; }
+        }
+        function saverFields() {
+            after.parentNode.hidden = saverSelect.value !== 'on';
+            after.required = saverSelect.value === 'on';
+            if (destination) { destination.parentNode.hidden = saverSelect.value !== 'on'; }
+        }
+        saverSelect.onchange = saverFields;
+        saverFields();
+        form.appendChild(node('p', mode === 'panel' ? 'Эти настройки сохраняются в конфигурации панели. Тема и колонки над предпросмотром меняют только просмотр.' :
+            'Служебные разделы не входят в обычные вкладки ESP32. Сейчас первый положительный интервал задаёт и запуск, и смену разделов заставки.'));
+        var submit = node('button', 'Сохранить в черновике');
+        submit.type = 'submit';
+        form.appendChild(submit);
+        rememberSettings();
+    }
+
+    ['panel', 'section'].forEach(function (mode) {
+        byId(mode + '-settings').onclick = function () {
+            if (busy || !leaveEdits()) { return; }
+            showSettings(mode);
+            openInspector(this);
+        };
+    });
+
+    byId('settings-form').onsubmit = function (event) {
+        event.preventDefault();
+        var fields = {};
+        var controls = {};
+        Array.prototype.forEach.call(this.querySelectorAll('[data-setting]'), function (el) {
+            var key = el.getAttribute('data-setting');
+            controls[key] = el.value;
+            if (key.indexOf('saver_') === 0 || el.value === settingsInitial[key]) { return; }
+            fields[key] = el.value === '' ? null : (key === 'cols' ? Number(el.value) :
+                (['hidden', 'tabs', 'accordion', 'swipe'].indexOf(key) >= 0 ? el.value === 'true' : el.value));
+        });
+        var saverChanged = ['saver_mode', 'saver_after', 'saver_panel'].some(function (key) { return controls[key] !== settingsInitial[key]; });
+        if (saverChanged) {
+            if (controls.saver_mode === '') { fields.screensaver = null; }
+            else if (controls.saver_mode === 'off') { fields.screensaver = 0; }
+            else if (inspectorMode === 'section') { fields.screensaver = controls.saver_after; }
+            else {
+                fields.screensaver = {after: controls.saver_after};
+                if (controls.saver_panel !== settingsInitial.saver_panel) { fields.screensaver.panel = controls.saver_panel || null; }
+            }
+        }
+        if (Object.keys(fields).length) { operate('update_' + inspectorMode, {fields: fields}); }
+        else { status('Настройки не изменились.'); }
+    };
 
     function showTileList(target, current, visited) {
         if (!current || visited.indexOf(current.id) >= 0) { return; }
@@ -317,77 +524,99 @@
         });
     }
 
-    function image(path, id, message, token, clear) {
+    function invalidatePreview() {
+        previewToken += 1;
+        padToken += 1;
+        if (previewRequest) { previewRequest.abort(); }
+        if (padRequest) { padRequest.abort(); }
+    }
+
+    function image(path, id, message, token) {
         var target = byId(id);
         var feedback = byId(message);
-        if (clear) {
-            target.hidden = true;
-            target.removeAttribute('src');
-            feedback.textContent = 'Загрузка SVG…';
-        }
-        previewPending += 1;
-        request('GET', draftPath(path), null, function (error, svg) {
-            previewPending -= 1;
-            if (token !== previewToken) { return; }
+        var isPanel = id === 'preview-image';
+        feedback.textContent = 'Загрузка SVG…';
+        return request('GET', draftPath(path), null, function (error, svg) {
+            if (token !== (isPanel ? previewToken : padToken)) { return; }
             if (error || typeof svg !== 'string') {
-                target.hidden = true;
-                target.removeAttribute('src');
-                feedback.textContent = error ? error.message : 'Получен некорректный SVG';
-                if (error) {
-                    previewStopped = true;
-                    feedback.textContent = 'Предпросмотр: ' + error.message;
-                    var retryImage = node('button', 'Повторить предпросмотр');
-                    retryImage.onclick = function () { refreshPreview(true); };
-                    feedback.appendChild(retryImage);
-                    if (id === 'preview-image') { byId('layout').hidden = false; }
-                    markIssue(error);
+                feedback.textContent = 'Предпросмотр: ' + (error ? error.message : 'Получен некорректный SVG');
+                if (isPanel) {
+                    byId('refresh-preview').hidden = false;
+                    byId('layout').hidden = !target.hidden;
                 }
+                if (error) { markIssue(error); }
                 return;
             }
-            if (id === 'pad-image' && !padOpen) { return; }
-            if (id === 'preview-image') { byId('layout').hidden = true; }
-            target.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-            target.hidden = false;
-            feedback.textContent = '';
+            if (!isPanel && !padOpen) { return; }
+            // Decode away from the document: the previous preview keeps its height until ready.
+            var ready = new Image();
+            ready.onload = function () {
+                if (token !== (isPanel ? previewToken : padToken)) { return; }
+                target.src = ready.src;
+                target.hidden = false;
+                if (isPanel) { byId('layout').hidden = true; byId('refresh-preview').hidden = true; }
+                feedback.textContent = '';
+            };
+            ready.onerror = function () {
+                if (token !== (isPanel ? previewToken : padToken)) { return; }
+                feedback.textContent = 'Не удалось показать SVG.';
+                if (isPanel) { byId('refresh-preview').hidden = false; }
+            };
+            ready.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
         });
     }
 
-    function refreshPreview(clear) {
-        if (!model || !selectedPanel()) { return; }
-        if (!clear && (previewPending || previewStopped || !byId('refresh-preview').hidden)) { return; }
-        if (clear) {
-            byId('refresh-preview').hidden = true;
-            previewStopped = false;
-            var layout = empty('layout');
-            layout.hidden = false;
-            layout.appendChild(node('h3', 'Схема плиток'));
-            showTileList(layout, selectedPanel(), []);
-        }
-        var token = ++previewToken;
-        var theme = byId('theme').value;
+    function previewQuery() {
+        var query = '?draft_version=' + model.draft_version + '&theme=' + encodeURIComponent(byId('theme').value);
         var cols = byId('cols');
-        var path = encodeURIComponent(panel);
-        var query = '?draft_version=' + model.draft_version + '&theme=' + encodeURIComponent(theme);
         if (cols.value && !cols.validity.valid) {
-            byId('preview-image').hidden = true;
             byId('preview-status').textContent = 'Введите целое число колонок от 1 до 12.';
-            return;
+            return null;
         }
         if (cols.value) { query += '&cols=' + encodeURIComponent(cols.value); }
+        return query;
+    }
+
+    function refreshPreview() {
+        if (!model || !selectedPanel() || busy) { return; }
+        var query = previewQuery();
+        if (!query) { return; }
         var current = selectedSection();
         if (current && current.outside_sections) { query += '&root_tiles=1'; }
-        image('/preview/' + path + '.svg' + query + '&mode=list', 'preview-image', 'preview-status', token, clear);
-        if (padOpen && currentTile()) {
-            image('/tile/' + path + '/' + encodeURIComponent(selected) + '.svg' + query,
-                  'pad-image', 'pad-status', token, clear);
+        var layout = empty('layout');
+        layout.hidden = !byId('preview-image').hidden;
+        layout.appendChild(node('h3', 'Схема плиток'));
+        showTileList(layout, selectedPanel(), []);
+        if (previewRequest) { previewRequest.abort(); }
+        previewRequest = image('/preview/' + encodeURIComponent(panel) + '.svg' + query + '&mode=list',
+                               'preview-image', 'preview-status', ++previewToken);
+    }
+
+    function refreshPad() {
+        padToken += 1;
+        if (padRequest) { padRequest.abort(); }
+        byId('pad').textContent = padOpen ? 'Скрыть пульт' : 'Показать пульт';
+        if (!padOpen) { byId('pad-image').hidden = true; byId('pad-status').textContent = ''; return; }
+        var query = previewQuery();
+        if (query) {
+            padRequest = image('/tile/' + encodeURIComponent(panel) + '/' + encodeURIComponent(selected) + '.svg' + query,
+                               'pad-image', 'pad-status', padToken);
         }
     }
 
     function run(method, path, data, success, failure) {
         if (busy) { return; }
         busy = true;
+        var focused = document.activeElement;
+        var locked = Array.prototype.map.call(document.querySelectorAll('#workspace input, #workspace select, #workspace button, #actions button'), function (el) {
+            var entry = [el, el.disabled]; el.disabled = true; return entry;
+        });
+        byId('workspace').setAttribute('aria-busy', 'true');
         request(method, path, data, function (error, result) {
             busy = false;
+            locked.forEach(function (entry) { entry[0].disabled = entry[1]; });
+            if (focused && document.contains(focused)) { focused.focus({preventScroll: true}); }
+            byId('workspace').setAttribute('aria-busy', 'false');
             if (error) {
                 errorMessage(error);
                 if (failure) { failure(error); }
@@ -397,6 +626,9 @@
 
     function newDraft(published) {
         if (busy) { return; }
+        invalidatePreview();
+        closeInspector(true);
+        inspectorMode = 'tile';
         var retry = byId('retry-start');
         function showRetry() { retry.hidden = false; }
         retry.hidden = true;
@@ -427,38 +659,40 @@
 
     function operate(op, fields) {
         var current = selectedSection();
-        if (!current || current.readonly || !model || busy) { return; }
+        var settings = op === 'update_panel' || op === 'update_section';
+        if ((!settings && (!current || current.readonly)) || !model || busy) { return; }
         status('Сохранение изменений в черновике…');
         fields.op = op;
         fields.panel = panel;
-        fields.section = section;
-        var sizeOnly = op === 'update_instance' && !('title' in fields.fields);
-        var editedTile = sizeOnly && currentTile();
-        var url = draftPath('/operation') + (sizeOnly ? '?result=version' : '');
-        run('POST', url, {draft_version: model.draft_version, operation: fields}, function (result) {
-            if (sizeOnly) {
-                Object.keys(fields.fields).forEach(function (key) {
-                    if (fields.fields[key] == null) { delete editedTile[key]; }
-                    else { editedTile[key] = fields.fields[key]; }
-                });
-                model.draft_version = result.draft_version;
-                model.checked = result.checked;
-            } else { model = result; }
+        fields.section = op === 'update_panel' ? null : section;
+        invalidatePreview();
+        run('POST', draftPath('/operation?result=panel'), {draft_version: model.draft_version, operation: fields}, function (result) {
+            var updated = result.panels[0];
+            model.panels = model.panels.map(function (p) { return p.id === updated.id ? updated : p; });
+            model.draft_version = result.draft_version;
+            model.checked = result.checked;
             issue = null;
-            if (op === 'add_instance') { byId('new-id').value = ''; }
-            if (op === 'add_instance' && panel === fields.panel && section === fields.section) {
-                var tiles = selectedSection().tiles;
-                selected = tiles[tiles.length - 1].id;
+            if (panel === fields.panel) {
+                byId('panels').options[byId('panels').selectedIndex].textContent = updated.title + ' · ' + updated.id;
+                var part = selectedSection();
+                if (part) { byId('sections').options[byId('sections').selectedIndex].textContent = part.title + (part.readonly ? ' · только чтение' : ''); }
+                if (op === 'add_instance') { byId('new-id').value = ''; search(); }
+                syncInstances();
+                if (op === 'remove_instance' && selected === fields.id) { selected = null; closeInspector(true); showInstance(); }
+                if (settings) { rememberSettings(); }
+                if (op === 'update_instance') {
+                    if (fields.fields.title === '') { byId('inherit-title').hidden = true; }
+                }
             }
             empty('details').hidden = true;
-            if (sizeOnly && panel === fields.panel && section === fields.section) {
-                previewToken += 1;
-                byId('preview-status').textContent = 'Размер сохранён. Предпросмотр показывает предыдущую раскладку.';
-                byId('refresh-preview').hidden = false;
-                markIssue(null);
-                progress();
-                status('Размер плитки сохранён в черновике.');
-            } else { showModel(); }
+            byId('preview-status').textContent = 'Изменения сохранены. Предпросмотр показывает предыдущую версию.';
+            byId('refresh-preview').hidden = false;
+            if (padOpen) { byId('pad-status').textContent = 'Изменения сохранены. Откройте пульт заново для обновления.'; }
+            markIssue(null);
+            progress();
+            byId('edit-status').textContent = 'Сохранено в черновике.';
+        }, function () {
+            if (model) { byId('refresh-preview').hidden = false; }
         });
     }
 
@@ -475,16 +709,28 @@
         if (model && model.draft_version && !window.confirm('Открыть новый черновик? Незавершённая работа останется в предыдущем черновике до истечения его срока.')) { return; }
         newDraft();
     };
-    byId('panels').onchange = function () { section = null; selected = null; showPanel(); };
-    byId('sections').onchange = function () { selected = null; showSection(); };
+    byId('panels').onchange = function () {
+        var next = byId('panels').value;
+        byId('panels').value = panel;
+        if (busy || !leaveEdits()) { return; }
+        byId('panels').value = next;
+        closeInspector(true); inspectorMode = 'tile'; section = null; selected = null;
+        byId('preview-image').hidden = true; showPanel();
+    };
+    byId('sections').onchange = function () {
+        var next = byId('sections').selectedIndex;
+        selectedPanel().sections.forEach(function (s, i) { if (s.section === section) { byId('sections').selectedIndex = i; } });
+        if (busy || !leaveEdits()) { return; }
+        byId('sections').selectedIndex = next;
+        closeInspector(true); inspectorMode = 'tile'; selected = null; showSection();
+    };
     byId('search').oninput = search;
     byId('theme').onchange = function () { refreshPreview(true); };
     byId('cols').onchange = function () { refreshPreview(true); };
     byId('refresh-preview').onclick = function () { refreshPreview(true); };
     byId('pad').onclick = function () {
         padOpen = !padOpen;
-        showInstance();
-        refreshPreview(true);
+        refreshPad();
     };
     byId('add').onclick = function () {
         var source = byId('elements').value;
@@ -530,7 +776,7 @@
             var list = node('ul', '');
             diff.operations.forEach(function (op) {
                 list.appendChild(node('li', operationNames[op.op] + ' · ' + op.panel + ' · ' +
-                                      (op.element || op.id) + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
+                                      (op.element || op.id || '') + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
             });
             target.appendChild(list);
             progress();
@@ -613,5 +859,5 @@
         });
     };
     newDraft();
-    window.setInterval(function () { if (!busy && !document.hidden) { refreshPreview(false); } }, 12000);
+
 }());

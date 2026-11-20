@@ -44,3 +44,26 @@ header .error { color: #ffc6bf; }
 
 .instance-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .3rem; }
 .instance-row [data-direction] { min-width: 2.4rem; text-align: center; }
+
+/* List and preview retain their DOM positions while the inspector edits one object. */
+main { max-width: 90rem; grid-template-columns: minmax(0, 1fr) minmax(18rem, 25rem); grid-template-areas: "panel inspector" "tiles inspector" "preview inspector"; }
+.sidebar { grid-area: panel; }
+.components { grid-area: tiles; }
+.preview { grid-area: preview; }
+.inspector { grid-area: inspector; position: sticky; top: 5rem; max-height: calc(100dvh - 6rem); overflow-y: auto; overscroll-behavior: contain; }
+.inspector-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.inspector-heading h2 { margin: 0; }
+#close-inspector { display: none; }
+#edit-status { min-height: 1.5em; font-size: .9rem; }
+#settings-form button[type="submit"] { margin-top: 1rem; }
+#workspace[aria-busy="true"] .instance-row [data-direction] { opacity: .5; }
+@media (max-width: 760px) {
+  main { display: block; padding: .65rem; }
+  main > .card { margin-bottom: .75rem; }
+  .inspector { display: none; position: fixed; z-index: 5; inset: 0 0 0 auto; width: min(92vw, 26rem); height: 100dvh; max-height: none; margin: 0 !important; border-radius: .9rem 0 0 .9rem; padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .inspector.open { display: block; }
+  #close-inspector { display: block; min-width: 44px; min-height: 44px; }
+  .inspector-heading { position: sticky; top: -1rem; background: #fff; padding: .5rem 0; z-index: 1; }
+  #inspector-backdrop { position: fixed; inset: 0; background: #10233b80; z-index: 4; }
+  .instance-row [data-direction] { min-width: 44px; min-height: 44px; }
+}

@@ -224,6 +224,8 @@ def main():
     assert not client.get("/api/editor/state").get_json()["managed"]
     assert client.post("/api/editor/drafts", json={}, headers={"X-WB-Editor": "1"}).status_code == 409
     check_editor()
+    from editor_settings_check import run as check_settings
+    check_settings()
     print("адресов: %d, проверок: %d%s" % (len(rules), len(CASES),
                                             ", ошибок: %d" % bad if bad else " - всё отвечает"))
     return 1 if bad else 0

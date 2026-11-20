@@ -44,7 +44,7 @@ async function editorFlow(browser) {
   const fixture = path.join(ROOT, 'tests/fixtures/editor/managed.yaml');
   const child = spawn('python3', [path.join(ROOT, 'tools/visual/serve.py'), String(port), fixture],
                       {cwd: ROOT, stdio: 'ignore'});
-  const context = await browser.newContext({viewport: {width: 700, height: 850}});
+  const context = await browser.newContext({viewport: {width: 1200, height: 850}});
   try {
     for (let i = 0; i < 60 && (await get(base + 'healthz')).status !== 200; i++) {
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -87,17 +87,19 @@ async function editorFlow(browser) {
     await p.locator('#cols').fill('2');
     await p.locator('#cols').dispatchEvent('change');
     await p.locator('#layout .layout-grid > div').first().waitFor();
-    await p.getByRole('button', {name: 'Повторить предпросмотр'}).waitFor();
+    await p.locator('#refresh-preview').waitFor();
     ok('редактор: медленный SVG, список плиток и отдельный повтор', attempts === 1
-       && await p.getByRole('button', {name: 'Повторить предпросмотр'}).isVisible());
+       && await p.locator('#refresh-preview').isVisible());
     await p.unroute(slowPreview);
     await p.locator('#sources a').click();
     await p.fill('#search', 'Выключатель без канала');
     await p.selectOption('#elements', 'invalid_switch');
     await p.click('#add');
+    await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 4);
+    await p.locator('#instances li [aria-pressed]').last().click();
+    await p.click('#check');
     await p.locator('#instances .invalid').waitFor();
-    ok('редактор: ошибка кандидата и плитки', await p.locator('#preview-image').isHidden()
-       && (await p.locator('#instance-error').innerText()).includes('У плитки неполные или неверные настройки'));
+    ok('редактор: ошибка кандидата и плитки', (await p.locator('#instance-error').innerText()).includes('У плитки неполные или неверные настройки'));
     await p.click('#remove');
     await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 3);
     await p.fill('#search', 'Подсветка');
@@ -111,10 +113,16 @@ async function editorFlow(browser) {
     await p.locator('#instances li').nth(2).locator('[data-direction=down]').click();
     await p.waitForFunction(id => document.querySelectorAll('#instances li')[3].dataset.instance === id, added);
     ok('редактор: обе стрелки перемещают свою плитку', await p.locator('#instances li').last().locator('[data-direction=down]').isDisabled());
+    await p.locator('#instances li [aria-pressed]').last().click();
+    await p.evaluate(() => { window.savedList = document.querySelector('#instances'); window.savedForm = document.querySelector('#width'); window.savedRow = document.querySelector('#instances li:last-child'); });
     await p.fill('#width', '1.5');
     await p.fill('#height', '1.5');
     await p.fill('#title', 'Browser LED');
     await p.locator('#placement button[type=submit]').click();
+    await p.locator('#refresh-preview').waitFor();
+    await p.waitForFunction(() => document.querySelector('#status').textContent.includes('Сохранено'));
+    ok('редактор: название сохраняет DOM списка и формы', await p.evaluate(() => window.savedList === document.querySelector('#instances') && window.savedRow === document.querySelector('#instances li:last-child') && window.savedForm === document.querySelector('#width')));
+    await p.click('#refresh-preview');
     await p.waitForFunction(() => {
       const img = document.getElementById('preview-image');
       return !img.hidden && img.naturalWidth > 0 && decodeURIComponent(img.src).includes('Browser LED');
@@ -128,15 +136,61 @@ async function editorFlow(browser) {
     await p.click('#refresh-preview');
     await p.click('#pad');
     await p.waitForFunction(() => document.getElementById('pad-image').naturalWidth > 0);
+    let mainPreviews = 0;
+    p.on('request', request => { if (request.url().includes('/preview/')) mainPreviews++; });
+    await p.click('#pad'); // close
+    await p.click('#pad'); // only the pad request
+    await p.waitForFunction(() => document.querySelector('#pad-status').textContent === '');
+    ok('редактор: пульт не перестраивает панель', mainPreviews === 0);
+    await p.click('#panel-settings');
+    await p.fill('#setting-title', 'Room settings');
+    await p.fill('#setting-cols', '2');
+    await p.selectOption('#setting-hidden', 'true');
+    await p.selectOption('#setting-saver_mode', 'on');
+    await p.fill('#setting-saver_after', '2m');
+    await p.selectOption('#setting-saver_panel', 'utility');
+    await p.locator('#settings-form button[type=submit]').click();
+    await p.waitForFunction(() => document.querySelector('#status').textContent.includes('Сохранено'));
+    ok('редактор: настройки панели без запроса SVG', mainPreviews === 0 && (await p.locator('#panels option:checked').innerText()).includes('Room settings'));
     await p.setViewportSize({width: 390, height: 844});
-    ok('редактор: порядок разделов и закреплённые действия в узком окне', await p.evaluate(() => {
+    ok('редактор: список перед превью, закреплённые действия', await p.evaluate(() => {
       const sections = Array.from(document.querySelectorAll('main > section'));
       return sections.map(el => el.className).join('|') ===
-        'card sidebar|card preview|card components|card inspector' &&
-        sections.every((el, i) => !i || el.offsetTop >= sections[i - 1].offsetTop + sections[i - 1].offsetHeight) &&
+        'card sidebar|card components|card preview|card inspector' &&
         getComputedStyle(document.querySelector('#actions')).position === 'sticky' &&
-        document.documentElement.scrollWidth <= innerWidth && document.querySelector('[data-direction=up]').offsetWidth > 0;
+        document.documentElement.scrollWidth <= innerWidth && document.querySelector('[data-direction=up]').offsetWidth >= 44;
     }));
+    const selectedRow = p.locator('#instances li [aria-pressed]').last();
+    await selectedRow.scrollIntoViewIfNeeded();
+    const scrollBefore = await p.evaluate(() => window.pageYOffset);
+    await selectedRow.click();
+    ok('редактор: свойства справа на телефоне', await p.locator('#inspector').getAttribute('aria-modal') === 'true'
+       && await p.locator('#placement').isVisible());
+    await p.fill('#width', '2.5');
+    await p.fill('#title', 'Mobile LED');
+    const srcBefore = await p.locator('#preview-image').getAttribute('src');
+    await p.locator('#placement button[type=submit]').click();
+    await p.waitForFunction(() => document.querySelector('#edit-status').textContent.includes('Сохранено'));
+    ok('редактор: мобильное сохранение без перерисовки', mainPreviews === 0
+       && srcBefore === await p.locator('#preview-image').getAttribute('src')
+       && await p.locator('#width').inputValue() === '2.5'
+       && await p.evaluate(() => window.savedForm === document.querySelector('#width')));
+    await p.keyboard.press('Escape');
+    ok('редактор: закрытие возвращает прокрутку и фокус', await p.evaluate(y => Math.abs(window.pageYOffset - y) < 2 && document.activeElement === document.querySelector('#instances li:last-child [aria-pressed]'), scrollBefore));
+    await p.click('#panel-settings');
+    ok('редактор: сохранённые настройки доступны повторно', await p.locator('#setting-cols').inputValue() === '2'
+       && await p.locator('#setting-saver_after').inputValue() === '2m');
+    await p.click('#close-inspector');
+    await p.selectOption('#panels', 'summary');
+    await p.selectOption('#sections', '0');
+    await p.click('#section-settings');
+    await p.fill('#setting-title', 'Night view');
+    await p.selectOption('#setting-saver_mode', 'on');
+    await p.fill('#setting-saver_after', '30s');
+    await p.locator('#settings-form button[type=submit]').click();
+    await p.waitForFunction(() => document.querySelector('#edit-status').textContent.includes('Сохранено'));
+    await p.click('#close-inspector');
+    await p.selectOption('#panels', 'room');
     await p.route('**/publish', async route => {
       const response = await route.fetch();
       if (response.status() !== 200) throw new Error('Публикация: HTTP ' + response.status());
@@ -144,7 +198,7 @@ async function editorFlow(browser) {
     });
     await p.click('#publish');
     await p.waitForFunction(() => document.getElementById('status').textContent.includes('Опубликовано'));
-    ok('редактор: публикация', (await get(base + 'room.svg?theme=dark')).body.includes('Browser LED'));
+    ok('редактор: публикация', (await get(base + 'room.svg?theme=dark')).body.includes('Mobile LED'));
     await p.waitForFunction(() => document.getElementById('status').textContent.includes('Можно продолжать'));
     ok('редактор: продолжение после потери ответа', await p.locator('#panels').inputValue() === 'room'
        && await p.locator('#publish').isDisabled());

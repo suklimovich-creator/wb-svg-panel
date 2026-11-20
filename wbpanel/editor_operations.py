@@ -15,6 +15,7 @@ from .editor_documents import DocumentError
 
 STR = "tag:yaml.org,2002:str"
 NODE_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+NODE_DUMPER = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
 MAP = "tag:yaml.org,2002:map"
 SEQ = "tag:yaml.org,2002:seq"
 _INVALID_TEXT = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
@@ -75,11 +76,29 @@ def _placement(fields):
             raise OperationError("Размер от 0,5 до 32 с шагом 0,5", field)
 
 
+def set_fields(node, target, fields):
+    for key, value in fields.items():
+        if value is None or value == "":
+            target.pop(key, None)
+            node.value[:] = [(k, v) for k, v in node.value if k.value != key]
+        elif target.get(key) != value:
+            target[key] = value
+            new = yaml.SafeDumper("").represent_data(value)
+            for i, (k, _v) in enumerate(node.value):
+                if k.tag == STR and k.value == key:
+                    node.value[i] = (k, new)
+                    break
+            else:
+                node.value.append((ScalarNode(STR, key), new))
+
+
 OP_FIELDS = {
     "add_instance": {"element"},
     "remove_instance": {"id"},
     "move_instance": {"id", "direction"},
     "update_instance": {"id", "fields"},
+    "update_panel": {"fields"},
+    "update_section": {"fields"},
 }
 
 
@@ -109,11 +128,17 @@ def validate(operation):
         raise OperationError("Допустимы направления up и down", "direction")
     if kind == "update_instance":
         _placement(operation["fields"])
+    elif kind in ("update_panel", "update_section"):
+        from .editor_settings import validate_settings
+        validate_settings(operation)
 
 
 def apply(config, changeset, operation, originals):
     """Return staged bytes, expected resolved tree and a value-free event."""
     validate(operation)
+    if operation["op"] in ("update_panel", "update_section"):
+        from .editor_settings import apply_settings
+        return apply_settings(config, changeset, operation, originals)
     doc = config.documents
     expected = deepcopy(doc.data)
     panel, section, kind = (operation[k] for k in ("panel", "section", "op"))
@@ -175,20 +200,7 @@ def apply(config, changeset, operation, originals):
             raise OperationError("Экземпляр должен быть YAML-словарём")
         fields = operation["fields"]
         event["fields"] = sorted(fields)
-        old = tiles[index]
-        for key, value in fields.items():
-            if value is None or value == "":
-                old.pop(key, None)
-                node.value[:] = [(k, v) for k, v in node.value if k.value != key]
-            elif old.get(key) != value:
-                old[key] = value
-                new = yaml.SafeDumper("").represent_data(value)
-                for i, (k, _v) in enumerate(node.value):
-                    if k.tag == STR and k.value == key:
-                        node.value[i] = (k, new)
-                        break
-                else:
-                    node.value.append((ScalarNode(STR, key), new))
+        set_fields(node, tiles[index], fields)
     else:
         if logical != list_path:
             if not isinstance(node, MappingNode) or node.tag != MAP:
@@ -250,4 +262,4 @@ def apply(config, changeset, operation, originals):
 
 
 def _serialize(node):
-    return yaml.serialize(node, Dumper=yaml.SafeDumper, allow_unicode=True).encode("utf-8")
+    return yaml.serialize(node, Dumper=NODE_DUMPER, allow_unicode=True).encode("utf-8")

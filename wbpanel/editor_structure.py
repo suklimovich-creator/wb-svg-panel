@@ -80,7 +80,7 @@ def apply_structure(config, changeset, op, originals):
         path += (name,)
         section = {"title": op.get("title"), "tiles": []}
         sections = panels[name].get("sections")
-        if kind == "add_section" and sections is None:
+        if kind == "add_section" and (sections is None or (sections == [] and "tiles" in panels[name])):
             move_tiles = "tiles" in panels[name]
             fields["sections"] = [section]
         else:
@@ -98,6 +98,8 @@ def apply_structure(config, changeset, op, originals):
     if fields and isinstance(node, MappingNode):
         if move_tiles:
             # Move the original YAML node, including a possible !include, without expanding it.
+            if "sections" in target and _node_at(node, ("sections",)).tag != "tag:yaml.org,2002:seq":
+                raise OperationError("Для переноса корневых плиток список разделов должен быть задан в самой панели")
             tiles_node = _node_at(node, ("tiles",))
             tiles = target["tiles"]
             set_fields(node, target, {"tiles": None})

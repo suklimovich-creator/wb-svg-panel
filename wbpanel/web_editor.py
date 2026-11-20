@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import threading
+from time import perf_counter
 from xml.dom import Node, minidom
 from xml.parsers.expat import ExpatError
 from urllib.parse import urlsplit
@@ -54,6 +55,7 @@ def _response(value, status=200):
 def _route(func):
     @wraps(func)
     def handle(*args, **kwargs):
+        started = perf_counter()
         try:
             request_context = _editor_request.set(True)
             try:
@@ -78,6 +80,7 @@ def _route(func):
             web.log.error("Ошибка обработки запроса редактора")
             response = _response({"error": {"code": "editor_failure",
                 "message": "Ошибка чтения, записи или отрисовки конфигурации."}}, 500)
+        response.headers["Server-Timing"] = "editor;dur=%.1f" % ((perf_counter() - started) * 1000)
         response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"

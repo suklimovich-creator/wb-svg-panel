@@ -12,12 +12,17 @@ def run():
         stream.write("\nscreens:\n  hall-esp: {panel: room, theme: dark}\n")
     with (config.parent / "secrets.yaml").open("a") as stream:
         stream.write("\nlogin: panel\n")
+    panel_file = config.parent / "panels.yaml"
+    panel_file.write_text(panel_file.read_text().replace("  tiles: !include", "  sections: []\n  tiles: !include", 1))
+    original = panel_file.read_bytes()
     cfg.reload()
 
     def post(path, data):
         return client.post("/api/editor/" + path, json=data, headers=headers)
 
-    state = post("drafts", {}).json
+    response = post("drafts", {})
+    assert float(response.headers["Server-Timing"].split("editor;dur=")[1]) >= 0
+    state = response.json
     base = state["base_revision"]
     draft = "drafts/" + state["draft_id"]
 
@@ -33,7 +38,9 @@ def run():
             return next((p for p in state["panels"] if p["id"] == panel), None)
 
     edit("remove_panel", "room", fail=True)
+    ids = [t["id"] for t in next(p for p in state["panels"] if p["id"] == "room")["sections"][0]["tiles"]]
     moved = edit("add_section", "room", title="Основной раздел")
+    assert ids == [t["id"] for t in moved["sections"][0]["tiles"]]
     assert len(moved["sections"]) == 1 and len(moved["sections"][0]["tiles"]) == 3
     edit("add_panel", "desk", title="Рабочий стол")
     edit("add_panel", "desk", title="Копия", fail=True)
@@ -61,6 +68,7 @@ def run():
     assert cfg.panels["desk"]["sections"][0]["tiles"]
     assert post("rollback", {"revision": base, "base_revision": rev.json["id"], "confirm": True}).status_code == 200
     assert client.get("/api/screen/hall-esp").json["panel"] == "room"
+    assert panel_file.read_bytes() == original
     assert "desk" not in cfg.panels
     print("editor structure: panels, sections, ESP assignments, publication and rollback OK")
 

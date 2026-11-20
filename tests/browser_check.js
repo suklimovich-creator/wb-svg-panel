@@ -199,6 +199,12 @@ async function editorFlow(browser) {
        && await p.evaluate(() => window.savedForm === document.querySelector('#width')));
     await p.keyboard.press('Escape');
     ok('редактор: закрытие возвращает прокрутку и фокус', await p.evaluate(y => Math.abs(window.pageYOffset - y) < 2 && document.activeElement === document.querySelector('#instances li:last-child [aria-pressed]'), scrollBefore));
+    const resumePath = base + 'api/editor/drafts/' + (await draft.json()).draft_id;
+    const [resumed] = await Promise.all([p.waitForResponse(r => r.url() === resumePath), p.reload()]);
+    await p.locator('#instances [aria-pressed=true]').waitFor();
+    ok('редактор: вкладка восстановила черновик и выбор', resumed.ok()
+       && await p.locator('#panels').inputValue() === 'room'
+       && (await p.locator('#instances [aria-pressed=true]').innerText()).includes('Mobile LED'));
     await p.click('#panel-settings');
     ok('редактор: сохранённые настройки доступны повторно', await p.locator('#setting-cols').inputValue() === '2'
        && await p.locator('#setting-saver_after').inputValue() === '2m');

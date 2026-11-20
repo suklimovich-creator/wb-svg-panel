@@ -255,6 +255,7 @@
             }
             syncInstances();
         }
+        remember();
         showInstance();
         markIssue(issue);
         search();
@@ -280,6 +281,7 @@
                 select.onclick = function () {
                     if (busy || !leaveEdits()) { return; }
                     selected = tile.id;
+                    remember();
                     padOpen = false;
                     syncInstances();
                     inspectorMode = 'tile';
@@ -642,6 +644,38 @@
         });
     }
 
+    var resumeKey = 'wb-editor:' + location.pathname;
+    function remember() {
+        try {
+            if (model) {
+                sessionStorage.setItem(resumeKey, JSON.stringify({id: model.draft_id, panel: panel, section: section, tile: selected}));
+            } else { sessionStorage.removeItem(resumeKey); }
+        } catch (err) { /* Storage may be disabled by the browser. */ }
+    }
+    window.addEventListener('pagehide', function () { if (model) { remember(); } });
+    function start() {
+        var saved;
+        try { saved = JSON.parse(sessionStorage.getItem(resumeKey)); } catch (err) { saved = null; }
+        if (!saved || !saved.id) { newDraft(); return; }
+        var retry = byId('retry-start');
+        retry.hidden = true;
+        status('Открывается сохранённый черновик…');
+        run('GET', 'drafts/' + encodeURIComponent(saved.id), null, function (result) {
+            model = result;
+            panel = saved.panel;
+            section = saved.section;
+            selected = saved.tile;
+            byId('actions').hidden = false;
+            showModel();
+        }, function (error) {
+            if (error.code === 'draft_unknown' || error.code === 'base_revision') {
+                remember();
+                retry.textContent = 'Новый черновик';
+            }
+            retry.hidden = false;
+        });
+    }
+
     function newDraft(published) {
         if (busy) { return; }
         invalidatePreview();
@@ -659,6 +693,7 @@
             byId('legacy').hidden = true;
             byId('actions').hidden = false;
             showModel();
+            remember();
             if (published === true) { status('Опубликовано. Можно продолжать редактирование в новом черновике.'); }
         }, function (error) {
             if (error.code === 'legacy') {
@@ -673,7 +708,7 @@
         });
     }
 
-    byId('retry-start').onclick = newDraft;
+    byId('retry-start').onclick = start;
 
     function operate(op, fields) {
         var current = selectedSection();
@@ -772,6 +807,7 @@
 
     function receivedRevision(revision, message) {
         model = null;
+        remember();
         previewToken += 1;
         byId('workspace').hidden = true;
         byId('check').disabled = true;
@@ -932,6 +968,6 @@
             });
         });
     };
-    newDraft();
+    start();
 
 }());

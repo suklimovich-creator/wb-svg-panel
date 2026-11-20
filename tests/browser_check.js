@@ -73,6 +73,28 @@ async function editorFlow(browser) {
     if (draft.status() !== 201) {
       throw new Error('Повторное создание черновика: HTTP ' + draft.status() + ', ожидался 201');
     }
+    await p.locator('#structure summary').click();
+    await p.fill('#create-panel [name=key]', 'new-room');
+    await p.fill('#create-panel [name=caption]', 'Новая комната');
+    await p.click('#create-panel button');
+    await p.waitForFunction(() => document.querySelector('#panels').value === 'new-room');
+    await p.fill('#create-section [name=caption]', 'Сцены');
+    await p.click('#create-section button');
+    await p.waitForFunction(() => document.querySelector('#sections option:checked').textContent === 'Сцены');
+    await p.fill('#assign-screen [name=screen]', 'wall-esp');
+    await p.click('#assign-screen button');
+    await p.waitForFunction(() => document.querySelector('#screen-list').textContent.includes('wall-esp'));
+    await p.click('#remove-section');
+    await p.waitForFunction(() => document.querySelector('#remove-section').disabled && document.querySelector('#sections').options.length === 1);
+    await p.selectOption('#panels', 'room');
+    await p.fill('#assign-screen [name=screen]', 'wall-esp');
+    await p.click('#assign-screen button');
+    await p.waitForFunction(() => document.querySelector('#screen-list').textContent.includes('wall-esp'));
+    await p.selectOption('#panels', 'new-room');
+    await p.click('#remove-panel');
+    await p.waitForFunction(() => !document.querySelector('#panels option[value="new-room"]'));
+    ok('редактор: панели, разделы и переназначение ESP32', await p.locator('#panels').inputValue() === 'room');
+    await p.locator('#structure summary').click();
     await p.selectOption('#panels', 'summary');
     await p.selectOption('#sections', '1');
     ok('редактор: импортированный раздел', (await p.locator('#sources').innerText()).includes('room')

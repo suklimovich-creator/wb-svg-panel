@@ -17,7 +17,9 @@
     var operationNames = {
         add_instance: 'Добавлен', remove_instance: 'Удалён',
         move_instance: 'Перемещён', update_instance: 'Изменён',
-        update_panel: 'Настройки панели', update_section: 'Настройки раздела'
+        update_panel: 'Настройки панели', update_section: 'Настройки раздела',
+        add_panel: 'Добавлена панель', remove_panel: 'Удалена панель',
+        add_section: 'Добавлен раздел', remove_section: 'Удалён раздел', assign_screen: 'Назначен экран'
     };
 
     function byId(id) { return document.getElementById(id); }
@@ -181,7 +183,20 @@
         option(themes, '', 'Из конфига');
         model.themes.forEach(function (name) { option(themes, name, name); });
         themes.value = theme;
-        byId('workspace').hidden = !model.panels.length;
+        byId('workspace').hidden = false;
+        var hasPanel = model.panels.length > 0;
+        ['.components', '.preview', '.inspector'].forEach(function (selector) {
+            document.querySelector(selector).hidden = !hasPanel;
+        });
+        ['section-management', 'assign-screen', 'remove-panel', 'panel-settings'].forEach(function (id) {
+            byId(id).hidden = !hasPanel;
+        });
+        if (!hasPanel) {
+            empty('sections'); empty('sources'); byId('section-settings').hidden = true;
+            byId('structure').open = true;
+        }
+        var screens = empty('screen-names');
+        (model.screens || []).forEach(function (screen) { if (screen.name) { option(screens, screen.name, screen.panel); } });
         showPanel();
         progress();
     }
@@ -190,6 +205,8 @@
         var current = selectedPanel();
         if (!current) { return; }
         panel = current.id;
+        var assigned = (model.screens || []).filter(function (screen) { return screen.panel === panel; });
+        byId('screen-list').textContent = 'Назначенные экраны: ' + (assigned.map(function (screen) { return screen.name || 'Имя скрыто'; }).join(', ') || 'нет явных назначений');
         var menu = empty('sections');
         current.sections.forEach(function (item, index) {
             option(menu, index, item.title + (item.readonly ? ' · только чтение' : ''));
@@ -207,6 +224,7 @@
         var current = selectedSection();
         var sources = empty('sources');
         empty('instances');
+        byId('remove-section').disabled = !current || current.section == null;
         byId('section-settings').hidden = !current || current.section == null || !current.settings;
         byId('library').hidden = !current || current.readonly;
         if (current) {
@@ -695,6 +713,62 @@
             if (model) { byId('refresh-preview').hidden = false; }
         });
     }
+
+    function changeStructure(operation, form) {
+        if (busy || !model || !leaveEdits()) { return; }
+        byId('structure-status').textContent = 'Сохранение в черновике…';
+        run('POST', draftPath('/operation'), {draft_version: model.draft_version, operation: operation}, function (result) {
+            if (operation.op === 'assign_screen') {
+                model.screens = result.screens;
+                model.checked = result.checked;
+                model.draft_version = result.draft_version;
+                var names = empty('screen-names');
+                model.screens.forEach(function (entry) { if (entry.name) { option(names, entry.name, entry.panel); } });
+                byId('screen-list').textContent = 'Назначенные экраны: ' + model.screens.filter(function (entry) {
+                    return entry.panel === panel;
+                }).map(function (entry) { return entry.name || 'Имя скрыто'; }).join(', ');
+            } else {
+                invalidatePreview(); closeInspector(true); inspectorMode = 'tile'; padOpen = false;
+                issue = null; selected = null; section = null; model = result;
+                if (operation.op === 'add_panel') { panel = operation.panel; }
+                if (operation.op === 'add_section') {
+                    var changed = model.panels.filter(function (p) { return p.id === panel; })[0];
+                    section = changed.sections[changed.sections.length - 1].section;
+                }
+                byId('preview-image').hidden = true;
+                showModel();
+            }
+            if (form) { form.reset(); }
+            empty('details').hidden = true; progress();
+            byId('structure-status').textContent = 'Сохранено в черновике. Для применения нажмите «Опубликовать».';
+        }, function (error) { byId('structure-status').textContent = error.message; });
+    }
+
+    byId('create-panel').onsubmit = function (event) {
+        event.preventDefault();
+        changeStructure({op: 'add_panel', panel: this.elements.key.value.trim(), title: this.elements.caption.value.trim(), section: null}, this);
+    };
+    byId('remove-panel').onclick = function () {
+        if (window.confirm('Удалить панель «' + selectedPanel().title + '» вместе со всеми её разделами и плитками из черновика?')) {
+            changeStructure({op: 'remove_panel', panel: panel, section: null});
+        }
+    };
+    byId('create-section').onsubmit = function (event) {
+        event.preventDefault();
+        var parts = selectedPanel().sections;
+        if (parts.length === 1 && parts[0].section == null && parts[0].tiles.length &&
+            !window.confirm('Существующие плитки панели перейдут в первый раздел. Продолжить?')) { return; }
+        changeStructure({op: 'add_section', panel: panel, section: null, title: this.elements.caption.value.trim()}, this);
+    };
+    byId('remove-section').onclick = function () {
+        if (section != null && window.confirm('Удалить раздел «' + selectedSection().title + '» вместе с его плитками из черновика?')) {
+            changeStructure({op: 'remove_section', panel: panel, section: section});
+        }
+    };
+    byId('assign-screen').onsubmit = function (event) {
+        event.preventDefault();
+        changeStructure({op: 'assign_screen', panel: panel, section: null, screen: this.elements.screen.value.trim()}, this);
+    };
 
     function receivedRevision(revision, message) {
         model = null;

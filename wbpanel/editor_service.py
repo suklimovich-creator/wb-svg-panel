@@ -259,6 +259,14 @@ class EditorService:
         body = {"draft_id": key, "base_revision": session.draft.base_revision,
                 "draft_version": session.version, "checked": session.checked == session.version,
                 "panels": panels, "library": list(library.values()), "themes": palette.names() if panel_id is None else []}
+        if panel_id is None:
+            body["screens"] = []
+            screens = docs.data.get("screens") or {}
+            if isinstance(screens, dict):
+                for name, value in screens.items():
+                    target = value.get("panel") if isinstance(value, dict) else value
+                    if isinstance(name, str) and isinstance(target, str) and not policy.contains(target):
+                        body["screens"].append({"name": policy.label(name, None), "panel": target})
         if inline:
             body["inline_tiles"] = True
         policy.check_values(panels)
@@ -285,12 +293,19 @@ class EditorService:
             policy = session.policy
             try:
                 validate(operation)
-                policy.check_values({k: v for k, v in operation.items() if k not in ("op", "direction")})
+                visible = {k: v for k, v in operation.items() if k not in ("op", "direction")}
+                # A device name entered by the operator may contain a common login.
+                # Keep protected names write-only in the editor and its change log.
+                if operation["op"] == "assign_screen":
+                    visible.pop("screen")
+                policy.check_values(visible)
                 dimensions_only = (operation["op"] == "update_instance"
                                    and operation["fields"].keys() <= {"w", "h"})
                 brief = compact and dimensions_only
                 changeset, expected, event, path, original = apply(
                     candidate, session.draft.changeset, operation, session.originals)
+                if operation["op"] == "assign_screen" and policy.contains(event["id"]):
+                    event.pop("id")
                 if changeset._files == session.draft.changeset._files:
                     if brief:
                         return {"draft_version": version, "checked": session.checked == version}

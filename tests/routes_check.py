@@ -226,6 +226,8 @@ def main():
     check_editor()
     from editor_settings_check import run as check_settings
     check_settings()
+    from editor_structure_check import run as check_structure
+    check_structure()
     print("адресов: %d, проверок: %d%s" % (len(rules), len(CASES),
                                             ", ошибок: %d" % bad if bad else " - всё отвечает"))
     return 1 if bad else 0

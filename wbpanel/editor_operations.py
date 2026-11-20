@@ -106,7 +106,8 @@ def validate(operation):
     if not isinstance(operation, dict) or not isinstance(operation.get("op"), str):
         raise OperationError("Требуется структурная операция")
     kind = operation["op"]
-    fields = OP_FIELDS.get(kind)
+    from .editor_structure import FIELDS, validate_structure
+    fields = OP_FIELDS.get(kind, FIELDS.get(kind))
     required = fields | {"op", "panel", "section"} if fields is not None else set()
     optional = {"id"} if kind == "add_instance" else set()
     if fields is None or not required <= operation.keys() <= required | optional:
@@ -119,6 +120,8 @@ def validate(operation):
             raise OperationError("Требуется непустая строка", key)
         if value.startswith(("/", "\\")) or ".." in value.replace("\\", "/").split("/"):
             raise OperationError("Требуется идентификатор из конфигурации", key)
+    if kind in FIELDS:
+        validate_structure(operation)
     if kind == "add_instance":
         if "id" in operation and not CUSTOM_TILE_ID.fullmatch(operation["id"]):
             raise OperationError("ID: до 64 латинских букв, цифр, дефисов и подчёркиваний", "id")
@@ -136,6 +139,9 @@ def validate(operation):
 def apply(config, changeset, operation, originals):
     """Return staged bytes, expected resolved tree and a value-free event."""
     validate(operation)
+    from .editor_structure import FIELDS, apply_structure
+    if operation["op"] in FIELDS:
+        return apply_structure(config, changeset, operation, originals)
     if operation["op"] in ("update_panel", "update_section"):
         from .editor_settings import apply_settings
         return apply_settings(config, changeset, operation, originals)

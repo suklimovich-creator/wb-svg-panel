@@ -67,3 +67,8 @@ main { max-width: 90rem; grid-template-columns: minmax(0, 1fr) minmax(18rem, 25r
   #inspector-backdrop { position: fixed; inset: 0; background: #10233b80; z-index: 4; }
   .instance-row [data-direction] { min-width: 44px; min-height: 44px; }
 }
+
+#structure { margin-top: .8rem; }
+#structure summary { cursor: pointer; }
+#structure form { margin: .8rem 0 .4rem; }
+#structure form button { margin-top: .5rem; }

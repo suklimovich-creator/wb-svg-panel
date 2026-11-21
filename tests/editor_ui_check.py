@@ -131,7 +131,11 @@ def run():
     assert state == initial and state["draft_id"] != original["draft_id"]
     assert state["panels"][1]["sections"][1]["sources"] == ["room"]
     assert state["panels"][1]["sections"][1]["readonly"]
-    assert "command_topic" not in repr(state) and "channel_brightness" not in repr(state)
+    assert "channel_brightness" not in repr(state)
+    switch = next(item for item in state["library"] if item["id"] == "switch")
+    bindings = {item["name"]: item for item in switch["binding"]["fields"]}
+    assert bindings["channel"]["protected"] and bindings["channel"]["value"] == ""
+    assert bindings["command_topic"]["protected"] and bindings["command_topic"]["value"] == ""
     for op, fields in (
         ("add_instance", {"element": "missing"}),
         ("add_instance", {"element": "light", "id": "first"}),

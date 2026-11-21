@@ -11,12 +11,13 @@ from .editor_drafts import Changeset
 from .editor_operations import NODE_LOADER, OperationError, _node_at, _placement, _serialize, set_fields
 
 FIELDS = {"add_panel": {"title"}, "remove_panel": set(), "add_section": {"title"},
-          "remove_section": set(), "assign_screen": {"screen"}}
+          "remove_section": set(), "assign_screen": {"screen"},
+          "copy_panel": {"new_panel", "title"}, "copy_section": {"title"}}
 NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}")
 
 
 def validate_structure(op):
-    if op["op"] == "remove_section":
+    if op["op"] in ("remove_section", "copy_section"):
         if type(op["section"]) is not int or op["section"] < 0:
             raise OperationError("Выберите раздел")
     elif op["section"] is not None:
@@ -27,6 +28,8 @@ def validate_structure(op):
             raise OperationError("Введите название")
     if op["op"] == "add_panel" and not NAME.fullmatch(op["panel"]):
         raise OperationError("ID панели: до 64 латинских букв, цифр, дефисов и подчёркиваний")
+    if "new_panel" in op and (not isinstance(op["new_panel"], str) or not NAME.fullmatch(op["new_panel"])):
+        raise OperationError("Введите ID новой панели: до 64 латинских букв, цифр, дефисов и подчёркиваний")
     if "screen" in op and (not isinstance(op["screen"], str) or not NAME.fullmatch(op["screen"])):
         raise OperationError("Введите сетевое имя ESP32, например panel-6a10")
 
@@ -46,6 +49,9 @@ def ensure_removable(data, name):
 
 
 def apply_structure(config, changeset, op, originals):
+    if op["op"] in ("copy_panel", "copy_section"):
+        from .editor_copy import apply_copy
+        return apply_copy(config, changeset, op, originals)
     doc = config.documents
     expected = deepcopy(doc.data)
     panels = expected["panels"]

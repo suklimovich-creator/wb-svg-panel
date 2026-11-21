@@ -19,6 +19,7 @@ from .editor_documents import DocumentError, Documents, _Loader
 from .editor_model import PLACEMENT, placement_id, resolve
 from .editor_operations import OperationError, apply, list_at, validate
 from .editor_revisions import Conflict, LegacyConfiguration, RevisionNotFound, RevisionStore, ValidationError
+from .editor_bindings import binding_model, element_panels, affected_panels
 from .editor_settings import settings_model, SECTION_FIELDS
 from .registry import has_pad, resolve_type
 
@@ -197,6 +198,10 @@ class EditorService:
             kind = resolve_type(value, state)
             library[name] = {"id": name, "type": kind, "pad": has_pad(kind),
                              "title": policy.label(value.get("title") or name)}
+            binding = binding_model(value, policy)
+            if binding:
+                library[name]["binding"] = binding
+                library[name]["affected_panels"] = element_panels(docs.data, name)
             for field in ("w", "h"):
                 size = value.get(field)
                 if type(size) in (int, float) and not policy.contains(str(size)):
@@ -222,6 +227,10 @@ class EditorService:
                     else:
                         kind = resolve_type(tile, state)
                         item.update(type=kind, pad=has_pad(kind))
+                        binding = binding_model(tile, policy)
+                        if binding:
+                            item["binding"] = binding
+                            item["affected_panels"] = affected_panels(docs.data, [name])
                     result.append(item)
                 return result
 
@@ -377,13 +386,23 @@ class EditorService:
             if session.checked != session.version:
                 self._verify(candidate, policy)
             operations = [dict(event) for event in session.events]
+            affected = set()
+            for event in operations:
+                for data in (session.baseline.documents.data, candidate.documents.data):
+                    if event["op"] == "update_binding" and "element" in event:
+                        names = element_panels(data, event["element"])
+                    else:
+                        names = affected_panels(data, [event["panel"], event.get("new_panel")])
+                    affected.update(names)
             for event in operations:
                 if policy.contains(event["file"]):
                     event.pop("file")
             body = {"summary": summary, "operations": operations,
+                    "affected_panels": sorted(affected),
                     "draft_version": session.version, "base_revision": session.draft.base_revision}
             policy.check_values([{k: v for k, v in event.items() if k not in ("op", "fields")}
                                  for event in operations])
+            policy.check_values(body["affected_panels"])
             session.checked = session.version
             return body
 

@@ -97,6 +97,7 @@ OP_FIELDS = {
     "remove_instance": {"id"},
     "move_instance": {"id", "direction"},
     "update_instance": {"id", "fields"},
+    "update_binding": {"id", "fields"},
     "update_panel": {"fields"},
     "update_section": {"fields"},
 }
@@ -129,6 +130,8 @@ def validate(operation):
         raise OperationError("Требуется номер раздела", "section")
     if kind == "move_instance" and operation["direction"] not in ("up", "down"):
         raise OperationError("Допустимы направления up и down", "direction")
+    if kind == "update_binding" and (not isinstance(operation["fields"], dict) or not operation["fields"]):
+        raise OperationError("Укажите поля привязки", "fields")
     if kind == "update_instance":
         _placement(operation["fields"])
     elif kind in ("update_panel", "update_section"):
@@ -145,6 +148,9 @@ def apply(config, changeset, operation, originals):
     if operation["op"] in ("update_panel", "update_section"):
         from .editor_settings import apply_settings
         return apply_settings(config, changeset, operation, originals)
+    if operation["op"] == "update_binding":
+        from .editor_bindings import apply_binding
+        return apply_binding(config, changeset, operation, originals)
     doc = config.documents
     expected = deepcopy(doc.data)
     panel, section, kind = (operation[k] for k in ("panel", "section", "op"))

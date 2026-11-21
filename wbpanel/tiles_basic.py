@@ -23,6 +23,8 @@ from .state import to_float
 
 @tile("switch")
 class Switch(Tile):
+    editor_bindings = {"channel": "Канал состояния (устройство/канал)",
+                       "command_topic": "Топик команды (пусто — автоматически)"}
     roles = ("value",)
 
     def prepare(self, ctx):

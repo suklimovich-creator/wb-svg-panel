@@ -37,8 +37,10 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <details id="structure"><summary>Панели, разделы и экраны ESP32</summary>
         <form id="create-panel"><label>ID новой панели <input name="key" required maxlength="64" pattern="[A-Za-z0-9_][A-Za-z0-9_\-]{0,63}" placeholder="livingroom"></label>
           <label>Название панели <input name="caption" required maxlength="512"></label><button>Добавить панель</button></form>
+        <button type="button" id="copy-panel">Скопировать панель</button>
         <button type="button" id="remove-panel">Удалить выбранную панель</button>
         <div id="section-management"><form id="create-section"><label>Название нового раздела <input name="caption" required maxlength="512"></label><button>Добавить раздел</button></form>
+          <button type="button" id="copy-section">Скопировать секцию</button>
           <button type="button" id="remove-section">Удалить выбранный раздел</button></div>
         <form id="assign-screen"><label>Сетевое имя экрана ESP32 <input name="screen" list="screen-names" placeholder="panel-6a10" required maxlength="64"></label>
           <datalist id="screen-names"></datalist><button>Назначить выбранную панель</button><p id="screen-list"></p></form>
@@ -75,6 +77,7 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <p id="selection-empty">Выберите плитку в списке, чтобы изменить её размер или название.</p>
       <form id="placement" hidden>
         <p id="identity"></p>
+        <h3>На этой панели</h3>
         <div class="sizes">
           <label>Ширина <input id="width" type="number" step=".5" min=".5" max="32"></label>
           <label>Высота <input id="height" type="number" step=".5" min=".5" max="32"></label>
@@ -91,6 +94,11 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
         <button type="button" id="pad" hidden>Показать пульт</button>
         <p id="pad-status" role="status"></p>
         <img id="pad-image" alt="SVG пульта из черновика" hidden>
+      </form>
+      <form id="binding-form" hidden>
+        <h3 id="binding-title"></h3><p id="binding-scope"></p>
+        <div id="binding-fields"></div>
+        <button id="save-binding" type="submit">Сохранить привязку в черновике</button>
       </form>
     </section>
   </main>

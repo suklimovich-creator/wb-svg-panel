@@ -79,7 +79,9 @@ jobs:
           python tests/render_check.py --soft
 
       - name: Миграция и ревизии редактора плиток
-        run: python tests/editor_check.py
+        run: |
+          python tests/editor_check.py
+          python tests/editor_library_check.py
 
       - name: Каждый адрес демона отвечает
         run: python tests/routes_check.py
@@ -99,8 +101,9 @@ jobs:
 
       - name: Скрипты страницы - ES5 и порядок файлов
         run: |
-          npm install --no-save --silent acorn@8
+          npm install --no-save --silent acorn@8 jsdom@26
           node tests/js_check.js
+          node tests/editor_dom_check.js
 
       - name: Шелл-скрипты
         # -S warning: ошибки и предупреждения роняют сборку, придирки уровня

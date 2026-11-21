@@ -8,13 +8,14 @@
     var libraryIndex = {};
     var inspectorMode = "tile", returnFocus, savedScroll = 0;
     var mobile = window.matchMedia("(max-width: 760px)");
-    var issue;
+    var issue, affectedPanels = [];
     var initialPanel = '';
     if (root === '../') {
         try { initialPanel = decodeURIComponent(location.pathname.split('/').pop()); }
         catch (err) { initialPanel = ''; }
     }
     var operationNames = {
+        update_binding: 'Изменена привязка', copy_panel: 'Скопирована панель', copy_section: 'Скопирована секция',
         add_instance: 'Добавлен', remove_instance: 'Удалён',
         move_instance: 'Перемещён', update_instance: 'Изменён',
         update_panel: 'Настройки панели', update_section: 'Настройки раздела',
@@ -188,7 +189,7 @@
         ['.components', '.preview', '.inspector'].forEach(function (selector) {
             document.querySelector(selector).hidden = !hasPanel;
         });
-        ['section-management', 'assign-screen', 'remove-panel', 'panel-settings'].forEach(function (id) {
+        ['section-management', 'assign-screen', 'remove-panel', 'copy-panel', 'panel-settings'].forEach(function (id) {
             byId(id).hidden = !hasPanel;
         });
         if (!hasPanel) {
@@ -225,6 +226,7 @@
         var sources = empty('sources');
         empty('instances');
         byId('remove-section').disabled = !current || current.section == null;
+        byId('copy-section').disabled = !current || current.section == null;
         byId('section-settings').hidden = !current || current.section == null || !current.settings;
         byId('library').hidden = !current || current.readonly;
         if (current) {
@@ -321,7 +323,7 @@
     }
 
     function leaveEdits() {
-        return !(dirtyTile() || (inspectorMode !== 'tile' && settingsDirty())) || window.confirm('Не сохранять введённые изменения?');
+        return !(dirtyBinding() || dirtyTile() || (inspectorMode !== 'tile' && settingsDirty())) || window.confirm('Не сохранять введённые изменения?');
     }
 
     function openInspector(trigger) {
@@ -381,6 +383,7 @@
         var current = selectedSection();
         var tile = currentTile();
         byId('placement').hidden = !tile;
+        showBinding(tile);
         byId('selection-empty').hidden = !!tile;
         byId('instance-error').hidden = true;
         padToken += 1;
@@ -405,6 +408,54 @@
         byId('pad').textContent = padOpen ? 'Скрыть пульт' : 'Показать пульт';
     }
 
+    function showBinding(tile) {
+        var form = byId('binding-form');
+        var item = tile && (tile.element ? libraryItem(tile.element) : tile);
+        var binding = item && item.binding;
+        form.hidden = !binding;
+        var fields = empty('binding-fields');
+        if (!binding) { return; }
+        byId('binding-title').textContent = tile.element ? 'Общая привязка элемента' : 'Привязка этой плитки';
+        byId('binding-scope').textContent = binding.readonly ? binding.reason :
+            (tile.element ? 'Изменится во всех размещениях элемента ' + tile.element + '. ' : 'Изменится только эта плитка. ') +
+            'Затронутые панели: ' + (item.affected_panels || [panel]).join(', ');
+        byId('save-binding').hidden = !!binding.readonly;
+        (binding.fields || []).forEach(function (field) {
+            var label = node('label', field.label);
+            var input = node('input', '');
+            input.type = 'text'; input.maxLength = 512;
+            input.setAttribute('data-binding', field.name);
+            input.setAttribute('data-initial', field.value);
+            input.value = field.value;
+            input.placeholder = field.protected ? 'Защищённое значение — оставьте пустым, чтобы сохранить' : '';
+            label.appendChild(input); fields.appendChild(label);
+        });
+    }
+
+    function dirtyBinding() {
+        return !byId('binding-form').hidden && Array.prototype.some.call(byId('binding-fields').querySelectorAll('input'), function (input) {
+            return input.value !== input.getAttribute('data-initial');
+        });
+    }
+
+    byId('binding-form').onsubmit = function (event) {
+        event.preventDefault();
+        if (!model || busy || !currentTile()) { return; }
+        if (dirtyTile() && !window.confirm('Не сохранять введённые размеры и название?')) { return; }
+        var fields = {};
+        Array.prototype.forEach.call(byId('binding-fields').querySelectorAll('input'), function (input) {
+            if (input.value !== input.getAttribute('data-initial')) { fields[input.getAttribute('data-binding')] = input.value; }
+        });
+        if (!Object.keys(fields).length) { status('Привязка не изменилась.'); return; }
+        invalidatePreview();
+        run('POST', draftPath('/operation'), {draft_version: model.draft_version,
+            operation: {op: 'update_binding', panel: panel, section: section, id: selected, fields: fields}}, function (result) {
+            model = result; issue = null; affectedPanels = [];
+            empty('details').hidden = true;
+            showModel();
+        });
+    };
+
     var settingsInitial = {};
 
     function rememberSettings() {
@@ -421,6 +472,7 @@
     }
 
     function showSettings(mode) {
+        byId('binding-form').hidden = true;
         inspectorMode = mode;
         padOpen = false;
         refreshPad();
@@ -766,6 +818,8 @@
                 invalidatePreview(); closeInspector(true); inspectorMode = 'tile'; padOpen = false;
                 issue = null; selected = null; section = null; model = result;
                 if (operation.op === 'add_panel') { panel = operation.panel; }
+                if (operation.op === 'copy_panel') { panel = operation.new_panel; }
+                if (operation.op === 'copy_section') { section = operation.section + 1; }
                 if (operation.op === 'add_section') {
                     var changed = model.panels.filter(function (p) { return p.id === panel; })[0];
                     section = changed.sections[changed.sections.length - 1].section;
@@ -778,6 +832,20 @@
             byId('structure-status').textContent = 'Сохранено в черновике. Для применения нажмите «Опубликовать».';
         }, function (error) { byId('structure-status').textContent = error.message; });
     }
+
+    byId('copy-panel').onclick = function () {
+        if (busy || !selectedPanel()) { return; }
+        var id = window.prompt('ID копии панели', (panel + '-copy').slice(0, 64));
+        if (!id) { return; }
+        var title = window.prompt('Название копии', selectedPanel().title + ' — копия');
+        if (!title) { return; }
+        changeStructure({op: 'copy_panel', panel: panel, section: null, new_panel: id.trim(), title: title.trim()});
+    };
+    byId('copy-section').onclick = function () {
+        if (busy || section == null) { return; }
+        var title = window.prompt('Название копии секции', selectedSection().title + ' — копия');
+        if (title) { changeStructure({op: 'copy_section', panel: panel, section: section, title: title.trim()}); }
+    };
 
     byId('create-panel').onsubmit = function (event) {
         event.preventDefault();
@@ -876,17 +944,19 @@
         run('GET', draftPath('/diff'), null, function (diff) {
             var target = empty('details');
             var s = diff.summary;
+            affectedPanels = diff.affected_panels || [];
             markIssue(null);
             model.checked = model.draft_version === diff.draft_version;
             target.hidden = false;
             target.appendChild(node('h2', 'Изменения черновика'));
+            target.appendChild(node('p', 'Затронутые панели: ' + affectedPanels.join(', ')));
             target.appendChild(node('p', 'Файлы к записи · ' + s.writes + '. Экземпляры: добавлено ' +
                                     s.instances.added + ', удалено ' + s.instances.removed +
                                     ', изменено ' + s.instances.changed + '.'));
             var list = node('ul', '');
             diff.operations.forEach(function (op) {
                 list.appendChild(node('li', operationNames[op.op] + ' · ' + op.panel + ' · ' +
-                                      (op.element || op.id || '') + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
+                                      (op.new_panel || op.element || op.id || '') + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
             });
             target.appendChild(list);
             progress();
@@ -894,9 +964,9 @@
         });
     };
     byId('publish').onclick = function () {
-        if (!model || busy) { return; }
+        if (!model || busy || !leaveEdits()) { return; }
         function confirmPublish() {
-            if (!window.confirm('Применить проверенные изменения на рабочих панелях?')) { progress(); return; }
+            if (!window.confirm('Применить проверенные изменения? Затронутые панели: ' + affectedPanels.join(', '))) { progress(); return; }
             status('Публикация изменений…');
             previewToken += 1;
             function continueEditing(revision) {
@@ -923,7 +993,6 @@
                 checkResult();
             });
         }
-        if (model.checked) { confirmPublish(); return; }
         status('Проверка черновика перед публикацией…');
         run('GET', draftPath('/diff'), null, function (diff) {
             if (!diff.summary.writes && !diff.summary.deletes) {
@@ -932,6 +1001,7 @@
                 return;
             }
             model.checked = model.draft_version === diff.draft_version;
+            affectedPanels = diff.affected_panels || [];
             if (model.checked) { confirmPublish(); }
         });
     };

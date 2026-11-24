@@ -8,7 +8,7 @@ import re
 import yaml
 
 from .editor_documents import DocumentError
-from .editor_model import next_tile_id, reserve_tile_id, tile_lists
+from .editor_model import next_tile_id, reserve_tile_id, tile_lists, placement_id
 
 MAP = "tag:yaml.org,2002:map"
 STR = "tag:yaml.org,2002:str"
@@ -42,6 +42,8 @@ def _effective_pairs(node):
 def migration_files(config):
     """Return new YAML bytes without modifying the active legacy tree."""
     docs = config.documents
+    if docs and docs.data.get("schema") in (2, 3):
+        return placement_migration_files(config)
     if not docs or "schema" in docs.data or "elements" in docs.data:
         raise DocumentError("Миграция требует исходного конфига без schema и elements")
     root = docs.root.parent
@@ -83,8 +85,10 @@ def migration_files(config):
             ref = stable_id
             parent = docs.origins[logical].file.parent
             instance = [("element", _scalar(ref))]
+            instance.extend((key.value, block_copy(value, parent, parent))
+                            for key, value in _effective_pairs(node) if key.value in ("w", "h"))
             body = _mapping((key.value, block_copy(value, parent, parent))
-                            for key, value in _effective_pairs(node) if key.value != "id")
+                            for key, value in _effective_pairs(node) if key.value not in ("id", "w", "h"))
             if parent == root:
                 library.append((ref, body))
             else:
@@ -162,6 +166,15 @@ def _entry_nodes(docs, path, destination):
         includes = docs.includes.get(logical)
         source = includes[0][0].file.parent if includes else docs.origins[logical].file.parent
         yield key.value, block_copy(value, source, destination)
+
+
+def field_node(docs, path, destination):
+    includes = docs.includes.get(path)
+    if includes:
+        origin, node = includes[0]
+    else:
+        origin, node = docs.origins[path], docs.nodes[path]
+    return block_copy(node, origin.file.parent, destination)
 
 
 def inline_tile(config, path, destination):
@@ -245,7 +258,8 @@ def id_changes(old, new):
         for index, tile in enumerate(tiles):
             previous = tile.get("id")
             if isinstance(previous, str) and re.fullmatch(r"tile_[0-9a-f]{32}", previous):
-                result[previous] = new.documents.data_at(path + (index,))["id"]
+                result[previous] = placement_id(path[1], new.documents.data_at(path + (index,)),
+                                                path[3] if len(path) == 5 else None)
     return result
 
 
@@ -268,3 +282,82 @@ def verify_migration(old, new):
         raise DocumentError("Миграция изменила разрешённую конфигурацию")
     if any(screen_layout(name, old) != screen_layout(name, new) for name in old.panels):
         raise DocumentError("Миграция изменила ESP JSON")
+
+
+def placement_migration_files(config):
+    """Normalize schema 2/3 references, preserving unresolved values and includes.
+
+    Changed include branches are copied on write, so aliases/shared includes can
+    supply independent placements. Original files remain available for rollback.
+    Inline definitions retain their IDs. Missing dimensions remain type defaults.
+    """
+    docs = config.documents
+    root = docs.root.parent
+    replacements, files = {}, {}
+    for path, _, tiles in tile_lists(docs.data['panels'], legacy=True):
+        seen = set()
+        for index, tile in enumerate(tiles):
+            if 'element' not in tile:
+                continue
+            ref = tile['element']
+            if ref in seen:
+                # Do not echo potentially secret-backed identifiers.
+                raise DocumentError('Повтор элемента в одном контейнере: список %s, плитка %d. '
+                                    'Разнесите повторения по разделам перед миграцией.' %
+                                    ('корневой' if len(path) == 3 else 'раздела %d' % path[3], index + 1))
+            seen.add(ref)
+            logical = path + (index,)
+            library = docs.data['elements'][ref]
+            inherited = [key for key in ('w', 'h') if key not in tile and key in library]
+            if 'id' not in tile and not inherited:
+                continue
+            parent = docs.origins[logical].file.parent
+            pairs = dict(_entry_nodes(docs, logical, parent))
+            pairs.pop('id', None)
+            for key in inherited:
+                field = ('elements', ref, key)
+                includes = docs.includes.get(field)
+                if includes:
+                    origin, node = includes[0]
+                else:
+                    origin, node = docs.origins[field], docs.nodes[field]
+                pairs[key] = block_copy(node, origin.file.parent, parent)
+            replacements[logical] = _mapping(pairs.items())
+
+    if not replacements:
+        return {}
+
+    def include_file(node, parent, source):
+        index = len(files) + 1
+        while True:
+            path = parent.relative_to(root) / ('editor-placement-%03d.yaml' % index)
+            if path not in files and not (root / path).exists() and not (root / path).is_symlink():
+                break
+            index += 1
+        files[path] = _serialize(node)
+        return _scalar(os.path.relpath(root / path, source), '!include')
+
+    def transform(node, logical):
+        if not any(target[:len(logical)] == logical for target in replacements):
+            return node
+        if node.tag == '!include':
+            transformed = transform(docs.nodes[logical], logical)
+            origins = docs.includes[logical]
+            for index in reversed(range(len(origins))):
+                origin, _ = origins[index]
+                parent = (docs.origins[logical].file.parent if index == len(origins) - 1
+                          else origins[index + 1][0].file.parent)
+                transformed = include_file(transformed, parent, origin.file.parent)
+            return transformed
+        if logical in replacements:
+            return replacements[logical]
+        updated = copy(node)
+        if isinstance(node, yaml.MappingNode):
+            updated.value = [(key, transform(value, logical + (key.value,)))
+                             for key, value in _effective_pairs(node)]
+        elif isinstance(node, yaml.SequenceNode):
+            updated.value = [transform(value, logical + (i,)) for i, value in enumerate(node.value)]
+        return updated
+
+    files[Path(docs.root.name)] = _serialize(transform(docs.nodes[()], ()))
+    return files

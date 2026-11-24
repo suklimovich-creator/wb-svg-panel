@@ -82,6 +82,7 @@ jobs:
         run: |
           python tests/editor_check.py
           python tests/editor_library_check.py
+          python tests/editor_placements_check.py
 
       - name: Каждый адрес демона отвечает
         run: python tests/routes_check.py

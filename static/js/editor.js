@@ -93,6 +93,7 @@
     function errorMessage(error) {
         if (error.current) {
             model = error.current;
+            selected = null; section = null; closeInspector(true);
             showModel();
         }
         if (error.code === 'base_revision' || error.code === 'draft_unknown') {
@@ -148,8 +149,10 @@
     function search() {
         var query = byId('search').value.toLowerCase().trim();
         var menu = empty('elements');
+        var current = selectedSection();
         model.library.forEach(function (item) {
-            if (label(item).toLowerCase().indexOf(query) >= 0) {
+            var placed = !model.inline_tiles && current && current.tiles.some(function (tile) { return tile.element === item.id; });
+            if (!placed && label(item).toLowerCase().indexOf(query) >= 0) {
                 option(menu, item.id, label(item));
             }
         });
@@ -700,7 +703,7 @@
     function remember() {
         try {
             if (model) {
-                sessionStorage.setItem(resumeKey, JSON.stringify({id: model.draft_id, panel: panel, section: section, tile: selected}));
+                sessionStorage.setItem(resumeKey, JSON.stringify({id: model.draft_id, panel: panel, section: section, tile: selected, version: model.draft_version}));
             } else { sessionStorage.removeItem(resumeKey); }
         } catch (err) { /* Storage may be disabled by the browser. */ }
     }
@@ -715,8 +718,8 @@
         run('GET', 'drafts/' + encodeURIComponent(saved.id), null, function (result) {
             model = result;
             panel = saved.panel;
-            section = saved.section;
-            selected = saved.tile;
+            section = saved.version === result.draft_version ? saved.section : null;
+            selected = saved.version === result.draft_version ? saved.tile : null;
             byId('actions').hidden = false;
             showModel();
         }, function (error) {
@@ -783,6 +786,7 @@
                 if (part) { byId('sections').options[byId('sections').selectedIndex].textContent = part.title + (part.readonly ? ' · только чтение' : ''); }
                 if (op === 'add_instance') { byId('new-id').value = ''; search(); }
                 syncInstances();
+                if (op === 'remove_instance') { search(); }
                 if (op === 'remove_instance' && selected === fields.id) { selected = null; closeInspector(true); showInstance(); }
                 if (settings) { rememberSettings(); }
                 if (op === 'update_instance') {

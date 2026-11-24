@@ -93,6 +93,19 @@ async function until(fn) {
     choose('panels', 'b'); prompts.push('Lights copy'); el('copy-section').click();
     await until(() => el('sections').options.length === 2 && !el('sections').disabled);
     assert.strictEqual(el('sections').selectedIndex, 1);
+    // Another tab inserts a section at the selected index. A stale edit must
+    // return 409 and clear selection rather than selecting its replacement.
+    selectedTile();
+    w.dispatchEvent(new w.Event('pagehide'));
+    const stored = JSON.parse(w.sessionStorage.getItem(w.sessionStorage.key(0)));
+    const external = await rpc('POST', '/api/editor/drafts/' + stored.id + '/operation',
+      JSON.stringify({draft_version: stored.version, operation: {op: 'copy_section', panel: 'b', section: 0, title: 'Other tab'}}),
+      {'X-WB-Editor': '1', 'Content-Type': 'application/json'});
+    assert.strictEqual(external.status, 200);
+    el('width').value = '4'; submit('placement');
+    await until(() => el('sections').options.length === 3 && !el('sections').disabled);
+    assert(!d.querySelector('#instances [aria-pressed="true"]'));
+    assert(el('placement').hidden);
     el('check').click();
     await until(() => !el('details').hidden && !el('check').disabled);
     assert(el('details').textContent.includes('Затронутые панели: a, a-copy, b, summary'));

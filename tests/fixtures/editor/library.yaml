@@ -12,3 +12,8 @@ switch:
 invalid_switch:
   type: switch
   title: Выключатель без канала
+extra_light:
+  type: dimmer
+  title: Дополнительная подсветка
+  channel: dm/K1
+  channel_brightness: dm/Channel 1

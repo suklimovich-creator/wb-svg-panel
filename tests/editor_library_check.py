@@ -77,7 +77,7 @@ def run(root, schema):
     c = edit('copy_panel', panel='b', new_panel='b-copy', title='B copy')
     c = edit('copy_section', panel='summary', section=0, title='Referenced copy')
     assert c.panels['summary']['sections'][1]['from'] == ['a', 'b']
-    ids = [placement_id(p[1], t) for p, _, ts in tile_lists(c.documents.data['panels']) for t in ts]
+    ids = [placement_id(p[1], t, p[3] if len(p) == 5 else None) for p, _, ts in tile_lists(c.documents.data['panels']) for t in ts]
     assert len(set(ids)) == len(ids)
     if schema == 3:
         assert c.get('last_tile_ids')['switch'] == max(ids)

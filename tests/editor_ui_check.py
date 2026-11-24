@@ -194,10 +194,11 @@ def run():
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = dict(pool.map(simultaneous, ("Первый запрос", "Второй запрос")))
     assert set(results) == {200, 409} and results[409]["error"]["current"] == results[200]
-    state = operation(first, state, "add_instance", element="light")
+    operation(first, state, "add_instance", element="light", code=400)
+    state = operation(first, state, "add_instance", element="extra_light")
     tiles = state["panels"][0]["sections"][0]["tiles"]
     first_id = tiles[-1]["id"]
-    assert tiles[-1]["element"] == tiles[0]["element"] and first_id not in ("first", "second")
+    assert tiles[-1]["element"] == "extra_light" and first_id not in ("first", "second")
     assert len(get(second).get_json()["panels"][0]["sections"][0]["tiles"]) == 3
     stale = operation(first, initial, "remove_instance", id="first", code=409)
     assert stale["error"]["current"] == state
@@ -210,7 +211,7 @@ def run():
     state = operation(first, state, "update_instance", id="first", fields={"title": "Новая плитка"})
     state = operation(first, state, "remove_instance", id="third")
     assert any(e["id"] == "switch" for e in state["library"])
-    state = operation(first, state, "add_instance", panel="summary", section=0, element="light")
+    state = operation(first, state, "add_instance", panel="summary", section=0, element="extra_light")
     inline = state["panels"][1]["sections"][0]["tiles"]
     assert len(inline) == 3 and inline[-1]["id"] != first_id
     state = operation(first, state, "move_instance", panel="summary", section=0,

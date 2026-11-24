@@ -212,14 +212,14 @@ class EditorService:
                 continue
             sections = []
 
-            def instances(tiles):
+            def instances(tiles, section=None):
                 result = []
                 for tile in tiles:
                     placement = {k: policy.label(tile[k], "") for k in sorted(PLACEMENT)
                                  if k in tile}
                     if "title" in tile and placement["title"] != tile["title"]:
                         placement["title_protected"] = True
-                    item = {"id": placement_id(name, tile), **placement}
+                    item = {"id": placement_id(name, tile, section), **placement}
                     if "id" not in tile:
                         item["implicit_id"] = True
                     if "element" in tile:
@@ -248,7 +248,7 @@ class EditorService:
                 sections.append({"section": index,
                                  "title": policy.label(section.get("title") or "Раздел"),
                                  "readonly": readonly, "sources": sources,
-                                 "tiles": [] if readonly else instances(section["tiles"]),
+                                 "tiles": [] if readonly else instances(section["tiles"], index),
                                  "settings": {k: section[k] for k in SECTION_FIELDS if k in section}})
             panel_cols = panel.get("cols", 4)
             panels.append({"id": name, "title": policy.label(panel.get("title") or name),

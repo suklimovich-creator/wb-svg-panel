@@ -62,7 +62,17 @@ def apply_copy(config, changeset, op, originals):
 
     def new_ids(container, node):
         for index, tile in enumerate(container.get('tiles') or []):
-            definition = expected.get('elements', {}).get(tile.get('element'), tile)
+            if 'element' in tile:
+                tile_node = _node_at(node, ('tiles', index))
+                set_fields(tile_node, tile, {'id': None})
+                definition = expected.get('elements', {})[tile['element']]
+                for field in ('w', 'h'):
+                    if field not in tile and field in definition:
+                        tile[field] = definition[field]
+                        tile_node.value.append((ScalarNode(STR, field), clone_node(
+                            docs, ('elements', tile['element'], field), origin.file.parent)))
+                continue
+            definition = tile
             new_id = next_tile_id(definition, occupied)
             occupied.add(new_id)
             reserve_tile_id(counters, new_id)

@@ -10,7 +10,7 @@ from yaml.nodes import MappingNode, ScalarNode, SequenceNode
 from . import yamlx
 from .editor_drafts import Changeset
 from .editor_model import CUSTOM_TILE_ID, PLACEMENT, next_tile_id, placement_id, reserve_tile_id
-from .editor_migration import _entry_nodes, _mapping, _scalar, block_copy, inline_tile
+from .editor_migration import _entry_nodes, _mapping, _scalar, block_copy, inline_tile, field_node
 from .editor_documents import DocumentError
 
 STR = "tag:yaml.org,2002:str"
@@ -183,8 +183,12 @@ def apply(config, changeset, operation, originals):
         occupied = {key for category, key in config.origins if category == "tile"}
         if stable_id in occupied:
             raise OperationError("Такой ID уже занят", "id")
-        compact_id = placement_id(panel, {"element": element})
-        compact = not inline and stable_id is None and compact_id not in occupied
+        compact_id = placement_id(panel, {"element": element}, section)
+        if not inline and any(t.get("element") == element for t in tiles):
+            raise OperationError("Этот элемент уже размещён в выбранном разделе", "element")
+        if not inline and stable_id is not None:
+            raise OperationError("Для ссылки на библиотеку отдельный id не нужен", "id")
+        compact = not inline
         if compact:
             stable_id = compact_id
         elif stable_id is None:
@@ -226,7 +230,12 @@ def apply(config, changeset, operation, originals):
         if kind == "add_instance":
             if not inline:
                 entry = {"element": element} if compact else {"id": stable_id, "element": element}
-                entry_node = yaml.SafeDumper("").represent_data(entry)
+                # Freeze library defaults at creation; absent sizes retain type defaults.
+                entry.update({key: definition[key] for key in ("w", "h") if key in definition})
+                fields = {key: field_node(doc, source_path + (key,), origin.file.parent)
+                          for key in ("w", "h") if key in definition}
+                entry_node = _mapping([(key, fields[key] if key in ("w", "h") else _scalar(value))
+                                       for key, value in entry.items()])
             else:
                 if source_path[0] == "elements":
                     fields = list(_entry_nodes(doc, source_path, origin.file.parent))

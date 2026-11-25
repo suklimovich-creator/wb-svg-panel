@@ -15,7 +15,7 @@
         catch (err) { initialPanel = ''; }
     }
     var operationNames = {
-        update_binding: 'Изменена привязка', copy_panel: 'Скопирована панель', copy_section: 'Скопирована секция',
+        update_element: 'Изменены свойства элемента', update_binding: 'Изменена привязка', copy_panel: 'Скопирована панель', copy_section: 'Скопирована секция',
         add_instance: 'Добавлен', remove_instance: 'Удалён',
         move_instance: 'Перемещён', update_instance: 'Изменён',
         update_panel: 'Настройки панели', update_section: 'Настройки раздела',
@@ -174,7 +174,61 @@
         byId('add').disabled = !menu.options.length;
     }
 
+    function showProperties() {
+        var id = byId('property-element').value;
+        var item = model.library.find(function (entry) { return entry.id === id; });
+        var fields = empty('property-fields');
+        if (!item) { byId('property-preview').removeAttribute('src'); return; }
+        item.properties.forEach(function (field) {
+            var spec = field.spec;
+            var label = node('label', spec[0]);
+            var input = node(spec[1] === 'choice' ? 'select' : 'input', '');
+            if (spec[1] === 'choice') {
+                option(input, '', 'По умолчанию');
+                spec.slice(2).forEach(function (choice) { option(input, choice, choice); });
+            } else if (spec[1] === 'size' || spec[1] === 'integer') {
+                input.type = 'number';
+                input.min = spec[2] === undefined ? 0.5 : spec[2];
+                input.max = spec[3] === undefined ? 32 : spec[3];
+                input.step = spec[1] === 'size' ? 0.5 : 1;
+            }
+            input.name = field.key;
+            input.disabled = field.protected;
+            input.value = field.value == null ? '' : field.value;
+            input.dataset.initial = input.value;
+            if (field.protected) { input.placeholder = 'Задаётся в YAML'; }
+            label.appendChild(input);
+            fields.appendChild(label);
+        });
+        byId('property-preview').src = api + draftPath('/element.svg?element=' + encodeURIComponent(id) + '&draft_version=' + model.draft_version);
+    }
+
+    byId('library-editor').ontoggle = function () { if (this.open && model) { showProperties(); } };
+    byId('property-element').onchange = showProperties;
+    byId('property-form').onsubmit = function (event) {
+        event.preventDefault();
+        var fields = {};
+        Array.prototype.forEach.call(this.elements, function (input) {
+            if (input.name && !input.disabled && input.value !== input.dataset.initial) {
+                fields[input.name] = input.value === '' ? null : input.type === 'number' ? Number(input.value) : input.value;
+            }
+        });
+        if (!Object.keys(fields).length || busy) { return; }
+        run('POST', draftPath('/operation'), {draft_version: model.draft_version, operation: {
+            op: 'update_element', element: byId('property-element').value, fields: fields
+        }}, function (result) {
+            model = result;
+            empty('details').hidden = true;
+            showModel();
+        });
+    };
+
     function showModel() {
+        var previous = byId('property-element').value;
+        var properties = empty('property-element');
+        model.library.forEach(function (item) { option(properties, item.id, label(item)); });
+        if (model.library.some(function (item) { return item.id === previous; })) { properties.value = previous; }
+        if (byId('library-editor').open) { showProperties(); }
         libraryIndex = Object.create(null);
         model.library.forEach(function (item) { libraryIndex[item.id] = item; });
         var menu = empty('panels');
@@ -953,13 +1007,13 @@
             model.checked = model.draft_version === diff.draft_version;
             target.hidden = false;
             target.appendChild(node('h2', 'Изменения черновика'));
-            target.appendChild(node('p', 'Затронутые панели: ' + affectedPanels.join(', ')));
+            if (affectedPanels.length) { target.appendChild(node('p', 'Затронутые панели: ' + affectedPanels.join(', '))); }
             target.appendChild(node('p', 'Файлы к записи · ' + s.writes + '. Экземпляры: добавлено ' +
                                     s.instances.added + ', удалено ' + s.instances.removed +
                                     ', изменено ' + s.instances.changed + '.'));
             var list = node('ul', '');
             diff.operations.forEach(function (op) {
-                list.appendChild(node('li', operationNames[op.op] + ' · ' + op.panel + ' · ' +
+                list.appendChild(node('li', operationNames[op.op] + ' · ' + (op.panel ? op.panel + ' · ' : '') +
                                       (op.new_panel || op.element || op.id || '') + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
             });
             target.appendChild(list);

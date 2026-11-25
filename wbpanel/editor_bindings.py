@@ -10,6 +10,62 @@ from .editor_operations import MAP, NODE_LOADER, OperationError, _node_at, _plac
 from .registry import REGISTRY, resolve_type
 
 
+COMMON_PROPERTIES = {'title': ('Название', 'text'), 'w': ('Базовая ширина', 'size'),
+                     'h': ('Базовая высота', 'size'), 'icon': ('Иконка', 'text')}
+
+
+def properties(definition):
+    cls = REGISTRY.get(resolve_type(definition, None))
+    fields = {**COMMON_PROPERTIES, **getattr(cls, 'editor_properties', {})}
+    if definition.get('service') or definition.get('roles'):
+        fields.pop('channel', None)
+    return fields
+
+
+def locked(doc, path):
+    source = doc.nodes.get(path)
+    return (path in doc.includes or
+            (source is not None and (not isinstance(source, yaml.ScalarNode)
+             or source.tag.startswith('!') or '${' in str(source.value))))
+
+
+def property_model(doc, name, definition, policy):
+    result = []
+    for key, spec in properties(definition).items():
+        value = definition.get(key)
+        protected = locked(doc, ('elements', name, key)) or policy.contains(str(value))
+        result.append(dict(key=key, spec=spec, protected=protected, value=None if protected else value))
+    return result
+
+
+def apply_element(config, changeset, op, originals):
+    doc = config.documents
+    path = ('elements', op['element'])
+    if path not in doc.origins:
+        raise OperationError('Элемент не найден')
+    definition = doc.data_at(path)
+    specs = properties(definition)
+    for key, value in op['fields'].items():
+        if key not in specs or locked(doc, path + (key,)):
+            raise OperationError('Поле недоступно для редактирования')
+        kind = specs[key][1]
+        if value is None:
+            continue
+        if kind == 'size':
+            _placement({key: value})
+        elif kind == 'integer':
+            if type(value) is not int or not specs[key][2] <= value <= specs[key][3]:
+                raise OperationError('Значение вне диапазона', key)
+        elif kind == 'choice':
+            if value not in specs[key][2:]:
+                raise OperationError('Неизвестный режим', key)
+        else:
+            _placement({'title': value})
+            if kind == 'channel' and ('/' not in value or any(c in value for c in '#+')):
+                raise OperationError('Требуется конкретный канал устройства', key)
+    return write_definition(doc, changeset, op, originals, path, op['element'])
+
+
 def binding_fields(definition):
     return getattr(REGISTRY.get(resolve_type(definition, None)), 'editor_bindings', {})
 
@@ -57,7 +113,6 @@ def binding_model(definition, policy):
 
 def apply_binding(config, changeset, op, originals):
     doc = config.documents
-    expected = deepcopy(doc.data)
     list_path, container = list_at(doc.data, op['panel'], op['section'])
     try:
         origin = config.tile_origin(op['id'])
@@ -80,6 +135,13 @@ def apply_binding(config, changeset, op, originals):
             raise OperationError('Введите канал в формате устройство/канал', name)
         if value != value.strip() or any(c in value for c in ('\n', '\r', '\x00', '#', '+')):
             raise OperationError('Введите конкретный канал без MQTT-масок и перевода строки', name)
+    return write_definition(doc, changeset, op, originals, path, element)
+
+
+def write_definition(doc, changeset, op, originals, path, element):
+    expected = deepcopy(doc.data)
+    definition = doc.data_at(path)
+    fields = op['fields']
     origin = doc.origins[path]
     if origin.file.name == yamlx.SECRETS_NAME:
         raise OperationError('Файл секретов доступен только для чтения')
@@ -102,8 +164,8 @@ def apply_binding(config, changeset, op, originals):
             files.pop(relative, None)
         else:
             files[relative] = body
-    event = {'op': op['op'], 'panel': op['panel'], 'section': op['section'],
-             'id': op['id'], 'fields': sorted(fields), 'file': relative.name,
+    event = {'op': op['op'], 'panel': op.get('panel'), 'section': op.get('section'),
+             'id': op.get('id', element), 'fields': sorted(fields), 'file': relative.name,
              'scope': 'element' if element else 'instance'}
     if element:
         event['element'] = element

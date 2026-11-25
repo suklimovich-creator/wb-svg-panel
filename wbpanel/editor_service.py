@@ -19,7 +19,7 @@ from .editor_documents import DocumentError, Documents, _Loader
 from .editor_model import PLACEMENT, placement_id, resolve
 from .editor_operations import OperationError, apply, list_at, validate
 from .editor_revisions import Conflict, LegacyConfiguration, RevisionNotFound, RevisionStore, ValidationError
-from .editor_bindings import binding_model, element_panels, affected_panels
+from .editor_bindings import property_model, binding_model, element_panels, affected_panels
 from .editor_settings import settings_model, SECTION_FIELDS
 from .registry import has_pad, resolve_type
 
@@ -198,6 +198,7 @@ class EditorService:
             kind = resolve_type(value, state)
             library[name] = {"id": name, "type": kind, "pad": has_pad(kind),
                              "title": policy.label(value.get("title") or name)}
+            library[name]["properties"] = property_model(docs, name, value, policy)
             binding = binding_model(value, policy)
             if binding:
                 library[name]["binding"] = binding
@@ -319,7 +320,7 @@ class EditorService:
                     if brief:
                         return {"draft_version": version, "checked": session.checked == version}
                     return self._model(key, session, candidate,
-                                       panel_id=operation["panel"] if panel_only else None)
+                                       panel_id=operation.get("panel") if panel_only else None)
                 draft = replace(session.draft, changeset=changeset)
                 try:
                     baseline = session.baseline
@@ -343,7 +344,7 @@ class EditorService:
                 staged = replace(session, draft=draft, version=session.version + 1)
                 result = ({"draft_version": staged.version, "checked": False} if brief
                           else self._model(key, staged, updated,
-                                           panel_id=operation["panel"] if panel_only else None))
+                                           panel_id=operation.get("panel") if panel_only else None))
             except OperationError as exc:
                 supplied = operation if isinstance(operation, dict) else {}
                 details = {k: supplied[k] for k in ("panel", "id") if k in supplied
@@ -389,6 +390,8 @@ class EditorService:
             affected = set()
             for event in operations:
                 for data in (session.baseline.documents.data, candidate.documents.data):
+                    if event["op"] == "update_element":
+                        continue
                     if event["op"] == "update_binding" and "element" in event:
                         names = element_panels(data, event["element"])
                     else:

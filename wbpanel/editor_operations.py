@@ -107,6 +107,11 @@ def validate(operation):
     if not isinstance(operation, dict) or not isinstance(operation.get("op"), str):
         raise OperationError("Требуется структурная операция")
     kind = operation["op"]
+    if kind == "update_element":
+        if (set(operation) != {"op", "element", "fields"} or not isinstance(operation["element"], str)
+                or not isinstance(operation["fields"], dict) or not operation["fields"]):
+            raise OperationError("Требуются элемент и изменённые свойства")
+        return
     from .editor_structure import FIELDS, validate_structure
     fields = OP_FIELDS.get(kind, FIELDS.get(kind))
     required = fields | {"op", "panel", "section"} if fields is not None else set()
@@ -143,6 +148,9 @@ def apply(config, changeset, operation, originals):
     """Return staged bytes, expected resolved tree and a value-free event."""
     validate(operation)
     from .editor_structure import FIELDS, apply_structure
+    if operation["op"] == "update_element":
+        from .editor_bindings import apply_element
+        return apply_element(config, changeset, operation, originals)
     if operation["op"] in FIELDS:
         return apply_structure(config, changeset, operation, originals)
     if operation["op"] in ("update_panel", "update_section"):

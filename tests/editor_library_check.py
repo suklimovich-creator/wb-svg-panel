@@ -126,9 +126,44 @@ panels:
     assert service.get(model['draft_id']).version == 0
 
 
+def library_properties(root):
+    from wbpanel import web, web_editor
+    root.mkdir()
+    path = root / 'config.yaml'
+    original = """schema: 2
+elements:
+  clock: {type: clock, device: !secret weather_name}
+  forecast: {type: forecast}
+  reading: {type: value, channel: dev/temperature}
+panels: {home: {tiles: [{element: reading, w: 2}]}}
+"""
+    path.write_text(original)
+    (root / 'secrets.yaml').write_text('weather_name: PRIVATE-WEATHER')
+    service = EditorService(path)
+    model = service.create()
+    key, base = model['draft_id'], model['base_revision']
+    assert 'PRIVATE-WEATHER' not in str(model)
+    web.config = Config(path)
+    web_editor.service = service
+    for name, fields in [('clock', {'view': 'clock_weather', 'w': 1.5, 'h': 1.5}),
+                         ('forecast', {'hours': 8}), ('reading', {'unit': '°C', 'w': 1})]:
+        model = service.operation(key, model['draft_version'], dict(op='update_element', element=name, fields=fields))
+        response = web.app.test_client().get('/api/editor/drafts/%s/element.svg?element=%s' % (key, name))
+        assert response.status_code == 200 and b'<svg' in response.data, response.data
+        assert b'PRIVATE-WEATHER' not in response.data
+    reject(lambda: service.operation(key, model['draft_version'], dict(op='update_element', element='clock', fields={'device': 'other'})))
+    assert service.get(key).candidate.panels['home']['tiles'][0]['w'] == 2
+    service.diff(key)
+    revision = service.publish(key, model['draft_version'])
+    assert '!secret' in path.read_text()
+    service.rollback(base, revision['id'])
+    assert path.read_text() == original
+
+
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
     for schema in (2, 3):
         run(root / str(schema), schema)
     protected(root / 'protected')
+    library_properties(root / 'properties')
 print('editor library: shared/local bindings, copies, includes, secrets, conflicts, publish and rollback OK')

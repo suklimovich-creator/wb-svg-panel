@@ -114,8 +114,9 @@ function saverInline(svg){
           fr.readAsDataURL(b);
         });
       })
-      .catch(function(){ return ''; });
+      .catch(function(){ throw new Error('Не загружена картинка заставки'); });
   })).then(function(data){
+    for (var j = 0; j < data.length; j++) if (!data[j]) throw new Error('Не загружена картинка заставки');
     for (var i = 0; i < urls.length; i++) if (data[i]) svg = svg.split('"' + urls[i] + '"').join('"' + data[i] + '"');
     return svg;
   });
@@ -127,7 +128,7 @@ function saverInline(svg){
 var saverVer = null, saverLast = '', saverAbort = null;
 function saverPanel(){
   clearTimeout(saverTimer);
-  if (!saverOn || !CONTROLS.saver_panel) return;
+  if (!saverOn || !CONTROLS.saver_panel || appReload) return;
   var seq = ++saverSeq, cols = saverCols(), again = 300;
   saverAbort = window.AbortController ? new AbortController() : null;
   // Тема - устройства, если у панели заставки нет своей.
@@ -139,12 +140,16 @@ function saverPanel(){
       var v = r.headers && r.headers.get ? r.headers.get('X-Panel-Version') : null;
       if (v !== null && v !== '') saverVer = parseInt(v, 10);
       if (r.status === 204) { again = 2000; return null; }   // мест для ждущих нет
-      if (!r.ok) { again = 5000; return ''; }
+      if (!r.ok || r.redirected) throw responseError(r);
+      checkApp(r);
       return r.text();
     })
     .then(function(svg){
       if (svg === null || seq !== saverSeq || !saverOn) return null;
-      if (svg && svg === saverLast) return null;          // ничего не поменялось
+      if (svg && svg === saverLast) { saverFail(null); return null; }          // ничего не поменялось
+      completeSvg(svg);
+      svg = svg.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      if (!parseSvg(svg)) throw new Error('Некорректная заставка');
       saverLast = svg;
       return svg;
     })
@@ -158,8 +163,9 @@ function saverPanel(){
     .then(function(svg){
       if (svg === null || !saverOn || seq !== saverSeq) return;
       if (svg.indexOf('<svg') < 0) { saverFail(svg ? 'нет картинки' : 'нет ответа'); again = 5000; return; }
-      var img = saverEl.querySelector('.sv-panel');
-      if (!img) return;
+      var previous = saverEl.querySelector('.sv-panel');
+      if (!previous) return;
+      var img = document.createElement('img'); img.className = 'sv-panel'; img.alt = '';
       // фон вокруг - поле темы панели, если своей картинки нет
       if (!CONTROLS.saver_img) {
         var m = /<svg[^>]*class="([^"]*)"/.exec(svg), cls = m ? m[1].split(/\s+/) : [];
@@ -169,6 +175,8 @@ function saverPanel(){
       }
       var url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'}));
       img.onload = function(){
+        if (!saverOn || seq !== saverSeq) { URL.revokeObjectURL(url); return; }
+        previous.parentNode.replaceChild(img, previous);
         if (saverUrl && saverUrl !== url) URL.revokeObjectURL(saverUrl);
         saverUrl = url; img.style.display = ''; saverMarkup(null); saverFail(null);
         saverCamLayout();
@@ -178,6 +186,8 @@ function saverPanel(){
       // и в консоли: что сказал разборщик XML, если он вообще возражает.
       img.onerror = function(){
         URL.revokeObjectURL(url);
+        if (!saverOn || seq !== saverSeq) return;
+        if (previous.getAttribute('src')) { saverFail('нет свежих данных'); return; }
         var why = '';
         try {
           var pe = new DOMParser().parseFromString(svg, 'image/svg+xml').getElementsByTagName('parsererror')[0];
@@ -229,6 +239,11 @@ function saverFail(why){
   var img = saverEl.querySelector('.sv-panel'), clock = saverEl.querySelector('.sv-clock');
   var hint = saverEl.querySelector('.sv-hint');
   if (why) {
+    saverLast = '';
+    if ((img && img.getAttribute('src')) || saverEl.querySelector('.sv-inline svg')) {
+      if (hint) hint.textContent = 'Нет связи · данные устарели · коснитесь, чтобы вернуться';
+      return;
+    }
     if (img) img.style.display = 'none';
     if (!clock) {
       clock = document.createElement('div'); clock.className = 'sv-clock';

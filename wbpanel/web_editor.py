@@ -207,6 +207,13 @@ def _svg(value, policy):
         "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"})
 
 
+@app.route("/editor/library")
+@_route
+def library_page():
+    return Response(web._template("library.html").render(
+        version=__version__, root="../"), mimetype="text/html")
+
+
 @app.route("/editor")
 @app.route("/editor/<name>")
 @_route

@@ -42,13 +42,22 @@ if (editorOrder.join() !== 'editor') {
   bad++;
   console.log('Неверный порядок файлов JS редактора: ' + editorOrder.join(', '));
 }
+const library = fs.readFileSync(path.join(ROOT, 'templates/library.html'), 'utf8');
+const libraryOrder = [];
+library.replace(/<script src="\{\{ root \}\}static\/js\/([\w-]+)\.js/g,
+  function (_, name) { libraryOrder.push(name); });
+if (libraryOrder.join() !== 'library') {
+  bad++;
+  console.log('Неверный порядок файлов JS библиотеки: ' + libraryOrder.join(', '));
+}
 const onDisk = fs.readdirSync(path.join(ROOT, 'static/js')).filter(f => f.endsWith('.js')).map(f => f.slice(0, -3));
-onDisk.forEach(n => { if (order.indexOf(n) < 0 && editorOrder.indexOf(n) < 0) { bad++; console.log('static/js/' + n + '.js не подключён в wrapper.html'); } });
+onDisk.forEach(n => { if (order.indexOf(n) < 0 && editorOrder.indexOf(n) < 0 && libraryOrder.indexOf(n) < 0) { bad++; console.log('static/js/' + n + '.js не подключён на страницы'); } });
 
 es5('templates/wrapper.html (встроенный)', inlineScripts('templates/wrapper.html'));
 es5('templates/themes.html', inlineScripts('templates/themes.html'));
 es5('templates/editor.html', inlineScripts('templates/editor.html'));
-editorOrder.forEach(n => es5('static/js/' + n + '.js',
+es5('templates/library.html', inlineScripts('templates/library.html'));
+editorOrder.concat(libraryOrder).forEach(n => es5('static/js/' + n + '.js',
   fs.readFileSync(path.join(ROOT, 'static/js', n + '.js'), 'utf8')));
 
 const asts = {}, defs = {};

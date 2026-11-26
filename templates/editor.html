@@ -8,8 +8,15 @@
 </head>
 <body data-root="{{ root }}">
   <header>
-    <a href="{{ root }}">Все панели</a>
-    <h1>Редактор панелей</h1>
+    <div class="top">
+      <a class="back" href="{{ root }}">← панели</a>
+      <h1>Редактор панелей</h1>
+    </div>
+    <p class="sub">Разделы, плитки и их размещение. Общие свойства элементов вынесены в отдельную библиотеку.</p>
+    <nav class="editor-nav" aria-label="Разделы редактора">
+      <a class="on" aria-current="page" href="{{ root }}editor">Панели</a>
+      <a id="library-link" href="{{ root }}editor/library">Библиотека</a>
+    </nav>
     <p id="status" role="status" aria-live="polite">Загрузка конфигурации…</p>
     <button id="retry-start" type="button" hidden>Повторить загрузку редактора</button>
     <div id="legacy" hidden>
@@ -21,12 +28,12 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
       <pre><code>python3 -m wbpanel.editor_cli migrate --apply</code></pre>
     </div>
   </header>
-    <div id="actions" class="actions" hidden>
-      <button id="restart">Новый черновик</button>
-      <button id="check">Проверить и показать изменения</button>
-      <button id="publish" disabled>Опубликовать</button>
-      <button id="history">История</button>
-    </div>
+  <div id="actions" class="actions editor-actions" hidden>
+    <button id="restart">Новый черновик</button>
+    <button id="check">Проверить и показать изменения</button>
+    <button id="publish" disabled>Опубликовать</button>
+    <button id="history">История</button>
+  </div>
   <section id="details" class="card details" hidden aria-label="Проверка и история"></section>
   <main id="workspace" hidden>
     <section class="card sidebar">
@@ -42,38 +49,33 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
         <div id="section-management"><form id="create-section"><label>Название нового раздела <input name="caption" required maxlength="512"></label><button>Добавить раздел</button></form>
           <button type="button" id="copy-section">Скопировать секцию</button>
           <button type="button" id="remove-section">Удалить выбранный раздел</button></div>
-        <form id="assign-screen"><label>Сетевое имя экрана ESP32 <input name="screen" list="screen-names" placeholder="panel-6a10" required maxlength="64"></label>
+        <form id="assign-screen"><label>Сетевое имя экрана ESP32 <input name="screen" list="screen-names" placeholder="panel-6a10" required></label>
           <datalist id="screen-names"></datalist><button>Назначить выбранную панель</button><p id="screen-list"></p></form>
         <p id="structure-status" role="status"></p>
-      </details>
-      <details id="library-editor"><summary>Свойства элементов библиотеки</summary>
-        <label>Элемент <select id="property-element"></select></label>
-        <form id="property-form"><div id="property-fields"></div><button>Сохранить в черновик</button></form>
-        <p>Базовые размеры применяются при отсутствии размеров у размещения.</p>
-        <img id="property-preview" alt="Предпросмотр одного элемента" style="max-width:100%">
       </details>
       <div id="sources"></div>
     </section>
     <section class="card components">
       <h3>Плитки этого раздела</h3><ol id="instances" aria-label="Порядок экземпляров"></ol>
       <div id="library">
-        <h2 id="library-title">Библиотека</h2>
+        <h2 id="library-title">Добавить плитку из библиотеки</h2>
         <label for="search">Поиск по названию, ID или типу</label>
         <input id="search" type="search" autocomplete="off">
         <label for="elements">Элемент</label><select id="elements"></select>
         <div id="custom-id" hidden><label for="new-id">ID новой плитки (необязательно)</label><input id="new-id" maxlength="64" placeholder="Автоматически"></div>
         <button id="add">Добавить на панель</button>
+        <a class="library-help" href="{{ root }}editor/library">Изменить общие свойства элементов →</a>
       </div>
     </section>
     <section class="card preview">
       <h2>Предпросмотр панели</h2>
       <div class="actions preview-controls">
-        <label>Тема <select id="theme"></select></label>
-        <label>Колонки <input id="cols" type="number" min="1" max="12" step="1"
-                                   placeholder="Из конфига"></label>
+        <label for="theme">Тема <select id="theme"></select></label>
+        <label for="cols">Колонки <input id="cols" type="number" min="1" max="12" step="1"
+                                       placeholder="Из конфига"></label>
       </div>
-      <div id="layout"></div><div id="preview-status" role="status"></div>
-      <button type="button" id="refresh-preview" hidden>Обновить предпросмотр</button>
+      <div id="layout"></div><p id="preview-status" role="status"></p>
+      <button id="refresh-preview" hidden>Обновить предпросмотр</button>
       <img id="preview-image" alt="SVG панели из черновика" hidden>
     </section>
     <section class="card inspector" id="inspector" aria-labelledby="inspector-title" tabindex="-1">
@@ -85,10 +87,10 @@ python3 -m wbpanel.editor_cli migrate</code></pre>
         <p id="identity"></p>
         <h3>На этой панели</h3>
         <div class="sizes">
-          <label>Ширина <input id="width" type="number" step=".5" min=".5" max="32"></label>
-          <label>Высота <input id="height" type="number" step=".5" min=".5" max="32"></label>
+          <label for="width">Ширина <input id="width" type="number" step=".5" min=".5" max="32"></label>
+          <label for="height">Высота <input id="height" type="number" step=".5" min=".5" max="32"></label>
         </div>
-        <label>Название <input id="title" type="text" maxlength="512"></label>
+        <label for="title">Название <input id="title" type="text" maxlength="512"></label>
         <button id="inherit-title" type="button" hidden>Наследовать название</button>
         <p class="muted">Размеры в единицах сетки. Пустое поле наследует значение из библиотеки.</p>
         <p id="instance-error" role="alert" hidden></p>

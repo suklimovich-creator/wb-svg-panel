@@ -160,10 +160,68 @@ panels: {home: {tiles: [{element: reading, w: 2}]}}
     assert path.read_text() == original
 
 
+def all_properties(root):
+    import yaml
+    from wbpanel import web, web_editor
+    from wbpanel.registry import REGISTRY
+
+    edits = {
+        'switch': {'invert': False}, 'scene': {'command_on': 'true'},
+        'scenes': {'items': [{'channel': 'dev/scene', 'level': 0.5}]},
+        'light': {'command_topic_brightness': '/dev/light/set'}, 'dimmer': {'channel_brightness': 'dev/level'},
+        'curtain': {'inverted': True}, 'roller': {'location': {'lat': 55, 'lon': 37}},
+        'thermostat': {'step': 0.5}, 'ac': {'device': 'ac-test'}, 'valve': {'water': 'hot'},
+        'fancoil': {'modes': {'0': 'Авто'}}, 'tv': {'apps': ['app_tv']},
+        'header': {'status': [{'channel': 'dev/test'}]}, 'camera': {'camera': 'door'},
+        'link': {'panel': 'home'}, 'list': {'font': 15}, 'agenda': {'calendars': ['family']},
+        'today': {'list': 'tasks'}, 'leak': {'sensors': ['bath']},
+        'chart': {'series': [{'channel': 'dev/temp', 'digits': 1, 'thresholds': [{'above': 20}]}]},
+        'clock': {'view': 'clock'}, 'forecast': {'time_labels': False}, 'value': {'digits': 0},
+    }
+    assert edits.keys() == REGISTRY.keys()
+    root.mkdir()
+    path = root / 'config.yaml'
+    path.write_text('schema: 2\nelements: !include elements.yaml\npanels: {home: {tiles: []}}\n')
+    source = root / 'elements.yaml'
+    original = yaml.safe_dump({kind: {'type': kind} for kind in edits}) + (
+        'private: {type: chart, series: [{channel: !secret nested}]}\n'
+        'external: {type: scenes, items: [!include scene.yaml]}\n')
+    source.write_text(original)
+    (root / 'secrets.yaml').write_text('nested: dev/PRIVATE-TEST')
+    (root / 'scene.yaml').write_text('channel: dev/scene')
+    service = EditorService(path)
+    web.config = Config(path)
+    web_editor.service = service
+    model = service.create()
+    key, base = model['draft_id'], model['base_revision']
+    client = web.app.test_client()
+    for name, fields in edits.items():
+        model = service.operation(key, model['draft_version'], dict(op='update_element', element=name, fields=fields))
+        item = next(e for e in model['library'] if e['id'] == name)
+        values = {f['key']: f['value'] for f in item['properties']}
+        assert all(values[k] == v for k, v in fields.items()), name
+        response = client.get('/api/editor/drafts/%s/element.svg?element=%s' % (key, name))
+        assert response.status_code == 200 and b'<svg' in response.data, name
+    for name, fields in [('private', {'series': []}), ('external', {'items': []}),
+                         ('switch', {'invert': 'false'}), ('light', {'command_topic': 'dev/#'}),
+                         ('thermostat', {'step': 0}), ('chart', {'series': ['bad']}),
+                         ('scenes', {'items': [{'channel': 'dev/x', 'level': 'bad'}]}),
+                         ('fancoil', {'modes': {'dev/PRIVATE-TEST': 'alarm'}})]:
+        reject(lambda: service.operation(key, model['draft_version'], dict(op='update_element', element=name, fields=fields)))
+    assert 'PRIVATE-TEST' not in str(model)
+    assert source.read_text() == original
+    service.diff(key)
+    revision = service.publish(key, model['draft_version'])
+    assert Config(path).documents.data['elements']['chart']['series'] == edits['chart']['series']
+    service.rollback(base, revision['id'])
+    assert source.read_text() == original
+
+
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
     for schema in (2, 3):
         run(root / str(schema), schema)
     protected(root / 'protected')
     library_properties(root / 'properties')
+    all_properties(root / 'all')
 print('editor library: shared/local bindings, copies, includes, secrets, conflicts, publish and rollback OK')

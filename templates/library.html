@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Библиотека элементов</title>
+  <link rel="stylesheet" href="{{ root }}static/editor.css?v={{ version }}">
+</head>
+<body data-root="{{ root }}">
+  <header>
+    <div class="top">
+      <a class="back" href="{{ root }}">← панели</a>
+      <h1>Библиотека элементов</h1>
+    </div>
+    <p class="sub">Общие свойства плиток, которые используются на панелях. Изменения сначала попадают в черновик и применяются только после публикации.</p>
+    <nav class="editor-nav" aria-label="Разделы редактора">
+      <a id="editor-link" href="{{ root }}editor">Панели</a>
+      <a class="on" aria-current="page" href="{{ root }}editor/library">Библиотека</a>
+    </nav>
+    <p id="status" role="status" aria-live="polite">Загрузка конфигурации…</p>
+    <button id="retry-start" type="button" hidden>Повторить загрузку редактора</button>
+    <div id="legacy" hidden>
+      <p>Эта конфигурация ещё не подготовлена для редактирования. Откройте терминал контроллера.</p>
+      <pre><code>cd /mnt/data/wb-svg-panel
+python3 -m wbpanel.editor_cli migrate</code></pre>
+      <p>Если проверка прошла, примените изменения и обновите эту страницу.</p>
+      <pre><code>python3 -m wbpanel.editor_cli migrate --apply</code></pre>
+    </div>
+  </header>
+  <div id="actions" class="actions editor-actions" hidden>
+    <button id="restart">Новый черновик</button>
+    <button id="check">Проверить и показать изменения</button>
+    <button id="publish" disabled>Опубликовать</button>
+    <button id="history">История</button>
+  </div>
+  <section id="details" class="card details" hidden aria-label="Проверка и история"></section>
+  <main id="workspace" class="library-workspace" hidden>
+    <section class="card library-browser" aria-labelledby="library-heading">
+      <div class="section-heading"><h2 id="library-heading">Элементы</h2><span id="library-count" class="tag"></span></div>
+      <label for="library-search">Поиск по названию, ID или типу</label>
+      <input id="library-search" type="search" autocomplete="off" placeholder="Например, свет или dimmer">
+      <ul id="library-list" class="library-list" aria-label="Элементы библиотеки"></ul>
+      <p id="library-empty" class="muted" hidden>По этому запросу ничего не найдено.</p>
+    </section>
+    <section class="card library-preview-card" aria-labelledby="property-title">
+      <div class="section-heading"><h2 id="property-title">Элемент не выбран</h2><span id="property-type" class="tag"></span></div>
+      <p id="property-id" class="meta"></p>
+      <div class="element-preview">
+        <img id="property-preview" alt="Предпросмотр выбранного элемента" hidden>
+        <p id="property-preview-status" class="muted">Выберите элемент в списке слева.</p>
+      </div>
+      <div id="element-usage" class="usage"></div>
+    </section>
+    <section class="card library-properties" aria-labelledby="properties-heading">
+      <div class="section-heading"><h2 id="properties-heading">Общие свойства</h2><span class="tag">все размещения</span></div>
+      <p class="muted">Размеры здесь становятся базовыми. Размеры и название конкретного размещения настраиваются на странице «Панели».</p>
+      <form id="property-form">
+        <div id="property-fields"></div>
+        <p id="edit-status" role="status" aria-live="polite"></p>
+        <button id="save-properties" type="submit" disabled>Сохранить в черновик</button>
+      </form>
+    </section>
+  </main>
+  <script src="{{ root }}static/js/library.js?v={{ version }}"></script>
+</body>
+</html>

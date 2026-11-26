@@ -44,6 +44,7 @@ function listView(node){
   var view = null, showDone = false, busy = false, timer = null, lastSig = '';
 
   function call(op){
+    if (panelBlocked) { flash('Нет связи: управление недоступно'); return Promise.resolve(); }
     busy = true;
     return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
                        body: JSON.stringify(op)})

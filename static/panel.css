@@ -633,3 +633,13 @@ html.tdrag #host{touch-action:none}
 #saver .sv-inline svg{display:block;width:100%;height:auto}
 #saver .sv-hint{position:absolute;right:4vw;bottom:2vh;color:rgba(255,255,255,.8);font:13px system-ui,sans-serif;
        background:rgba(0,0,0,.32);border-radius:12px;padding:4px 10px}
+
+/* Состояние связи не меняет геометрию панели и видно поверх заставки. */
+#connection{display:none;position:fixed;left:50%;top:8px;transform:translateX(-50%);
+ z-index:10000;max-width:90vw;padding:8px 12px;border-radius:10px;
+ background:#7c3928;color:white;font-size:14px;text-align:center}
+#connection button{margin-left:8px;padding:6px 10px;cursor:pointer}
+.panel-offline #host,.panel-offline #ov .card,.panel-offline #ov #pad,
+.panel-offline #ov #lvl,.panel-offline #tabdock,.panel-offline #navmenu{pointer-events:none}
+.panel-starting #host{min-height:calc(100vh - 64px);visibility:hidden}
+.panel-starting #host *{transition:none!important;animation:none!important}

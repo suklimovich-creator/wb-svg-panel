@@ -11,6 +11,7 @@
    перерисовывало панель обратно. Поэтому у каждого запроса номер, и ответ
    старее показанного выбрасывается, а ответ на запрос с другой свёрткой
    или числом колонок - тоже. */
+var startupScrollDone = false;
 var reqSeq = 0, shownSeq = 0, pendingSvg = null, inflight = 0, lastReqAt = 0;
 
 /* Последние картинки по состоянию свёртки: повторно раскрытый раздел
@@ -302,19 +303,21 @@ function full(svg, root, headRaw, at){
 var SCROLL_QUIET = 400;
 function scrolling(){ return Date.now() - lastScroll < SCROLL_QUIET; }
 
-function applySvg(svg, seq){
-  if (seq < shownSeq) return;
+function applySvg(svg, seq, fresh){
+  if (appReload || seq < shownSeq || seq < connectionSeq) return;
   if (fingerHeld() || scrolling()) {
-    if (!pendingSvg || seq > pendingSvg.seq) pendingSvg = {svg: svg, seq: seq};
+    if (!pendingSvg || seq > pendingSvg.seq) pendingSvg = {svg: svg, seq: seq, fresh: fresh};
     if (!fingerHeld()) setTimeout(flushPending, SCROLL_QUIET + 50);
     return;
   }
-  shownSeq = seq; pendingSvg = null;
+  pendingSvg = null;
   // Ровно та же картинка - разбирать и сравнивать нечего (если нет плиток,
   // ждущих подтверждения прибора: их надо вернуть к серверному виду).
   var holding = false;
   for (var h in holds) if (holds.hasOwnProperty(h)) { holding = true; break; }
   if (svg === shownSvg && !holding && host.querySelector('svg')) {
+    shownSeq = seq;
+    if (fresh) connectionState('', seq);
     host.classList.remove('wait'); err.style.display = 'none';
     return;
   }
@@ -329,9 +332,25 @@ function applySvg(svg, seq){
     var cut = patchWhy === 'не разрезать' || patchWhy === 'не разобрать часть';
     if (cut) TEXT_PARTS = false;
     if (cut || !TEXT_PARTS || !headRaw) patched = patch(root, headRaw);
-    if (!patched) full(svg, root, headRaw, at);
+    if (!patched) {
+      if (!root || root.localName !== 'svg') throw new Error('Некорректная панель');
+      full(svg, root, headRaw, at);
+    }
   }
+  shownSeq = seq;
   shownSvg = svg;
+  if (fresh) connectionState('', seq);
+  document.body.classList.remove('panel-starting');
+  dockBar();
+  if (!DEMO) navScale();
+  if (!startupScrollDone) {
+    startupScrollDone = true;
+    try {
+      var savedY = sessionStorage.getItem('wb-panel-scroll:' + NAME);
+      sessionStorage.removeItem('wb-panel-scroll:' + NAME);
+      if (savedY !== null) window.scrollTo(0, +savedY || 0);
+    } catch(e) {}
+  }
   // Облегчённо: вращение вентиляторов и круги на воде стоят на месте.
   var shown = host.querySelector('svg');
   if (LITE && shown && shown.pauseAnimations) shown.pauseAnimations();
@@ -354,22 +373,63 @@ function flushPending(){
   if (!pendingSvg || fingerHeld()) return;
   if (scrolling()) { setTimeout(flushPending, SCROLL_QUIET + 50); return; }
   var p = pendingSvg; pendingSvg = null;
-  applySvg(p.svg, p.seq);
+  applySvg(p.svg, p.seq, p.fresh);
 }
 
 /* Версия состояния, которую видела страница. Её отдаёт сервер в
    X-Panel-Version, и ждущий запрос держится открытым, пока она не
    изменится. Нет заголовка - старый сервер, работаем опросом. */
 var VER = null, LIVE = true;
-function noteVersion(r){
+var connectionReason = '', connectionSeq = 0;
+function connectionState(reason, seq){
+  if (seq && seq < connectionSeq) return;
+  if (seq) connectionSeq = seq;
+  connectionReason = reason || '';
+  var blocked = !!connectionReason || appReload;
+  if (blocked && !panelBlocked) commandEpoch++;
+  panelBlocked = blocked;
+  document.body.classList.toggle('panel-offline', blocked);
+  var box = document.getElementById('connection');
+  box.textContent = connectionReason || (appReload ? 'Доступна новая версия панели' : '');
+  box.style.display = blocked ? 'block' : 'none';
+  if (appReload || connectionReason === 'Требуется вход') {
+    var button = document.createElement('button');
+    button.textContent = appReload ? 'Обновить панель' : 'Войти';
+    button.onclick = function(){
+      try { sessionStorage.setItem('wb-panel-scroll:' + NAME, String(window.pageYOffset || 0)); } catch(e) {}
+      location.reload();
+    };
+    box.appendChild(button);
+  }
+}
+function responseError(r){
+  var e = new Error('HTTP ' + r.status);
+  e.auth = r.status === 401 || r.status === 403 || r.redirected;
+  return e;
+}
+function connectionError(e, seq){
+  if (e && e.app) return;
+  connectionState(e && e.auth ? 'Требуется вход' : 'Нет связи · данные устарели', seq);
+  host.classList.remove('wait');
+}
+function checkApp(r){
   var app = r.headers && r.headers.get ? r.headers.get('X-Panel-App') : null;
   if (app && APP && app !== APP) {
-    // под открытым окном не дёргаем - перезагрузимся, когда его закроют
-    if (ov.classList.contains('open')) appReload = true; else location.reload();
+    appReload = true;
+    connectionState(connectionReason);
+    var e = new Error('Новая версия'); e.app = true; throw e;
   }
+}
+function noteVersion(r){
+  checkApp(r);
   var v = r.headers && r.headers.get ? r.headers.get('X-Panel-Version') : null;
   if (v === null || v === undefined || v === '') { LIVE = false; return; }
   VER = parseInt(v, 10);
+}
+function completeSvg(t){
+  if (!/^\s*(?:<\?xml[^>]*>\s*)?<svg\b/.test(t) || !/<\/svg>\s*$/.test(t))
+    throw new Error('Неполная панель');
+  return t;
 }
 function svgUrl(q, extra){
   // have= - отпечаток головы (стили и заготовки), что уже есть у страницы:
@@ -396,11 +456,12 @@ function takeSvg(r){
     if (r.headers && r.headers.get && r.headers.get('X-Panel-Lean') === '1') {
       if (HEAD && HEAD.mark === mark) {
         var h = r.headers.get('X-Panel-Height');
-        return (h ? withHeight(HEAD.text, h) : HEAD.text) + t;
+        return completeSvg((h ? withHeight(HEAD.text, h) : HEAD.text) + t);
       }
       HEAD = null;
       throw new Error('нет головы панели');
     }
+    completeSvg(t);
     var at = mark ? t.indexOf(MAIN_MARK) : -1;
     if (at > 0) HEAD = {mark: mark, text: t.slice(0, at)};
     return t;
@@ -410,35 +471,57 @@ function takeSvg(r){
 /* Разовый запрос: после нажатий, смены свёртки, закрытия окна.
    force нужен пультам: пока открыт оверлей, автообновление стоит, но
    пульт термостата сам следит за прибором и переспрашивает осознанно. */
+function panelRequest(url, opts, read, timeout, controller){
+  controller = controller || (window.AbortController ? new AbortController() : null);
+  if (controller) opts.signal = controller.signal;
+  return new Promise(function(resolve, reject){
+    var finished = false;
+    var timer = setTimeout(function(){
+      finished = true;
+      if (controller) controller.abort();
+      reject(new Error('Время ожидания истекло'));
+    }, timeout);
+    fetch(url, opts).then(function(r){
+      if (finished) throw new Error('Запрос устарел');
+      if (!r.ok || r.redirected) throw responseError(r);
+      return read(r);
+    }).then(function(value){
+      if (finished) return;
+      finished = true; clearTimeout(timer); resolve(value);
+    }, function(e){
+      if (finished) return;
+      finished = true; clearTimeout(timer); reject(e);
+    });
+  });
+}
 function refresh(force){
-  if(paused && !force) return;
+  if(appReload || (paused && !force)) return;
   var q = Q(), seq = ++reqSeq, settled = false;
   function settle(){ if(!settled){ settled = true; inflight--; } }
   inflight++; lastReqAt = Date.now();
-  fetch(svgUrl(q), {cache:'no-store'})
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      noteVersion(r);
-      return takeSvg(r);
-    })
+  panelRequest(svgUrl(q), {cache:'no-store'}, function(r){
+      noteVersion(r); return takeSvg(r);
+    }, 15000)
     .then(function(svg){
       settle();
       if(svg.indexOf('<svg')<0) throw new Error('пустой ответ');
       remember(q, svg);
       // Пока запрос шёл, свёртку или колонки поменяли - картинка уже не та.
       if(q !== Q()) return;
-      applySvg(svg, seq);
+      applySvg(svg, seq, true);
       // Первая загрузка: гармошку страница узнаёт только из разметки, и
       // первый запрос ушёл без раскрытого раздела. Переспрашиваем сразу.
       if(q !== Q()) refresh(true);
     })
     .catch(function(e){
       settle();
+      connectionError(e, seq);
       // Притушенную панель не оставляем: свежего не будет, а старое
       // лучше, чем ничего.
       if(q === Q()) host.classList.remove('wait');
       if(host.querySelector('svg')) return;
-      host.textContent = 'Не удалось загрузить панель: ' + e.message;
+      host.textContent = 'Ожидание соединения…';
+      document.body.classList.remove('panel-starting');
     });
 }
 
@@ -457,26 +540,27 @@ function schedule(ms){
   pollTimer = setTimeout(poll, ms);
 }
 function poll(){
-  if (pollBusy || STILL) return;
+  if (pollBusy || STILL || appReload) return;
   if (document.hidden) return;          // продолжим, когда вкладку покажут
   if (!LIVE) { if (!paused) refresh(); schedule(EVERY); return; }
   pollBusy = true;
-  var q = Q(), t0 = Date.now();
+  var q = Q(), t0 = Date.now(), seq = ++reqSeq;
   var ctl = window.AbortController ? new AbortController() : null;
   pollAbort = ctl;
   var opts = {cache:'no-store'};
   if (ctl) opts.signal = ctl.signal;
-  fetch(svgUrl(q, VER !== null ? 'since=' + VER + '&' : ''), opts)
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status);
+  panelRequest(svgUrl(q, VER !== null ? 'since=' + VER + '&' : ''), opts, function(r){
       noteVersion(r);
       // 204 - на сервере нет места для ждущих (открыто много экранов).
       // Картинка у нас и так текущая: спросим снова чуть позже.
       return r.status === 204 ? null : takeSvg(r);
-    })
+    }, Math.max(EVERY + 15000, 45000), ctl)
     .then(function(svg){
       pollBusy = false; pollAbort = null; pollFails = 0;
-      if (svg === null) { schedule(q !== Q() ? 0 : 2000); return; }
+      if (svg === null) {
+        if (panelBlocked) refresh(true);
+        schedule(q !== Q() ? 0 : 2000); return;
+      }
       if (svg.indexOf('<svg') >= 0) {
         remember(q, svg);
         // Панель обновляется и под открытым окном: замена точечная и
@@ -486,7 +570,9 @@ function poll(){
         // раньше всех, а приносит самое свежее. С номером запроса его
         // ответ проигрывал бы разовому, ушедшему позже, и изменение
         // терялось бы до следующего таймаута.
-        if (q === Q()) applySvg(svg, ++reqSeq);
+        if (q === Q() && seq >= connectionSeq) {
+          seq = ++reqSeq; applySvg(svg, seq, true);
+        }
       }
       if (q !== Q()) { schedule(0); return; }
       schedule(Date.now() - t0 < 300 ? 1000 : 0);
@@ -494,6 +580,7 @@ function poll(){
     .catch(function(e){
       pollBusy = false; pollAbort = null;
       if (e && e.name === 'AbortError') { schedule(0); return; }
+      connectionError(e, seq);
       pollFails += 1;
       // Контроллер перезагружается или сеть пропала: не долбим, а
       // отступаем, но не дольше обычного шага обновления.
@@ -567,6 +654,16 @@ document.addEventListener('dblclick', function(){
   if (fn) fn.call(el);
 });
 
+document.addEventListener('click', function(e){
+  if (!panelBlocked || !e.target.closest) return;
+  if (e.target.closest('#host,#tabdock,#navmenu') ||
+      (e.target.closest('#ov') && !e.target.closest('#ov .close'))) {
+    e.preventDefault(); e.stopImmediatePropagation();
+  }
+}, true);
+window.addEventListener('offline', function(){ connectionError(null, ++reqSeq); });
+window.addEventListener('online', function(){ refresh(true); restartPoll(); });
+window.addEventListener('pageshow', function(e){ if (e.persisted) { refresh(true); restartPoll(); } });
 drawCols();
 refresh();
 // Ждущий запрос - чуть позже первой картинки: она приходит без версии, а
@@ -583,7 +680,7 @@ schedule(800);
    ничего не стоит; раз в PREFETCH_MS, пока страница на экране. */
 var PREFETCH_MS = 90000, prefetchBusy = false;
 function prefetchTabs(){
-  if (prefetchBusy || SECT_MODE !== 'tabs' || STILL) return;
+  if (panelBlocked || prefetchBusy || SECT_MODE !== 'tabs' || STILL) return;
   if (typeof saverOn !== 'undefined' && saverOn) return;
   if (document.hidden || ov.classList.contains('open')) return;
   var nodes = host.querySelectorAll('[data-tab="1"][data-section]'), keys = [];

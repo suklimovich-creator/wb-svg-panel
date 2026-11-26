@@ -52,25 +52,23 @@ panels:
     after = Config(path, strict=True)
     assert list(before.all_tiles()) == list(after.all_tiles())
     assert after.documents.data["elements"]["switch-001"] == {
-        "type": "switch", "channel": "dev/actual", "title": "Actual", "w": 3}
+        "type": "switch", "channel": "dev/actual", "title": "Actual"}
     assert after.documents.data["panels"]["main"]["tiles"] == [
-        {"element": "switch-001"}]
-    from wbpanel.editor_service import EditorService
+        {"element": "switch-001", "w": 3}]
+    from wbpanel.editor_service import EditorService, EditorError
     editor = EditorService(path)
     model = editor.create()
     assert model["library"][0]["id"] == "switch-001"
-    updated = editor.operation(model["draft_id"], 0, {"op": "add_instance", "panel": "main",
-        "section": None, "element": "switch-001"})
-    assert updated["panels"][0]["sections"][0]["tiles"][-1] == {
-        "id": "switch-002", "element": "switch-001"}
-    another = editor.operation(model["draft_id"], 1, {"op": "add_instance", "panel": "other",
+    expect(EditorError, lambda: editor.operation(model["draft_id"], 0, {"op": "add_instance", "panel": "main",
+        "section": None, "element": "switch-001"}))
+    another = editor.operation(model["draft_id"], 0, {"op": "add_instance", "panel": "other",
         "section": None, "element": "switch-001"})
     second = another["panels"][1]["sections"][0]["tiles"][0]["id"]
     assert second != model["panels"][0]["sections"][0]["tiles"][0]["id"]
-    editor.operation(model["draft_id"], 2, {"op": "update_instance", "panel": "other",
+    editor.operation(model["draft_id"], 1, {"op": "update_instance", "panel": "other",
         "section": None, "id": second, "fields": {"w": 1.5, "h": 2}})
     editor.diff(model["draft_id"])
-    editor.publish(model["draft_id"], 3)
+    editor.publish(model["draft_id"], 2)
     published = Config(path)
     assert published.documents.data["panels"]["other"]["tiles"] == [
         {"element": "switch-001", "w": 1.5, "h": 2}]
@@ -170,8 +168,8 @@ def main(root):
     first, second = origins
     first_rel, second_rel = [o.file.relative_to(root) for o in origins]
     first_bytes, second_bytes = [o.file.read_bytes() for o in origins]
-    draft.changeset = Changeset({first_rel: first_bytes + b"w: 1\n",
-                                 second_rel: second_bytes + b"w: 1\n"})
+    draft.changeset = Changeset({first_rel: first_bytes.replace(b"w: 2", b"w: 1"),
+                                 second_rel: second_bytes.replace(b"w: 2", b"w: 1")})
 
     def failing_replace(target, data, mode=0o600):
         if target == second.file and data != second_bytes:

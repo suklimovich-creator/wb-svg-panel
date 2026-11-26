@@ -251,6 +251,19 @@ def editor_diff(draft_id):
     return _service().diff(draft_id)
 
 
+@app.route("/api/editor/drafts/<draft_id>/element.svg")
+@_route
+def editor_element_preview(draft_id):
+    name = request.args.get("element", "")
+    version = _query_int("draft_version", 0, 2**53 - 1)
+    _, safe, policy = _service().preview(draft_id, version)
+    tile = safe.data.get("elements", {}).get(name)
+    if tile is None:
+        raise EditorError("element_unknown", "Элемент не найден", 404)
+    safe.data["panels"] = {"library-preview": {"tiles": [dict(tile)], "cols": max(4, int(float(tile.get("w", 1)) + .99))}}
+    return _svg(web.render_panel("library-preview", candidate=safe), policy)
+
+
 @app.route("/api/editor/drafts/<draft_id>/preview/<name>.svg")
 @_route
 def editor_preview(draft_id, name):

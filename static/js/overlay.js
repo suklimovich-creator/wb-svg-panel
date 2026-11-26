@@ -12,15 +12,13 @@ var ovCleanup = null;
 /* Открытое окно - шаг в истории браузера. Жест «назад» на iPhone и
    кнопка «назад» на Android закрывают окно, а не уводят со страницы:
    раньше выход из пульта во весь экран приводил к списку панелей. */
-var ovHist = false, ovReload = false;
+var ovHist = false;
 window.addEventListener('popstate', function(){
-  if (ovReload) { location.reload(); return; }
   if (ovHist) { ovHist = false; if (ov.classList.contains('open')) closeOv(); }
 });
 function closeOv(){ ov.classList.remove('open'); paused=false;
   // свой шаг истории убираем сами, popstate при этом окно уже не трогает
-  if(ovHist){ ovHist = false; ovReload = appReload; history.back(); if(appReload) return; }
-  if(appReload){ location.reload(); return; }
+  if(ovHist){ ovHist = false; history.back(); }
   if(ovCleanup){ ovCleanup(); ovCleanup = null; }
   var k=ov.querySelector('.card,#pad,#lvl,#crtwrap,.ttl,.hint');
   while(ov.children.length>1) ov.removeChild(ov.lastChild);

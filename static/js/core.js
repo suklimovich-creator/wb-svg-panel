@@ -163,7 +163,7 @@ var OPENED = (function(){
 /* Вид разделов: list, accordion, tabs. SECT_MODE - что нарисовал сервер
    (узнаём из разметки), MODE - выбор этого устройства в меню (с 1.36):
    планшету на стене вкладки, телефону гармошка. Пусто - как в конфиге. */
-var SECT_MODE = 'list', HAS_SECTIONS = false;
+var SECT_MODE = CONTROLS.section_mode || 'list', HAS_SECTIONS = false;
 var MODE = (function(){
   try { return localStorage.getItem(FOLD_KEY + ':mode') || ''; }
   catch(e) { return ''; }
@@ -443,7 +443,11 @@ function liveSender(send, ms){
   var chain = Promise.resolve(), busy = false, last = 0;
   function run(fn){
     busy = true; last = Date.now();
-    var p = chain.then(function(){ return (fn || send)(); });
+    var epoch = commandEpoch;
+    var p = chain.then(function(){
+      if (panelBlocked || epoch !== commandEpoch) throw new Error('Команда отменена после потери связи');
+      return (fn || send)();
+    });
     chain = p.then(null, function(){}).then(function(){ busy = false; });
     return p;
   }
@@ -790,7 +794,9 @@ function evPoint(ev){
 function flash(t){ err.textContent=t; err.style.display='block';
   setTimeout(function(){ err.style.display='none'; }, 2600); }
 
+var panelBlocked = false, commandEpoch = 0;
 function pub(topic, value){
+  if (panelBlocked) return Promise.reject(new Error('Нет связи: управление недоступно'));
   return fetch('api/publish', {method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({topic:topic, value:String(value)})

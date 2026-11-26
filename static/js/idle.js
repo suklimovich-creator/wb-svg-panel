@@ -7,6 +7,7 @@
    вкладке, с той же прокруткой. Срок - из конфига, устройство может
    выбрать своё в меню шестерёнки (PADCLOSE_MODE, SAVER_MODE в core.js). */
 var idleAt = Date.now(), saverOn = false, saverEl = null, saverMin = -1;
+var saverPending = null;
 var saverUrl = null, saverTimer = null, saverSeq = 0;
 function padCloseSec(){ return PADCLOSE_MODE === '' ? (+CONTROLS.pad_close || 0) : (+PADCLOSE_MODE || 0); }
 /* Заставка - дело панели (1.58): где в конфиге её нет, выбор устройства
@@ -60,6 +61,14 @@ function saverTick(){
   c.style.left = (5 + (m * 7) % 23) + 'vw';
   c.style.bottom = (7 + (m * 11) % 19) + 'vh';
 }
+/* Освободить незавершённый кадр и его замыкания при смене/закрытии заставки. */
+function saverCancelImage(){
+  if (!saverPending) return;
+  var pending = saverPending; saverPending = null;
+  pending.img.onload = pending.img.onerror = null;
+  pending.img.removeAttribute('src');
+  URL.revokeObjectURL(pending.url);
+}
 function saverShow(){
   if (saverOn) return;
   if (ov.classList.contains('open')) closeOv();
@@ -73,6 +82,8 @@ function saverShow(){
   saverEl.style.background = saverBg();
   saverEl.style.backgroundSize = 'cover';
   saverEl.style.backgroundPosition = 'center';
+  saverCancelImage();
+  if (saverUrl) { URL.revokeObjectURL(saverUrl); saverUrl = null; }
   saverEl.innerHTML = (CONTROLS.saver_panel ? '<img class="sv-panel" alt="">' : '') +
                       (CONTROLS.saver_clock ? '<div class="sv-clock"></div>' : '') +
                       '<div class="sv-hint">коснитесь, чтобы вернуться</div>';
@@ -114,8 +125,9 @@ function saverInline(svg){
           fr.readAsDataURL(b);
         });
       })
-      .catch(function(){ return ''; });
+      .catch(function(){ throw new Error('Не загружена картинка заставки'); });
   })).then(function(data){
+    for (var j = 0; j < data.length; j++) if (!data[j]) throw new Error('Не загружена картинка заставки');
     for (var i = 0; i < urls.length; i++) if (data[i]) svg = svg.split('"' + urls[i] + '"').join('"' + data[i] + '"');
     return svg;
   });
@@ -127,7 +139,7 @@ function saverInline(svg){
 var saverVer = null, saverLast = '', saverAbort = null;
 function saverPanel(){
   clearTimeout(saverTimer);
-  if (!saverOn || !CONTROLS.saver_panel) return;
+  if (!saverOn || !CONTROLS.saver_panel || appReload) return;
   var seq = ++saverSeq, cols = saverCols(), again = 300;
   saverAbort = window.AbortController ? new AbortController() : null;
   // Тема - устройства, если у панели заставки нет своей.
@@ -139,12 +151,15 @@ function saverPanel(){
       var v = r.headers && r.headers.get ? r.headers.get('X-Panel-Version') : null;
       if (v !== null && v !== '') saverVer = parseInt(v, 10);
       if (r.status === 204) { again = 2000; return null; }   // мест для ждущих нет
-      if (!r.ok) { again = 5000; return ''; }
+      if (!r.ok || r.redirected) throw responseError(r);
+      checkApp(r);
       return r.text();
     })
     .then(function(svg){
       if (svg === null || seq !== saverSeq || !saverOn) return null;
-      if (svg && svg === saverLast) return null;          // ничего не поменялось
+      if (svg && svg === saverLast) { saverFail(null); return null; }          // ничего не поменялось
+      completeSvg(svg);
+      svg = svg.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
       saverLast = svg;
       return svg;
     })
@@ -158,8 +173,10 @@ function saverPanel(){
     .then(function(svg){
       if (svg === null || !saverOn || seq !== saverSeq) return;
       if (svg.indexOf('<svg') < 0) { saverFail(svg ? 'нет картинки' : 'нет ответа'); again = 5000; return; }
-      var img = saverEl.querySelector('.sv-panel');
-      if (!img) return;
+      saverCancelImage();
+      var previous = saverEl.querySelector('.sv-panel');
+      if (!previous) return;
+      var img = document.createElement('img'); img.className = 'sv-panel'; img.alt = '';
       // фон вокруг - поле темы панели, если своей картинки нет
       if (!CONTROLS.saver_img) {
         var m = /<svg[^>]*class="([^"]*)"/.exec(svg), cls = m ? m[1].split(/\s+/) : [];
@@ -168,7 +185,14 @@ function saverPanel(){
         }
       }
       var url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'}));
+      saverPending = {img: img, url: url};
       img.onload = function(){
+        img.onload = img.onerror = null;
+        if (saverPending && saverPending.img === img) saverPending = null;
+        if (!saverOn || seq !== saverSeq) { URL.revokeObjectURL(url); return; }
+        previous.onload = previous.onerror = null;
+        previous.parentNode.replaceChild(img, previous);
+        previous.removeAttribute('src');
         if (saverUrl && saverUrl !== url) URL.revokeObjectURL(saverUrl);
         saverUrl = url; img.style.display = ''; saverMarkup(null); saverFail(null);
         saverCamLayout();
@@ -177,7 +201,11 @@ function saverPanel(){
       // (как сама страница - там она открывается), а причину - в подсказке
       // и в консоли: что сказал разборщик XML, если он вообще возражает.
       img.onerror = function(){
+        img.onload = img.onerror = null;
+        if (saverPending && saverPending.img === img) saverPending = null;
         URL.revokeObjectURL(url);
+        if (!saverOn || seq !== saverSeq) return;
+        if (previous.getAttribute('src')) { saverFail('нет свежих данных'); return; }
         var why = '';
         try {
           var pe = new DOMParser().parseFromString(svg, 'image/svg+xml').getElementsByTagName('parsererror')[0];
@@ -229,6 +257,11 @@ function saverFail(why){
   var img = saverEl.querySelector('.sv-panel'), clock = saverEl.querySelector('.sv-clock');
   var hint = saverEl.querySelector('.sv-hint');
   if (why) {
+    saverLast = '';
+    if ((img && img.getAttribute('src')) || saverEl.querySelector('.sv-inline svg')) {
+      if (hint) hint.textContent = 'Нет связи · данные устарели · коснитесь, чтобы вернуться';
+      return;
+    }
     if (img) img.style.display = 'none';
     if (!clock) {
       clock = document.createElement('div'); clock.className = 'sv-clock';
@@ -317,6 +350,7 @@ window.addEventListener('resize', function(){ if (saverOn) saverCamLayout(); });
 function saverHide(){
   if (!saverOn) return;
   saverOn = false;
+  saverCancelImage();
   saverMarkup(null);              // её стили - только пока она на экране
   saverSeq++;                     // ждущий запрос заставки больше не нужен
   if (saverAbort) { try { saverAbort.abort(); } catch (e) {} saverAbort = null; }

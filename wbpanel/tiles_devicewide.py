@@ -769,6 +769,8 @@ class Chart(Tile):
 @tile("forecast")
 class Forecast(Tile):
     """Погода: одно виртуальное устройство, два десятка каналов."""
+    editor_properties = {'device': ('Устройство погоды', 'text'), 'hours': ('Число часов', 'integer', 1, 24)}
+
 
     roles = ()
 
@@ -901,6 +903,8 @@ def _weather_fill(w, h, data, x0=0.0):
 @tile("clock")
 class Clock(Forecast):
     """Крупные часы и текущая погода; раскрытие показывает прогноз."""
+    editor_properties = {**Forecast.editor_properties, 'view': ('Режим часов', 'choice', 'clock', 'weather', 'clock_weather')}
+
 
     def prepare(self, ctx):
         data = super().prepare(ctx)

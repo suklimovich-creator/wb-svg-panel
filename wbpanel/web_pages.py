@@ -17,7 +17,7 @@ from flask import Response, request
 
 from . import web
 from . import __version__, checkup, demo, palette, showcase, stats, themes
-from .assemble import resolve_sections
+from .assemble import resolve_sections, section_mode
 from .const import BASE_DIR, TEMPLATE_DIRS
 from .state import state
 from .web import _json, app
@@ -315,6 +315,7 @@ def panel_html(name):
             # Ручки (1.51): отклик сразу и жесты на плитках - у панели или
             # общие; устройство может выбрать своё в меню шестерёнки.
             ("__CONTROLS__", json.dumps({
+                "section_mode": section_mode(panel_conf),
                 "live": bool(panel_conf.get("live_controls", web.config.get("live_controls", False))),
                 "drag": bool(panel_conf.get("tile_gestures", web.config.get("tile_gestures", False))),
                 # шаг отправки «сразу», мс (1.52): под скорость диммера

@@ -124,8 +124,8 @@ async function editorFlow(browser) {
     ok('редактор: ошибка кандидата и плитки', (await p.locator('#instance-error').innerText()).includes('У плитки неполные или неверные настройки'));
     await p.click('#remove');
     await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 3);
-    await p.fill('#search', 'Подсветка');
-    await p.selectOption('#elements', 'light');
+    await p.fill('#search', 'Дополнительная подсветка');
+    await p.selectOption('#elements', 'extra_light');
     await p.click('#add');
     await p.waitForFunction(() => document.querySelectorAll('#instances li').length === 4);
     const added = await p.locator('#instances li').last().getAttribute('data-instance');

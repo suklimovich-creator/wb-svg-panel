@@ -11,12 +11,13 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <title>__NAME__</title>
 <link rel="stylesheet" href="static/panel.css?v=__APP__">
-</head><body>
+</head><body class="panel-starting">
 <a id="back" href="./">← Панели</a>
 <div id="cols"></div>
 <div id="navmenu"></div>
 <div id="host">загрузка…</div>
 <div id="err"></div>
+<div id="connection" role="status" aria-live="polite"></div>
 <div id="warn8080"></div>
 <div id="ov"><div class="close hbtn" onclick="closeOv()"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></div></div>
 
@@ -24,10 +25,7 @@
 /* Что знает только сервер - подставляется при отдаче страницы. Остальное -
    static/panel.css и static/js/*.js (с 1.45; до того всё было здесь). */
 var NAME = __NAME_JS__, EVERY = __EVERY__000;
-/* Версия демона, с которой отдана эта страница. Обновили панель на
-   контроллере - картинка уже новая, а скрипты страницы старые: пульты
-   рисовались новым сервером, а вели себя по-старому. Поэтому страница
-   сверяет версию с каждым ответом и перезагружается сама. */
+/* Новая версия предлагается пользователю без автоматической перезагрузки. */
 var APP = __APP_JS__, appReload = false;
 /* Темы для меню и цвета полей - из данных тем (с 1.24). */
 var THEME_LIST = __THEMES_JS__;

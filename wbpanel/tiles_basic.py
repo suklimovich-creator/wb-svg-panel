@@ -189,6 +189,8 @@ class Scenes(Tile):
 
 @tile("value")
 class Value(Tile):
+    editor_properties = {"channel": ("Канал показания", "channel"), "unit": ("Единица измерения", "text"),
+                         "digits": ("Знаков после запятой", "integer", 0, 10)}
     roles = ("value",)
 
     def prepare(self, ctx):

@@ -129,7 +129,7 @@ COVERED = {"/", "/healthz", "/manifest.webmanifest", "/icon.svg", "/docs",
 # Managed success, malformed payloads and conflict cases are exercised in
 # editor_ui_check.run() below. Keep these routes in the same coverage map.
 COVERED.update({
-    "/editor", "/editor/<name>", "/api/editor/state", "/api/editor/drafts",
+    "/editor", "/editor/library", "/editor/<name>", "/api/editor/state", "/api/editor/drafts",
     "/api/editor/drafts/<draft_id>", "/api/editor/drafts/<draft_id>/operation",
     "/api/editor/drafts/<draft_id>/diff", "/api/editor/drafts/<draft_id>/preview/<name>.svg",
     "/api/editor/drafts/<draft_id>/tile/<name>/<stable_id>.svg", "/api/editor/drafts/<draft_id>/element.svg",

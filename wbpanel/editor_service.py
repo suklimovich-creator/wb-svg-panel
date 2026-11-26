@@ -199,10 +199,10 @@ class EditorService:
             library[name] = {"id": name, "type": kind, "pad": has_pad(kind),
                              "title": policy.label(value.get("title") or name)}
             library[name]["properties"] = property_model(docs, name, value, policy)
+            library[name]["affected_panels"] = element_panels(docs.data, name)
             binding = binding_model(value, policy)
             if binding:
                 library[name]["binding"] = binding
-                library[name]["affected_panels"] = element_panels(docs.data, name)
             for field in ("w", "h"):
                 size = value.get(field)
                 if type(size) in (int, float) and not policy.contains(str(size)):

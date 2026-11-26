@@ -59,7 +59,13 @@ def run():
 
     assert "Редактор панелей" in client.get("/").get_data(as_text=True)
     for url in ("/editor", "/editor/room"):
-        assert b"editor.js" in safe(client.get(url)).data
+        page = safe(client.get(url)).get_data(as_text=True)
+        assert "editor.js" in page and 'id="library-link"' in page
+        target = "./editor/library" if url == "/editor" else "../editor/library"
+        assert 'href="' + target + '"' in page
+    library_page = safe(client.get("/editor/library")).get_data(as_text=True)
+    assert "library.js" in library_page and "library-search" in library_page
+    assert "Библиотека элементов" in library_page and 'href="../editor"' in library_page
     assert get("/state").get_json()["managed"]
     assert get("/revisions").get_json()["head"] is None
     assert not store.directory.exists()
@@ -131,6 +137,7 @@ def run():
     assert state == initial and state["draft_id"] != original["draft_id"]
     assert state["panels"][1]["sections"][1]["sources"] == ["room"]
     assert state["panels"][1]["sections"][1]["readonly"]
+    assert all("affected_panels" in item for item in state["library"])
     dimmer = next(item for item in state["library"] if item["id"] == "light")
     props = {p["key"]: p for p in dimmer["properties"]}
     assert props["channel_brightness"]["value"] == "dm/Channel 1"

@@ -132,7 +132,7 @@ COVERED.update({
     "/editor", "/editor/<name>", "/api/editor/state", "/api/editor/drafts",
     "/api/editor/drafts/<draft_id>", "/api/editor/drafts/<draft_id>/operation",
     "/api/editor/drafts/<draft_id>/diff", "/api/editor/drafts/<draft_id>/preview/<name>.svg",
-    "/api/editor/drafts/<draft_id>/tile/<name>/<stable_id>.svg",
+    "/api/editor/drafts/<draft_id>/tile/<name>/<stable_id>.svg", "/api/editor/drafts/<draft_id>/element.svg",
     "/api/editor/drafts/<draft_id>/publication", "/api/editor/revisions/delete",
     "/api/editor/drafts/<draft_id>/publish", "/api/editor/revisions", "/api/editor/rollback",
 })

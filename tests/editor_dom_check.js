@@ -15,6 +15,7 @@ Path(cfg.path).write_text('''schema: 2
 interactive: true
 elements:
   lamp: {type: switch, channel: dev/old}
+  graph: {type: chart}
 panels:
   a: {title: A, tiles: [{element: lamp}]}
   b: {title: B, sections: [{title: Lights, tiles: [{element: lamp}]}]}
@@ -72,6 +73,20 @@ async function until(fn) {
     function choose(id, value) { el(id).value = value; el(id).dispatchEvent(new w.Event('change')); }
     function submit(id) { el(id).dispatchEvent(new w.Event('submit', {cancelable: true})); }
     function selectedTile() { d.querySelector('#instances button').click(); }
+    el('library-editor').open = true;
+    choose('property-element', 'graph');
+    d.querySelector('#property-fields fieldset button').click();
+    const row = d.querySelector('#property-fields fieldset fieldset');
+    const first = row.querySelector('input');
+    first.value = 'dev/temperature';
+    first.dispatchEvent(new w.Event('input'));
+    const bool = d.querySelector('#property-fields [name=grid_labels]');
+    bool.value = 'false';
+    submit('property-form');
+    await until(() => d.querySelector('#property-fields [name=grid_labels]').dataset.initial === 'false');
+    const savedSeries = JSON.parse(d.querySelector('#property-fields [name=series]').value);
+    assert.deepStrictEqual(savedSeries, [{channel: 'dev/temperature'}]);
+    el('library-editor').open = false;
     selectedTile();
     assert(el('binding-title').textContent.includes('Общая'));
     assert(el('binding-scope').textContent.includes('a, b, summary'));

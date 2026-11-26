@@ -174,6 +174,89 @@
         byId('add').disabled = !menu.options.length;
     }
 
+    // Preserve optional and older row properties while editing the common fields.
+    var rowColumns = {
+        series: {channel: 'Канал', label: 'Название', unit: 'Единица', color: 'Цвет',
+            digits: 'Знаков после запятой', min: 'Минимум', max: 'Максимум', grid: 'Шаг сетки'},
+        items: {title: 'Название', channel: 'Канал', icon: 'Иконка', command_topic: 'Топик команды',
+            command_on: 'Значение команды', level: 'Уровень от 0 до 1'},
+        status: {title: 'Название', icon: 'Иконка', channel: 'Канал', value_channel: 'Канал значения',
+            value_unit: 'Единица', air: 'Канал качества воздуха'}
+    };
+
+    function propertyRows(container, field, input) {
+        var columns = rowColumns[field.key];
+        var rows = field.value || [];
+        if (!columns || !Array.isArray(rows) || field.protected) { return; }
+        var holder = node('div', '');
+        var add = node('button', 'Добавить строку');
+        add.type = 'button';
+        container.appendChild(holder);
+        container.appendChild(add);
+
+        function draw() {
+            holder.textContent = '';
+            rows.forEach(function (row, index) {
+                var block = node('fieldset', '');
+                block.appendChild(node('legend', 'Строка ' + (index + 1)));
+                Object.keys(columns).forEach(function (key) {
+                    var label = node('label', columns[key]);
+                    var control = node('input', '');
+                    var numeric = ['digits', 'min', 'max', 'grid', 'level'].indexOf(key) >= 0;
+                    if (numeric) {
+                        control.type = 'number';
+                        control.step = key === 'digits' ? '1' : 'any';
+                    }
+                    control.value = row[key] == null ? '' : row[key];
+                    control.oninput = function () {
+                        if (control.value === '') { delete row[key]; }
+                        else { row[key] = numeric ? Number(control.value) : control.value; }
+                        input.value = JSON.stringify(rows, null, 2);
+                    };
+                    label.appendChild(control);
+                    block.appendChild(label);
+                });
+                var remove = node('button', 'Удалить строку');
+                remove.type = 'button';
+                remove.onclick = function () {
+                    rows.splice(index, 1);
+                    input.value = JSON.stringify(rows, null, 2);
+                    draw();
+                };
+                block.appendChild(remove);
+                holder.appendChild(block);
+            });
+        }
+        // The JSON view also covers nested thresholds, conditions and extended row options.
+        var full = node('details', '');
+        full.appendChild(node('summary', 'Все поля в JSON'));
+        full.appendChild(input.parentNode);
+        container.appendChild(full);
+        function readRows() {
+            try {
+                var next = JSON.parse(input.value || '[]');
+                if (Array.isArray(next) && next.every(function (r) {
+                    return r && typeof r === 'object' && !Array.isArray(r);
+                })) {
+                    rows = next;
+                    add.disabled = false;
+                    draw();
+                    return;
+                }
+            } catch (ignore) {}
+            add.disabled = true;
+            holder.textContent = '';
+        }
+        input.addEventListener('input', readRows);
+        add.onclick = function () {
+            rows.push({});
+            input.value = JSON.stringify(rows, null, 2);
+            draw();
+            holder.lastChild.querySelector('input').focus();
+        };
+        readRows();
+    }
+
     function showProperties() {
         var id = byId('property-element').value;
         var item = model.library.find(function (entry) { return entry.id === id; });
@@ -182,23 +265,42 @@
         item.properties.forEach(function (field) {
             var spec = field.spec;
             var label = node('label', spec[0]);
-            var input = node(spec[1] === 'choice' ? 'select' : 'input', '');
-            if (spec[1] === 'choice') {
+            var kind = spec[1];
+            var select = kind === 'choice' || kind === 'boolean';
+            var input = node(select ? 'select' : kind === 'json' ? 'textarea' : 'input', '');
+            input.dataset.kind = kind;
+            if (select) {
                 option(input, '', 'По умолчанию');
-                spec.slice(2).forEach(function (choice) { option(input, choice, choice); });
-            } else if (spec[1] === 'size' || spec[1] === 'integer') {
+                if (kind === 'boolean') {
+                    option(input, 'true', 'Да');
+                    option(input, 'false', 'Нет');
+                } else {
+                    spec.slice(2).forEach(function (choice) { option(input, choice, choice); });
+                }
+            } else if (kind === 'json') {
+                input.rows = 4;
+                label.appendChild(node('small', 'JSON, например ' + spec[2]));
+            } else if (['size', 'integer', 'number', 'nonnegative', 'positive'].indexOf(kind) >= 0) {
                 input.type = 'number';
-                input.min = spec[2] === undefined ? 0.5 : spec[2];
-                input.max = spec[3] === undefined ? 32 : spec[3];
-                input.step = spec[1] === 'size' ? 0.5 : 1;
+                input.step = kind === 'size' ? '0.5' : kind === 'integer' ? '1' : 'any';
+                if (kind === 'size' || kind === 'integer') {
+                    input.min = kind === 'size' ? 0.5 : spec[2];
+                    input.max = kind === 'size' ? 32 : spec[3];
+                } else if (kind !== 'number') { input.min = 0; }
             }
             input.name = field.key;
             input.disabled = field.protected;
-            input.value = field.value == null ? '' : field.value;
+            input.value = field.value == null ? '' : kind === 'json' ? JSON.stringify(field.value, null, 2) : field.value;
             input.dataset.initial = input.value;
             if (field.protected) { input.placeholder = 'Задаётся в YAML'; }
             label.appendChild(input);
-            fields.appendChild(label);
+            if (kind === 'json' && rowColumns[field.key] && !field.protected) {
+                var group = node('fieldset', '');
+                group.appendChild(node('legend', spec[0]));
+                group.appendChild(label);
+                fields.appendChild(group);
+                propertyRows(group, field, input);
+            } else { fields.appendChild(label); }
         });
         byId('property-preview').src = api + draftPath('/element.svg?element=' + encodeURIComponent(id) + '&draft_version=' + model.draft_version);
     }
@@ -208,12 +310,25 @@
     byId('property-form').onsubmit = function (event) {
         event.preventDefault();
         var fields = {};
+        var invalid = false;
         Array.prototype.forEach.call(this.elements, function (input) {
             if (input.name && !input.disabled && input.value !== input.dataset.initial) {
-                fields[input.name] = input.value === '' ? null : input.type === 'number' ? Number(input.value) : input.value;
+                if (input.value && input.dataset.kind === 'json') {
+                    try { fields[input.name] = JSON.parse(input.value); }
+                    catch (error) {
+                        input.setCustomValidity('Проверьте формат JSON');
+                        input.oninput = function () { this.setCustomValidity(''); };
+                        input.reportValidity();
+                        invalid = true;
+                    }
+                } else if (input.value && input.dataset.kind === 'boolean') {
+                    fields[input.name] = input.value === 'true';
+                } else {
+                    fields[input.name] = input.value === '' ? null : input.type === 'number' ? Number(input.value) : input.value;
+                }
             }
         });
-        if (!Object.keys(fields).length || busy) { return; }
+        if (invalid || !Object.keys(fields).length || busy) { return; }
         run('POST', draftPath('/operation'), {draft_version: model.draft_version, operation: {
             op: 'update_element', element: byId('property-element').value, fields: fields
         }}, function (result) {
@@ -737,7 +852,7 @@
         if (busy) { return; }
         busy = true;
         var focused = document.activeElement;
-        var locked = Array.prototype.map.call(document.querySelectorAll('#workspace input, #workspace select, #workspace button, #actions button'), function (el) {
+        var locked = Array.prototype.map.call(document.querySelectorAll('#workspace input, #workspace textarea, #workspace select, #workspace button, #actions button'), function (el) {
             var entry = [el, el.disabled]; el.disabled = true; return entry;
         });
         byId('workspace').setAttribute('aria-busy', 'true');

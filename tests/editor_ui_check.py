@@ -131,7 +131,12 @@ def run():
     assert state == initial and state["draft_id"] != original["draft_id"]
     assert state["panels"][1]["sections"][1]["sources"] == ["room"]
     assert state["panels"][1]["sections"][1]["readonly"]
-    assert "channel_brightness" not in repr(state)
+    dimmer = next(item for item in state["library"] if item["id"] == "light")
+    props = {p["key"]: p for p in dimmer["properties"]}
+    assert props["channel_brightness"]["value"] == "dm/Channel 1"
+    assert "channel_brightness" not in repr(state["panels"])
+    assert get(first + "/element.svg?element=light").mimetype == "image/svg+xml"
+    get(first + "/element.svg?element=missing", 404)
     switch = next(item for item in state["library"] if item["id"] == "switch")
     bindings = {item["name"]: item for item in switch["binding"]["fields"]}
     assert bindings["channel"]["protected"] and bindings["channel"]["value"] == ""

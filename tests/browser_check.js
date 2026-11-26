@@ -73,6 +73,18 @@ async function editorFlow(browser) {
     if (draft.status() !== 201) {
       throw new Error('Повторное создание черновика: HTTP ' + draft.status() + ', ожидался 201');
     }
+    await p.locator('#library-editor summary').click();
+    await p.selectOption('#property-element', 'light');
+    await p.fill('#property-fields [name=channel_brightness]', 'dm/Edited level');
+    const [edited] = await Promise.all([
+      p.waitForResponse(r => r.url().endsWith('/operation') && r.request().method() === 'POST'),
+      p.click('#property-form button')
+    ]);
+    ok('редактор: поле яркости диммера в черновике', edited.ok() &&
+       (await edited.json()).library.find(e => e.id === 'light').properties
+         .some(f => f.key === 'channel_brightness' && f.value === 'dm/Edited level'));
+    await p.waitForFunction(() => document.querySelector('#property-preview').naturalWidth > 0);
+    await p.locator('#library-editor summary').first().click();
     await p.locator('#structure summary').click();
     await p.fill('#create-panel [name=key]', 'new-room');
     await p.fill('#create-panel [name=caption]', 'Новая комната');

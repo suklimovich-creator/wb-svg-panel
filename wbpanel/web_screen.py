@@ -68,6 +68,8 @@ light/dark, ревизия и палитра по ролям (docs/SCREEN_THEME.
 без своего color несут ещё и role - цвет берётся из текущей темы экрана.
 С 1.77.4 её view передаёт состав clock, clock_weather (по умолчанию) или
 weather; служебный view=pad в JSON не попадает и по-прежнему означает прогноз.
+С 1.87.2 корень, страницы и страницы заставки содержат декларативные правила
+status для esp32-panel 0.12.9+: значения экран читает из MQTT сам.
 """
 
 import datetime as dt
@@ -77,7 +79,7 @@ from urllib.parse import quote
 
 from flask import Response, abort, request
 
-from . import cameras, palette, web
+from . import air, cameras, palette, web
 from .assemble import resolve_sections
 from .calendars import Calendars, MONTHS, WEEKDAYS, calendars, day_label
 from .geometry import cells, field_color, parse_duration
@@ -85,6 +87,7 @@ from .lists import lists
 from .registry import REGISTRY, resolve_type
 from .sources import bind
 from .state import state
+from .status import parse_span, status_entries
 from .tiles import AC_FAN_RU, AC_MODE_RU, HEAT_MODE, HEAT_NOW, command_topic
 from .tiles_basic import Scene
 from .tiles_calendar import _hm, _state, _when_text
@@ -637,6 +640,69 @@ def _screen_sections(panel, panels):
     return list(zip(configured, rows))
 
 
+def _screen_status(panel):
+    """Правила status -> декларативные чипы, значения ESP читает из MQTT."""
+    out = []
+    for entry in status_entries(panel):
+        if "leak" in entry:
+            sensors = water.pick_sensors(entry.get("leak"))
+            if not sensors:
+                continue
+            channels = water.channels(sensors)
+            sensor_topics = {topic_of(s.get("channel")) for s in sensors}
+            item = {"kind": "leak", "icon": entry.get("icon") or "leak",
+                    "sensors": [{"topic": topic_of(s["channel"])} for s in sensors
+                                if s.get("channel")],
+                    "alarms": [topic_of(ch) for ch in channels
+                               if ch and topic_of(ch) not in sensor_topics]}
+            # channels() возвращает set: порядок тревог стабилизируем, чтобы
+            # повторный JSON совпадал байт в байт.
+            item["alarms"].sort()
+            out.append(item)
+            continue
+        if entry.get("air"):
+            spec = air.chip_spec(entry)
+            zones = spec["zones"]
+            if not spec["channel"] or not zones:
+                continue
+            alarm_from = len(zones) - 1
+            out.append({"kind": "air", "channel": topic_of(spec["channel"]),
+                        "icon": spec["icon"],
+                        "thresholds": [z[0] for z in zones if z[0] is not None],
+                        "chip_from": spec["chip_from"],
+                        "alarm_from": alarm_from if alarm_from >= 2 else 99,
+                        "value_unit": str(entry.get("value_unit") or "")})
+            continue
+        item = {"kind": "status"}
+        for key in ("channel", "value_channel"):
+            if entry.get(key):
+                item[key] = topic_of(entry[key])
+        for key in ("icon", "icon_faded", "badge", "badge_color", "value_unit",
+                    "when", "above", "below", "value_digits", "badges",
+                    "attention", "alarm"):
+            if key in entry and entry[key] is not None:
+                item[key] = entry[key]
+        fade = parse_span(entry.get("fade"), 0)
+        if fade:
+            item["fade"] = fade
+        req = entry.get("require")
+        if req:
+            rules = req if isinstance(req, list) else [req]
+            converted = []
+            for rule in rules:
+                if not isinstance(rule, dict) or not rule.get("channel"):
+                    continue
+                row = {"channel": topic_of(rule["channel"])}
+                for key in ("when", "above", "below"):
+                    if key in rule and rule[key] is not None:
+                        row[key] = rule[key]
+                converted.append(row)
+            if converted:
+                item["require"] = converted
+        out.append(item)
+    return out
+
+
 def _saver_after(section):
     """Интервал у секции; само наличие screensaver делает её служебной."""
     return web._seconds(section.get("screensaver")) if section and "screensaver" in section else 0
@@ -670,9 +736,16 @@ def _screen_pages(panel_name, panel, panels, cols, history_base, screensaver=Fal
                 # Дела и события - тоже отдельно: они меняются каждый час.
                 tile["data"] = "%s/%d" % (today_base, today_index)
                 today_index += 1
-        if out:
-            pages.append({"title": title or panel.get("title") or panel_name,
-                          "tiles": out})
+        # Без sections корневой status уже передан отдельно: не дублируем его
+        # на первой странице. В секциях _src содержит разрешённые from-источники.
+        status = _screen_status(_src) if section else []
+        root_status_only = section is None and not out and bool(_screen_status(panel))
+        if out or status or root_status_only:
+            page = {"title": title or panel.get("title") or panel_name,
+                    "tiles": out}
+            if status:
+                page["status"] = status
+            pages.append(page)
     return pages
 
 
@@ -684,6 +757,9 @@ def screen_layout(panel_name, config=None):
     out = {"version": 1, "panel": panel_name, "cols": cols,
            "pages": _screen_pages(panel_name, panel, panels, cols, base + "/chart",
                                   config=config)}
+    status = _screen_status(panel)
+    if status:
+        out["status"] = status
     if panel.get("swipe") is True:
         out["swipe"] = True
 

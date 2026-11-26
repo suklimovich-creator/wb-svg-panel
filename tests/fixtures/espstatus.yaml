@@ -1,0 +1,45 @@
+mqtt:
+  host: 127.0.0.1
+screens:
+  panel-status: status-wall
+water:
+  modules:
+    mwac:
+      alarm: mw/Leakage Mode
+      reset: mw/Leakage Mode Reset
+  sensors:
+    bath: {title: Ванная, channel: mw/Input F1, module: mwac}
+    kitchen: {title: Кухня, channel: mw/Input F3, module: mwac}
+panels:
+  status-wall:
+    title: Статусы
+    hidden: true
+    cols: 3
+    status:
+    - channel: motion/Max Motion
+      icon: motion
+      above: 60
+      fade: 20m
+    - channel: ac/mode
+      icon: ac-unit
+      when: [cool, heat, dry, fan_only, auto]
+      badges: {cool: snow, heat: heat, dry: water, fan_only: fan, auto: auto}
+      require: {channel: ac/power, when: "1"}
+      value_channel: ac/target
+      value_digits: 1
+      value_unit: "°"
+    - air: msw/CO2
+    - air: msw/Air Quality (VOC)
+    - leak: all
+    sections:
+    - title: Комната
+      status:
+      - {channel: door/Contact, icon: door-open, alarm: true}
+      tiles:
+      - {type: sensor, title: Температура, channel: room/Temperature, w: 1, h: 1}
+    - title: Заставка
+      screensaver: 30s
+      status:
+      - {channel: saver/Flag, icon: home}
+      tiles:
+      - {type: sensor, title: Время, channel: room/Temperature, w: 1, h: 1}

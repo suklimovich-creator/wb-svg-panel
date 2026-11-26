@@ -308,6 +308,9 @@ class EditorService:
                 # Keep protected names write-only in the editor and its change log.
                 if operation["op"] == "assign_screen":
                     visible.pop("screen")
+                if operation["op"] == "update_element":
+                    # Structured property names (e.g. mode table keys) are user input too.
+                    policy.check(json.dumps(operation["fields"], ensure_ascii=False))
                 policy.check_values(visible)
                 dimensions_only = (operation["op"] == "update_instance"
                                    and operation["fields"].keys() <= {"w", "h"})
@@ -390,9 +393,7 @@ class EditorService:
             affected = set()
             for event in operations:
                 for data in (session.baseline.documents.data, candidate.documents.data):
-                    if event["op"] == "update_element":
-                        continue
-                    if event["op"] == "update_binding" and "element" in event:
+                    if event["op"] in ("update_element", "update_binding") and "element" in event:
                         names = element_panels(data, event["element"])
                     else:
                         names = affected_panels(data, [event["panel"], event.get("new_panel")])

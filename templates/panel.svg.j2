@@ -232,16 +232,16 @@
   {#- Подложка заголовка: едва заметная, только чтобы строка читалась как
       кнопка. Выключается section_plate: false у панели. -#}
   {% if plate_sections %}
-  <rect x="{{ hd.tap_x }}" y="{{ hd.tap_y }}" width="{{ hd.tap_w }}" height="36"
+  <rect x="{{ hd.tap_x }}" y="{{ hd.tap_y }}" width="{{ hd.tap_w }}" height="{{ hd.plate_h }}"
         rx="10" class="section-plate"/>
   {% endif %}
   <rect x="{{ hd.hit_x }}" y="{{ hd.hit_y }}" width="{{ hd.hit_w }}" height="{{ hd.hit_h }}"
         fill="transparent"/>
   {% endif %}
-  <text x="{{ hd.x }}" y="{{ hd.y }}" class="h2">{{ hd.title }}</text>
+  <text x="{{ hd.x }}" y="{{ hd.y }}" class="h2"{% if hd.font and hd.font > 18 %} style="font-size:{{ hd.font }}px"{% endif %}>{{ hd.title }}</text>
   {% if hd.key %}
   {#- вниз - раскрыт, вправо - свёрнут -#}
-  <path class="fold-arrow" d="{% if hd.folded %}M{{ hd.arrow_x }} {{ hd.arrow_y - 5 }}l5 5l-5 5{% else %}M{{ hd.arrow_x - 2 }} {{ hd.arrow_y - 2 }}l5 5l5 -5{% endif %}"/>
+  <path class="fold-arrow"{% if hd.font > 18 %} transform="translate({{ hd.arrow_x }} {{ hd.arrow_y }}) scale({{ hd.font / 18 }}) translate({{ -hd.arrow_x }} {{ -hd.arrow_y }})"{% endif %} d="{% if hd.folded %}M{{ hd.arrow_x }} {{ hd.arrow_y - 5 }}l5 5l-5 5{% else %}M{{ hd.arrow_x - 2 }} {{ hd.arrow_y - 2 }}l5 5l5 -5{% endif %}"/>
   {% endif %}
 </g>
 {% for c in hd.chips or [] %}

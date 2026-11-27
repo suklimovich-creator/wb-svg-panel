@@ -127,6 +127,11 @@ def _source(name):
     return panel_conf, state, history, config.panels
 
 
+def mobile_width():
+    width = request.args.get("vw", 0, type=int)
+    return width if 200 <= width <= 1024 else 0
+
+
 def render_panel(name, cols=None, *, candidate=None):
     preview = candidate is not None
     cfg = config if not preview else candidate
@@ -164,7 +169,7 @@ def render_panel(name, cols=None, *, candidate=None):
     panel_conf = dict(panel_conf, theme=theme)
     tiles, width, height, headers, top_chips, sect = prepare(
         panel_conf, st, hist, cols=cols, all_panels=all_panels,
-        name=name, closed=closed, opened=opened, mode=mode, nav=nav,
+        name=name, closed=closed, opened=opened, mode=mode, nav=nav, viewport=mobile_width(),
         cfg=(cfg if preview else None), preview=preview)
     template = _template(panel_conf.get("template", "panel.svg.j2"))
     wall_img, wall_dim = wall_of(panel_conf, theme, cfg=cfg)

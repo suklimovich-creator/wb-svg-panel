@@ -290,10 +290,16 @@ function toggleSection(node){
   restartPoll();
 }
 
+function mobileWidth(){
+  var w = document.getElementById('host').clientWidth;
+  return !DEMO && w >= 200 && w <= 1024 ? w : 0;
+}
+var layoutWidth = mobileWidth();
 function Q(){
   var parts = [];
   // кнопки страницы - в шапке картинки (1.44); витрине тем они не нужны
-  if (!DEMO) parts.push('nav=' + NAV_S);
+  if (!DEMO) parts.push('nav=' + (layoutWidth ? '1' : NAV_S));
+  if (layoutWidth) parts.push('vw=' + layoutWidth);
   if (LITE) parts.push('lite=1');
   if (COLS) parts.push('cols=' + COLS);
   if (THEME) parts.push('theme=' + THEME);
@@ -462,6 +468,13 @@ function liveSender(send, ms){
 var NAV_S = (function(){ try { return localStorage.getItem('wb-panel-navs') || '1.0'; } catch(e) { return '1.0'; } })();
 var navScaleAt = 0;
 function navScale(){
+  var width = mobileWidth();
+  if (width !== layoutWidth) {
+    layoutWidth = width;
+    refresh(true);
+    return;
+  }
+  if (width) return;
   var svg = host.querySelector('svg');
   if (!svg || !svg.getAttribute('viewBox')) return;
   var W = +svg.getAttribute('viewBox').split(' ')[2] || 0, shown = svg.getBoundingClientRect().width;

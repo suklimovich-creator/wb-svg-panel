@@ -381,6 +381,7 @@ function flushPending(){
    изменится. Нет заголовка - старый сервер, работаем опросом. */
 var VER = null, LIVE = true;
 var connectionReason = '', connectionSeq = 0;
+var connectionLabel = null;
 function connectionState(reason, seq){
   if (seq && seq < connectionSeq) return;
   if (seq) connectionSeq = seq;
@@ -390,7 +391,12 @@ function connectionState(reason, seq){
   panelBlocked = blocked;
   document.body.classList.toggle('panel-offline', blocked);
   var box = document.getElementById('connection');
-  box.textContent = connectionReason || (appReload ? 'Доступна новая версия панели' : '');
+  var label = connectionReason || (panelIncompatible ? 'Для управления обновите панель' :
+              appReload ? 'Доступна новая версия панели' : '');
+  var stateKey = label + '|' + appReload;
+  if (connectionLabel === stateKey) return;
+  connectionLabel = stateKey;
+  box.textContent = label;
   box.style.display = (blocked || appReload) ? 'block' : 'none';
   if (appReload || connectionReason === 'Требуется вход') {
     var button = document.createElement('button');
@@ -636,15 +642,29 @@ function videoAwake(){
   });
 }
 keepAwake();
+var resumeTimer = null;
+function resumePanel(){
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(function(){
+    if (!document.hidden) { refresh(true); restartPoll(); }
+  }, 0);
+}
 document.addEventListener('visibilitychange', function(){
   if (!document.hidden && !wakeLock) keepAwake();
   // Вкладку спрятали - ждущий запрос не держим, поток на контроллере
   // нужнее. Показали - сразу свежая картинка и снова ждём.
   if (document.hidden) {
+    fingerDown = false;
+    tdTwo = null;
+    if (press) {
+      clearTimeout(press.timer);
+      tdAbort(press, press.node);
+      press = null;
+    }
     if (pollAbort) { try { pollAbort.abort(); } catch(e) {} }
     clearTimeout(pollTimer);
   } else {
-    refresh(); schedule(300);
+    resumePanel();
   }
 });
 
@@ -666,7 +686,7 @@ document.addEventListener('click', function(e){
 }, true);
 window.addEventListener('offline', function(){ connectionError(null, ++reqSeq); });
 window.addEventListener('online', function(){ refresh(true); restartPoll(); });
-window.addEventListener('pageshow', function(e){ if (e.persisted) { refresh(true); restartPoll(); } });
+window.addEventListener('pageshow', function(e){ if (e.persisted) resumePanel(); });
 drawCols();
 refresh();
 // Ждущий запрос - чуть позже первой картинки: она приходит без версии, а

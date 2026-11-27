@@ -3,7 +3,7 @@ const {chromium} = require('playwright');
 const assert = require('assert');
 (async () => {
   const browser = await chromium.launch({executablePath: process.env.CHROMIUM || '/usr/bin/chromium', args:['--no-sandbox']});
-  const ctx = await browser.newContext({viewport:{width:390,height:844}});
+  const ctx = await browser.newContext({viewport:{width:390,height:844},hasTouch:true});
   const p = await ctx.newPage();
   const errors=[]; p.on('pageerror', e=>errors.push(e.message));
   let fault='', documents=0;
@@ -27,6 +27,14 @@ const assert = require('assert');
     const requests=[]; p.on('request',r=>{if(r.url().includes('/acc.svg'))requests.push(r.url());});
     await p.reload(); await p.waitForSelector('#host svg');
     assert.equal(new URL(requests[0]).searchParams.get('open'),key);
+    assert.equal(+new URL(requests[0]).searchParams.get('vw'),await p.locator('#host').evaluate(n=>n.clientWidth));
+    for(const width of [390,844,390]){
+      await p.setViewportSize({width,height:width===390?844:390});
+      await p.waitForFunction(()=>{
+        const plate=host.querySelector('[data-accordion] .section-plate');
+        return layoutWidth===host.clientWidth && plate && plate.getBoundingClientRect().height>=47;
+      });
+    }
     assert.equal(new URL(requests[0]).searchParams.get('theme'),'light');
     assert.equal(new URL(requests[0]).searchParams.get('cols'),'2');
     await p.evaluate(()=>{clearTimeout(pollTimer);window.originalRoot=host.querySelector('svg');window.token=42;});
@@ -77,9 +85,35 @@ const assert = require('assert');
       assert(await p.evaluate(()=>!!document.fullscreenElement));
       assert.equal(documents,navs);
     }
+    const section=p.locator('#host [data-accordion]').first();
+    const folded=await section.getAttribute('data-folded');
+    const button=await p.locator('#connection button').elementHandle();
+    await p.evaluate(()=>connectionState(''));
+    assert(await button.evaluate(el=>el===document.querySelector('#connection button')));
+    await section.scrollIntoViewIfNeeded();
+    await p.waitForFunction(()=>Date.now()>shieldUntil && Date.now()-lastScroll>SCROLL_GAP);
+    await section.locator('text').click();
+    await p.waitForFunction(old=>host.querySelector('[data-accordion]').getAttribute('data-folded')!==old,folded);
+    const controls=await ctx.newPage();
+    await controls.route('**/misc.svg?*',async route=>{
+      const response=await route.fetch();
+      await route.fulfill({response,headers:{...response.headers(),'x-panel-client':'changed-assets'}});
+    });
+    await controls.goto(base+'misc.html?cols=4');
+    await controls.waitForSelector('#connection button');
+    const light=controls.locator('#host [data-pad="xy"][data-topic]').first();
+    await light.scrollIntoViewIfNeeded();
+    await controls.waitForFunction(()=>Date.now()-lastScroll>SCROLL_GAP);
+    const [command]=await Promise.all([
+      controls.waitForResponse(r=>r.url().endsWith('/api/publish')),
+      light.tap()
+    ]);
+    assert(command.ok(),'tap with update banner must publish to the fixture');
+    await controls.unrouteAll({behavior:'ignoreErrors'});
+    await controls.close();
     // Server version changes must not reload, including overlay close.
     fault='version';await p.evaluate(()=>refresh(true));
-    await p.waitForFunction(()=>appReload);
+    await p.waitForFunction(()=>panelIncompatible && panelBlocked);
     await p.evaluate(()=>closeOv());
     assert.equal(documents,navs);
     assert(await p.locator('#connection button').isVisible());

@@ -27,6 +27,7 @@ function idleTouch(){ idleAt = Date.now(); }
    отпускании; click, который придёт следом, тоже гасим. */
 var saverGone = 0;
 function saverGuard(e){
+  if (e.target.closest && e.target.closest('#connection button')) return;
   if (!saverOn && Date.now() - saverGone > 400) return;
   if (e.cancelable) e.preventDefault();
   e.stopPropagation();

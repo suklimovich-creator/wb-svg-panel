@@ -562,7 +562,7 @@ NAV_GAP = 10
 
 
 def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
-            closed=(), opened=None, mode=None, nav=False, *, cfg=None, preview=False):
+            closed=(), opened=None, mode=None, nav=False, *, viewport=0, cfg=None, preview=False):
     cfg = config if cfg is None else cfg
     big_cols = int(cols or panel_conf.get("cols", 4))
     interactive = bool(panel_conf.get("interactive",
@@ -606,6 +606,9 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             head_dy = tab_h
             y_cursor += tab_h
 
+    scale = (right_edge + PAD) / viewport if viewport else 0
+    if viewport and nav:
+        nav = min(1.6, max(1.0, scale))
     for title, tiles_conf, status_src, key in sections:
         folded = bool(key) and key in hidden
         # плитки-ссылки должны знать, откуда на них нажали
@@ -616,15 +619,19 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
         if title and mode != "tabs":
             # Было 6: чипы высотой 36 подходили вплотную к плиткам сверху.
             y_cursor += 14
-            hd = {"title": title, "x": PAD, "y": y_cursor + 22, "chips": [],
+            plate_h = max(36, round(48 * scale)) if mode == "accordion" else 36
+            font = min(32, max(18, round(15 * scale))) if mode == "accordion" else 18
+            offset = (plate_h - 36) // 2
+            hd = {"plate_h": plate_h, "font": font, "title": title, "x": PAD,
+                  "y": y_cursor + 22 + offset + (font - 18) // 3, "chips": [],
                   # Заголовок становится кнопкой: нажатие сворачивает и
                   # разворачивает раздел. Стрелка показывает, что будет.
                   "key": key, "folded": folded,
                   # Ширина считается для обычного начертания, а заголовок
                   # полужирный - отсюда поправка 1.08. Плюс просвет, иначе
                   # стрелка липнет к последней букве.
-                  "arrow_x": PAD + text_width(title, 18) * 1.08 + 16,
-                  "arrow_y": y_cursor + 16,
+                  "arrow_x": PAD + text_width(title, font) * 1.08 + 16,
+                  "arrow_y": y_cursor + 16 + offset,
                   # Нажимать хочется по всей строке, а не по стрелке.
                   # Ширину дотягиваем до первого чипа: у них свои нажатия,
                   # заезжать на них нельзя. Ставится ниже, когда чипы
@@ -637,7 +644,7 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             # полосе раздела: базовая линия текста ниже его середины на
             # половину роста прописных, отсюда -2 вместо +4.
             hd["chips"] = place_chips(
-                build_status(status_src, state), right_edge, y_cursor - 2,
+                build_status(status_src, state), right_edge, y_cursor - 2 + offset,
                 left=hd["arrow_x"] + 24)
             # До первого чипа минус просвет, иначе до края строки
             first = min([c["x"] for c in hd["chips"]] or [right_edge + 8])
@@ -652,9 +659,9 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
             hd["hit_x"] = hd["tap_x"]
             hd["hit_y"] = y_cursor - 12
             hd["hit_w"] = right_edge + 8 - hd["tap_x"]
-            hd["hit_h"] = SECTION + 12
+            hd["hit_h"] = SECTION + 12 + plate_h - 36
             headers.append(hd)
-            y_cursor += SECTION
+            y_cursor += SECTION + plate_h - 36
 
         # Свёрнутый раздел не занимает места и не рисуется - в этом и
         # выгода, сводная панель из шести комнат перестаёт быть простынёй.

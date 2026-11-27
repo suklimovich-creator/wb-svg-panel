@@ -1,1216 +1,678 @@
 (function () {
     'use strict';
-    var root = document.body.getAttribute('data-root');
-    var api = root + 'api/editor/';
-    var model, panel, section, selected, busy, padOpen;
-    var previewToken = 0;
-    var previewRequest, padRequest, padToken = 0;
-    var libraryIndex = {};
-    var inspectorMode = "tile", returnFocus, savedScroll = 0;
-    var mobile = window.matchMedia("(max-width: 760px)");
-    var issue, affectedPanels = [];
-    var initialPanel = '';
-    if (root === '../') {
-        try { initialPanel = decodeURIComponent(location.pathname.split('/').pop()); }
-        catch (err) { initialPanel = ''; }
+    var api = 'api/editor';
+    var byId = function (id) { return document.getElementById(id); };
+    var model = null;
+    var panel = '';
+    var section = 0;
+    var selected = null;
+    var checked = null;
+    var busy = false;
+    var inspectorOpen = false;
+    var listSignature = '';
+    var previewCounter = 0;
+    var padCounter = 0;
+    var padImage = '';
+    var mobileMedia = window.matchMedia('(max-width: 900px)');
+    var resumeKey = 'wb-editor:shared';
+    var legacyResumeKey = 'wb-editor:' + location.pathname;
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+        });
     }
-    var operationNames = {
-        update_element: 'Изменены свойства элемента', update_binding: 'Изменена привязка', copy_panel: 'Скопирована панель', copy_section: 'Скопирована секция',
-        add_instance: 'Добавлен', remove_instance: 'Удалён',
-        move_instance: 'Перемещён', update_instance: 'Изменён',
-        update_panel: 'Настройки панели', update_section: 'Настройки раздела',
-        add_panel: 'Добавлена панель', remove_panel: 'Удалена панель',
-        add_section: 'Добавлен раздел', remove_section: 'Удалён раздел', assign_screen: 'Назначен экран'
-    };
-
-    function byId(id) { return document.getElementById(id); }
-
-    function node(tag, text) {
-        var item = document.createElement(tag);
-        item.textContent = text;
-        return item;
+    function status(text, bad) {
+        byId('status').textContent = text;
+        byId('status').className = bad ? 'err' : 'ok';
     }
-
-    function empty(id) {
-        var item = byId(id);
-        item.textContent = '';
-        return item;
+    function setBusy(value) {
+        busy = value;
+        ['restart', 'check', 'publish', 'history'].forEach(function (id) {
+            byId(id).disabled = value;
+        });
+        document.querySelectorAll('form button').forEach(function (el) {
+            if (el.id !== 'close-inspector') { el.disabled = value; }
+        });
     }
-
-    function option(select, value, label) {
-        var item = node('option', label);
-        item.value = value;
-        select.appendChild(item);
+    function errorText(err) {
+        var e = err && err.error;
+        if (e && e.message) { return e.message + ' (' + e.code + ')'; }
+        return String(err && err.message || err || 'Ошибка запроса');
     }
-
-    function request(method, path, data, done) {
-        var xhr = new XMLHttpRequest();
-        xhr.open(method, api + path);
-        xhr.timeout = 25000;
-        xhr.setRequestHeader('Accept', 'application/json, image/svg+xml');
-        if (method === 'POST') {
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('X-WB-Editor', '1');
+    function explainError(err) {
+        var code = err && err.error && err.error.code;
+        if (err && err.status === 401) {
+            return 'Сервер запросил повторный вход. Откройте панель заново через штатный адрес Wiren Board.';
         }
-        xhr.onload = function () {
-            var result = xhr.responseText;
-            if ((xhr.getResponseHeader('Content-Type') || '').indexOf('image/svg+xml') < 0) {
-                try { result = JSON.parse(result); }
-                catch (err) {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        done({message: 'Сервер вернул неожиданный ответ.'});
-                        return;
-                    }
-                    result = {};
-                }
-            }
-            if (xhr.status >= 200 && xhr.status < 300) {
-                done(null, result);
-            } else {
-                done(result.error || {message: xhr.status === 401 || xhr.status === 403 ?
-                    'Доступ к редактору отклонён. Проверьте, что вы вошли, и откройте страницу заново.' :
-                    'Сервер не смог обработать запрос (HTTP ' + xhr.status + ').'});
-            }
+        if (err && err.status === 403 && (code === 'origin' || code === 'editor_header' || code === 'request_too_large' || code === 'json')) {
+            return 'Редактор не смог подтвердить адрес страницы. Откройте его снова по ссылке «Редактор панелей» с главной страницы панели.';
+        }
+        return errorText(err);
+    }
+    function request(method, path, data) {
+        var opts = {
+            method: method,
+            headers: {'X-WB-Editor': '1'},
+            credentials: 'same-origin'
         };
-        xhr.onerror = function () { done({message: 'Связь с редактором прервалась.'}); };
-        xhr.ontimeout = function () { done({message: 'За 25 секунд браузер не получил ответ.'}); };
-        xhr.send(data ? JSON.stringify(data) : null);
-        return xhr;
-    }
-
-    function draftPath(suffix) {
-        return 'drafts/' + encodeURIComponent(model.draft_id) + suffix;
-    }
-
-    function status(text, failed) {
-        var target = byId('status');
-        target.className = failed ? 'error' : '';
-        target.textContent = text;
-        byId('edit-status').textContent = text;
-        byId('edit-status').className = failed ? 'error' : '';
-    }
-
-    function errorMessage(error) {
-        if (error.current) {
-            model = error.current;
-            selected = null; section = null; closeInspector(true);
-            showModel();
+        if (data !== undefined) {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = JSON.stringify(data);
         }
-        if (error.code === 'base_revision' || error.code === 'draft_unknown') {
-            model = null;
-            byId('workspace').hidden = true;
-            byId('check').disabled = true;
-            byId('publish').disabled = true;
-            previewToken += 1;
-        }
-        status(error.message, true);
-        markIssue(error);
+        return fetch(api + path, opts).then(function (r) {
+            return r.text().then(function (text) {
+                var body = {};
+                try { body = text ? JSON.parse(text) : {}; }
+                catch (ignore) { body = {error: {message: text || ('HTTP ' + r.status)}}; }
+                if (!r.ok) {
+                    body.status = r.status;
+                    throw body;
+                }
+                return body;
+            });
+        });
     }
-
-    function markIssue(error) {
-        if (error && !error.id) { return; }
-        issue = error;
-        var selectedError = issue && issue.id === selected;
-        byId('instance-error').hidden = !selectedError;
-        byId('instance-error').textContent = selectedError ?
-            (issue.field ? issue.field + ' · ' : '') + issue.message : '';
-        var list = byId('instances').querySelectorAll('[data-instance]');
-        for (var i = 0; i < list.length; i++) {
-            var id = list[i].getAttribute('data-instance');
-            list[i].className = issue && issue.id === id ? 'invalid' : '';
-        }
+    function run(method, path, data, done) {
+        setBusy(true);
+        status('Выполняется…');
+        return request(method, path, data).then(function (result) {
+            setBusy(false);
+            if (done) { done(result); }
+            return result;
+        }).catch(function (err) {
+            setBusy(false);
+            status(explainError(err), true);
+            if (err && err.draft) { showModel(err.draft); }
+            throw err;
+        });
     }
-
-    function progress() {
-        if (!model) { return; }
-        if (!model.draft_version) {
-            status('Черновик открыт. Пока изменений нет.');
-        } else if (model.checked) {
-            status('Проверка прошла. Изменения можно опубликовать.');
-        } else {
-            status('Сохранено в черновике. Нажмите «Опубликовать», чтобы проверить и применить изменения.');
-        }
-        byId('publish').disabled = !model.draft_version;
-        byId('check').disabled = false;
+    function selectedPanel() {
+        return model && model.panels.filter(function (p) { return p.id === panel; })[0];
     }
-
-    function selectedPanel() { return model.panels[byId('panels').selectedIndex]; }
     function selectedSection() {
         var p = selectedPanel();
-        return p && p.sections[byId('sections').selectedIndex];
+        return p && p.sections[section];
     }
-
-    function libraryItem(id) {
-        return libraryIndex[id];
+    function currentTiles() {
+        var p = selectedPanel();
+        var s = selectedSection();
+        return p && p.sections.length ? (s ? s.tiles : []) : (p ? p.tiles : []);
     }
-
-    function label(item) { return item.title + ' · ' + item.id + ' · ' + item.type; }
-
-    function search() {
-        var query = byId('search').value.toLowerCase().trim();
-        var menu = empty('elements');
-        var current = selectedSection();
-        model.library.forEach(function (item) {
-            var placed = !model.inline_tiles && current && current.tiles.some(function (tile) { return tile.element === item.id; });
-            if (!placed && label(item).toLowerCase().indexOf(query) >= 0) {
-                option(menu, item.id, label(item));
-            }
-        });
-        if (model.inline_tiles) {
-            model.panels.forEach(function (p) {
-                p.sections.forEach(function (s) {
-                    s.tiles.filter(function (tile) { return !tile.element; }).forEach(function (tile) {
-                        var name = label({id: tile.id, type: tile.type, title: tile.title || tile.type});
-                        if (name.toLowerCase().indexOf(query) >= 0) {
-                            option(menu, 'copy:' + tile.id, 'Копия · ' + name);
-                        }
-                    });
-                });
-            });
-
-        }
-        byId('library-title').textContent = 'Добавить плитку из библиотеки';
-        byId('custom-id').hidden = !model.inline_tiles;
-        byId('add').disabled = !menu.options.length;
+    function findTile(id) {
+        return currentTiles().filter(function (item) { return item.id === id; })[0];
     }
-
-    // Preserve optional and older row properties while editing the common fields.
-    var rowColumns = {
-        series: {channel: 'Канал', label: 'Название', unit: 'Единица', color: 'Цвет',
-            digits: 'Знаков после запятой', min: 'Минимум', max: 'Максимум', grid: 'Шаг сетки'},
-        items: {title: 'Название', channel: 'Канал', icon: 'Иконка', command_topic: 'Топик команды',
-            command_on: 'Значение команды', level: 'Уровень от 0 до 1'},
-        status: {title: 'Название', icon: 'Иконка', channel: 'Канал', value_channel: 'Канал значения',
-            value_unit: 'Единица', air: 'Канал качества воздуха'}
-    };
-
-    function propertyRows(container, field, input) {
-        var columns = rowColumns[field.key];
-        var rows = field.value || [];
-        if (!columns || !Array.isArray(rows) || field.protected) { return; }
-        var holder = node('div', '');
-        var add = node('button', 'Добавить строку');
-        add.type = 'button';
-        container.appendChild(holder);
-        container.appendChild(add);
-
-        function draw() {
-            holder.textContent = '';
-            rows.forEach(function (row, index) {
-                var block = node('fieldset', '');
-                block.appendChild(node('legend', 'Строка ' + (index + 1)));
-                Object.keys(columns).forEach(function (key) {
-                    var label = node('label', columns[key]);
-                    var control = node('input', '');
-                    var numeric = ['digits', 'min', 'max', 'grid', 'level'].indexOf(key) >= 0;
-                    if (numeric) {
-                        control.type = 'number';
-                        control.step = key === 'digits' ? '1' : 'any';
-                    }
-                    control.value = row[key] == null ? '' : row[key];
-                    control.oninput = function () {
-                        if (control.value === '') { delete row[key]; }
-                        else { row[key] = numeric ? Number(control.value) : control.value; }
-                        input.value = JSON.stringify(rows, null, 2);
-                    };
-                    label.appendChild(control);
-                    block.appendChild(label);
-                });
-                var remove = node('button', 'Удалить строку');
-                remove.type = 'button';
-                remove.onclick = function () {
-                    rows.splice(index, 1);
-                    input.value = JSON.stringify(rows, null, 2);
-                    draw();
-                };
-                block.appendChild(remove);
-                holder.appendChild(block);
-            });
-        }
-        // The JSON view also covers nested thresholds, conditions and extended row options.
-        var full = node('details', '');
-        full.appendChild(node('summary', 'Все поля в JSON'));
-        full.appendChild(input.parentNode);
-        container.appendChild(full);
-        function readRows() {
-            try {
-                var next = JSON.parse(input.value || '[]');
-                if (Array.isArray(next) && next.every(function (r) {
-                    return r && typeof r === 'object' && !Array.isArray(r);
-                })) {
-                    rows = next;
-                    add.disabled = false;
-                    draw();
-                    return;
-                }
-            } catch (ignore) {}
-            add.disabled = true;
-            holder.textContent = '';
-        }
-        input.addEventListener('input', readRows);
-        add.onclick = function () {
-            rows.push({});
-            input.value = JSON.stringify(rows, null, 2);
-            draw();
-            holder.lastChild.querySelector('input').focus();
-        };
-        readRows();
+    function rowTile(item) {
+        var active = item.id === selected;
+        return '<li class="' + (item.valid === false ? 'invalid' : '') +
+            '" data-instance="' + esc(item.id) + '">' +
+            '<button type="button" class="tile-select" aria-pressed="' + active + '">' +
+            '<strong>' + esc(item.effective_title || item.title || item.element) + '</strong>' +
+            '<small>' + esc(item.element || item.type) + ' · ' + esc(item.type) + '</small></button>' +
+            '<span class="row-actions">' +
+            '<button type="button" data-direction="up" aria-label="Выше" ' + (busy ? 'disabled' : '') + '>↑</button>' +
+            '<button type="button" data-direction="down" aria-label="Ниже" ' + (busy ? 'disabled' : '') + '>↓</button></span></li>';
     }
-
-    function showProperties() {
-        var id = byId('property-element').value;
-        var item = model.library.find(function (entry) { return entry.id === id; });
-        var fields = empty('property-fields');
-        if (!item) { byId('property-preview').removeAttribute('src'); return; }
-        item.properties.forEach(function (field) {
-            var spec = field.spec;
-            var label = node('label', spec[0]);
-            var kind = spec[1];
-            var select = kind === 'choice' || kind === 'boolean';
-            var input = node(select ? 'select' : kind === 'json' ? 'textarea' : 'input', '');
-            input.dataset.kind = kind;
-            if (select) {
-                option(input, '', 'По умолчанию');
-                if (kind === 'boolean') {
-                    option(input, 'true', 'Да');
-                    option(input, 'false', 'Нет');
-                } else {
-                    spec.slice(2).forEach(function (choice) { option(input, choice, choice); });
-                }
-            } else if (kind === 'json') {
-                input.rows = 4;
-                label.appendChild(node('small', 'JSON, например ' + spec[2]));
-            } else if (['size', 'integer', 'number', 'nonnegative', 'positive'].indexOf(kind) >= 0) {
-                input.type = 'number';
-                input.step = kind === 'size' ? '0.5' : kind === 'integer' ? '1' : 'any';
-                if (kind === 'size' || kind === 'integer') {
-                    input.min = kind === 'size' ? 0.5 : spec[2];
-                    input.max = kind === 'size' ? 32 : spec[3];
-                } else if (kind !== 'number') { input.min = 0; }
-            }
-            input.name = field.key;
-            input.disabled = field.protected;
-            input.value = field.value == null ? '' : kind === 'json' ? JSON.stringify(field.value, null, 2) : field.value;
-            input.dataset.initial = input.value;
-            if (field.protected) { input.placeholder = 'Задаётся в YAML'; }
-            label.appendChild(input);
-            if (kind === 'json' && rowColumns[field.key] && !field.protected) {
-                var group = node('fieldset', '');
-                group.appendChild(node('legend', spec[0]));
-                group.appendChild(label);
-                fields.appendChild(group);
-                propertyRows(group, field, input);
-            } else { fields.appendChild(label); }
-        });
-        byId('property-preview').src = api + draftPath('/element.svg?element=' + encodeURIComponent(id) + '&draft_version=' + model.draft_version);
+    function remember() {
+        if (!model) { return; }
+        try {
+            sessionStorage.setItem(resumeKey, JSON.stringify({
+                id: model.draft_id,
+                panel: panel,
+                section: section,
+                tile: selected,
+                version: model.draft_version
+            }));
+        } catch (ignore) {}
     }
-
-    byId('library-editor').ontoggle = function () { if (this.open && model) { showProperties(); } };
-    byId('property-element').onchange = showProperties;
-    byId('property-form').onsubmit = function (event) {
-        event.preventDefault();
-        var fields = {};
-        var invalid = false;
-        Array.prototype.forEach.call(this.elements, function (input) {
-            if (input.name && !input.disabled && input.value !== input.dataset.initial) {
-                if (input.value && input.dataset.kind === 'json') {
-                    try { fields[input.name] = JSON.parse(input.value); }
-                    catch (error) {
-                        input.setCustomValidity('Проверьте формат JSON');
-                        input.oninput = function () { this.setCustomValidity(''); };
-                        input.reportValidity();
-                        invalid = true;
-                    }
-                } else if (input.value && input.dataset.kind === 'boolean') {
-                    fields[input.name] = input.value === 'true';
-                } else {
-                    fields[input.name] = input.value === '' ? null : input.type === 'number' ? Number(input.value) : input.value;
-                }
-            }
-        });
-        if (invalid || !Object.keys(fields).length || busy) { return; }
-        run('POST', draftPath('/operation'), {draft_version: model.draft_version, operation: {
-            op: 'update_element', element: byId('property-element').value, fields: fields
-        }}, function (result) {
-            model = result;
-            empty('details').hidden = true;
-            showModel();
-        });
-    };
-
-    function showModel() {
-        var previous = byId('property-element').value;
-        var properties = empty('property-element');
-        model.library.forEach(function (item) { option(properties, item.id, label(item)); });
-        if (model.library.some(function (item) { return item.id === previous; })) { properties.value = previous; }
-        if (byId('library-editor').open) { showProperties(); }
-        libraryIndex = Object.create(null);
-        model.library.forEach(function (item) { libraryIndex[item.id] = item; });
-        var menu = empty('panels');
-        model.panels.forEach(function (item) { option(menu, item.id, item.title + ' · ' + item.id); });
-        if (model.panels.some(function (item) { return item.id === panel; })) {
-            menu.value = panel;
-        }
-        var theme = byId('theme').value;
-        var themes = empty('theme');
-        option(themes, '', 'Из конфига');
-        model.themes.forEach(function (name) { option(themes, name, name); });
-        themes.value = theme;
-        byId('workspace').hidden = false;
-        var hasPanel = model.panels.length > 0;
-        ['.components', '.preview', '.inspector'].forEach(function (selector) {
-            document.querySelector(selector).hidden = !hasPanel;
-        });
-        ['section-management', 'assign-screen', 'remove-panel', 'copy-panel', 'panel-settings'].forEach(function (id) {
-            byId(id).hidden = !hasPanel;
-        });
-        if (!hasPanel) {
-            empty('sections'); empty('sources'); byId('section-settings').hidden = true;
-            byId('structure').open = true;
-        }
-        var screens = empty('screen-names');
-        (model.screens || []).forEach(function (screen) { if (screen.name) { option(screens, screen.name, screen.panel); } });
-        showPanel();
-        progress();
+    function forget() {
+        try {
+            sessionStorage.removeItem(resumeKey);
+            sessionStorage.removeItem(legacyResumeKey);
+        } catch (ignore) {}
     }
-
-    function showPanel() {
-        var current = selectedPanel();
-        if (!current) { return; }
-        panel = current.id;
-        var assigned = (model.screens || []).filter(function (screen) { return screen.panel === panel; });
-        byId('screen-list').textContent = 'Назначенные экраны: ' + (assigned.map(function (screen) { return screen.name || 'Имя скрыто'; }).join(', ') || 'нет явных назначений');
-        var menu = empty('sections');
-        current.sections.forEach(function (item, index) {
-            option(menu, index, item.title + (item.readonly ? ' · только чтение' : ''));
-            if (item.section === section) { menu.selectedIndex = index; }
-        });
-        showSection();
+    function leaveEdits() {
+        return !formDirty() || window.confirm(
+            'Есть несохранённые поля. Перейти без их сохранения?'
+        );
     }
-
-    function currentTile() {
-        var current = selectedSection();
-        return current && current.tiles.filter(function (item) { return item.id === selected; })[0];
+    function option(value, title, current) {
+        return '<option value="' + esc(value) + '"' +
+            (String(value) === String(current) ? ' selected' : '') + '>' + esc(title) + '</option>';
     }
-
-    function showSection() {
-        var current = selectedSection();
-        var sources = empty('sources');
-        empty('instances');
-        byId('remove-section').disabled = !current || current.section == null;
-        byId('copy-section').disabled = !current || current.section == null;
-        byId('section-settings').hidden = !current || current.section == null || !current.settings;
-        byId('library').hidden = !current || current.readonly;
-        if (current) {
-            section = current.section;
-            if (current.outside_sections) {
-                sources.appendChild(node('p', 'Этот список расположен вне разделов и показан отдельным предпросмотром. Рабочая панель отображает разделы.'));
-            }
-            (current.sources || []).forEach(function (name) {
-                var p = node('p', 'Источник · ');
-                var a = node('a', name);
-                a.href = root + 'editor/' + encodeURIComponent(name);
-                a.onclick = function (event) {
-                    event.preventDefault();
-                    if (busy || !leaveEdits()) { return; }
-                    closeInspector(true); inspectorMode = 'tile';
-                    byId('preview-image').hidden = true;
-                    byId('panels').value = name;
-                    panel = name;
-                    selected = null;
-                    section = null;
-                    showPanel();
-                };
-                p.appendChild(a);
-                sources.appendChild(p);
-            });
-            if (current.readonly && !sources.childNodes.length) {
-                sources.appendChild(node('p', 'Раздел доступен только для чтения.'));
-            }
-            syncInstances();
-        }
-        remember();
-        showInstance();
-        markIssue(issue);
-        search();
-        refreshPreview(true);
+    function drawSections() {
+        var p = selectedPanel();
+        var sections = p ? p.sections : [];
+        byId('sections').innerHTML = sections.map(function (s, i) {
+            return option(i, s.title || 'Раздел ' + (i + 1), section);
+        }).join('');
+        byId('sections').hidden = !sections.length;
+        byId('section-label').hidden = !sections.length;
+        byId('remove-section').disabled = busy || !sections.length;
+        byId('sources').innerHTML = (p && p.sources || []).map(function (s) {
+            return '<a href="editor/' + encodeURIComponent(s) + '">' + esc(s) + '</a>';
+        }).join('');
+        byId('sources-wrap').hidden = !(p && p.sources && p.sources.length);
+        byId('library').hidden = !!(p && p.sources && p.sources.length);
+        byId('section-settings').disabled = busy || !sections.length;
+        byId('create-section').querySelector('button').disabled = busy || !!(p && p.sources && p.sources.length);
     }
-
-    function syncInstances() {
-        var current = selectedSection();
-        var list = byId('instances');
-        var existing = {};
-        Array.prototype.forEach.call(list.children, function (li) { existing[li.getAttribute('data-instance')] = li; });
-        (current ? current.tiles : []).forEach(function (tile, index) {
-            var li = existing[tile.id];
-            var item = tile.element && libraryItem(tile.element);
-            var title = (tile.title || (item && item.title) || tile.type) + ' · ' + (tile.implicit_id ? tile.element : tile.id);
-            if (!li) {
-                li = node('li', '');
-                li.setAttribute('data-instance', tile.id);
-                var row = node('div', '');
-                row.className = 'instance-row';
-                var select = node('button', '');
-                select.type = 'button';
-                select.onclick = function () {
-                    if (busy || !leaveEdits()) { return; }
+    function drawList() {
+        var list = currentTiles();
+        var signature = JSON.stringify([model.draft_version, list.map(function (x) {
+            return [x.id, x.effective_title, x.title, x.element, x.type, x.valid];
+        }), selected, busy]);
+        if (signature === listSignature) { return; }
+        listSignature = signature;
+        byId('instances').innerHTML = list.map(rowTile).join('');
+        byId('empty').hidden = list.length > 0;
+        Array.prototype.forEach.call(byId('instances').children, function (row, i) {
+            var tile = list[i];
+            var select = row.querySelector('[aria-pressed]');
+            select.onclick = function () {
+                if (!leaveEdits()) { return; }
+                selected = tile.id;
+                remember();
+                listSignature = '';
+                drawList();
+                showProperties();
+                if (mobileMedia.matches) { openInspector(); }
+            };
+            Array.prototype.forEach.call(row.querySelectorAll('[data-direction]'), function (button) {
+                button.disabled = busy || (button.dataset.direction === 'up' ? i === 0 : i === list.length - 1);
+                button.onclick = function () {
                     selected = tile.id;
                     remember();
-                    padOpen = false;
-                    syncInstances();
-                    inspectorMode = 'tile';
-                    showInstance();
-                    markIssue(issue);
-                    openInspector(select);
+                    operation({op: 'move_instance', id: tile.id, direction: button.dataset.direction}, true);
                 };
-                row.appendChild(select);
-                ['up', 'down'].forEach(function (direction) {
-                    var arrow = node('button', direction === 'up' ? '↑' : '↓');
-                    arrow.type = 'button';
-                    arrow.setAttribute('data-direction', direction);
-                    arrow.onclick = function () { operate('move_instance', {id: tile.id, direction: direction}); };
-                    row.appendChild(arrow);
-                });
-                li.appendChild(row);
-            }
-            var buttons = li.querySelectorAll('button');
-            buttons[0].textContent = title;
-            buttons[0].setAttribute('aria-pressed', String(selected === tile.id));
-            buttons[1].disabled = current.readonly || index === 0;
-            buttons[2].disabled = current.readonly || index === current.tiles.length - 1;
-            buttons[1].setAttribute('aria-label', 'Поднять ' + title);
-            buttons[2].setAttribute('aria-label', 'Опустить ' + title);
-            if (list.children[index] !== li) { list.insertBefore(li, list.children[index] || null); }
-            delete existing[tile.id];
-        });
-        Object.keys(existing).forEach(function (id) { list.removeChild(existing[id]); });
-    }
-
-    function dirtyTile() {
-        var tile = currentTile();
-        if (inspectorMode !== 'tile' || !tile) { return false; }
-        return byId('title').value !== (tile.title || '') ||
-            byId('width').value !== (tile.w == null ? '' : String(tile.w)) ||
-            byId('height').value !== (tile.h == null ? '' : String(tile.h));
-    }
-
-    function leaveEdits() {
-        return !(dirtyBinding() || dirtyTile() || (inspectorMode !== 'tile' && settingsDirty())) || window.confirm('Не сохранять введённые изменения?');
-    }
-
-    function openInspector(trigger) {
-        returnFocus = trigger || document.activeElement;
-        if (!mobile.matches) { return; }
-        if (!byId('inspector').classList.contains('open')) {
-            savedScroll = window.pageYOffset;
-            document.body.style.position = 'fixed';
-            document.body.style.top = '-' + savedScroll + 'px';
-            document.body.style.width = '100%';
-        }
-        byId('inspector').classList.add('open');
-        byId('inspector').setAttribute('role', 'dialog');
-        byId('inspector').setAttribute('aria-modal', 'true');
-        byId('inspector-backdrop').hidden = false;
-        byId('inspector').focus({preventScroll: true});
-    }
-
-    function closeInspector(force) {
-        if (!force && (busy || !leaveEdits())) { return; }
-        var wasOpen = byId('inspector').classList.contains('open');
-        byId('inspector').classList.remove('open');
-        byId('inspector').removeAttribute('role');
-        byId('inspector').removeAttribute('aria-modal');
-        byId('inspector-backdrop').hidden = true;
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-        if (wasOpen) {
-            window.scrollTo(0, savedScroll);
-            if (returnFocus && document.contains(returnFocus)) { returnFocus.focus({preventScroll: true}); }
-        }
-        if (!force) {
-            if (inspectorMode === 'tile') { showInstance(); }
-            else { showSettings(inspectorMode); }
-        }
-    }
-
-    byId('close-inspector').onclick = function () { closeInspector(false); };
-    byId('inspector-backdrop').onclick = function () { closeInspector(false); };
-    mobile.addListener(function () { if (!mobile.matches) { closeInspector(true); } });
-    byId('inspector').onkeydown = function (event) {
-        if (!mobile.matches || !byId('inspector').classList.contains('open')) { return; }
-        if (event.key === 'Escape') { event.preventDefault(); closeInspector(false); }
-        if (event.key === 'Tab') {
-            var controls = Array.prototype.filter.call(byId('inspector').querySelectorAll('button, input, select'), function (el) { return !el.disabled && el.getClientRects().length; });
-            var first = controls[0], last = controls[controls.length - 1];
-            if (event.shiftKey && (document.activeElement === first || document.activeElement === byId('inspector'))) { event.preventDefault(); last.focus(); }
-            else if (!event.shiftKey && (document.activeElement === last || document.activeElement === byId('inspector'))) { event.preventDefault(); first.focus(); }
-        }
-    };
-
-    function showInstance() {
-        if (inspectorMode !== 'tile') { return; }
-        byId('inspector-title').textContent = 'Настройки плитки';
-        byId('settings-form').hidden = true;
-        var current = selectedSection();
-        var tile = currentTile();
-        byId('placement').hidden = !tile;
-        showBinding(tile);
-        byId('selection-empty').hidden = !!tile;
-        byId('instance-error').hidden = true;
-        padToken += 1;
-        if (padRequest) { padRequest.abort(); }
-        byId('pad-status').textContent = '';
-        byId('pad-image').hidden = true;
-        if (!tile) {
-            padOpen = false;
-            return;
-        }
-        var element = tile.element ? libraryItem(tile.element) : tile;
-        byId('identity').textContent = (tile.implicit_id ? 'Элемент ' + tile.element : 'ID ' + tile.id + (tile.element ? ' · элемент ' + element.id : '')) + ' · ' + element.type;
-        byId('width').value = tile.w == null ? '' : tile.w;
-        byId('height').value = tile.h == null ? '' : tile.h;
-        byId('width').placeholder = element.w == null ? 'Авто' : String(element.w);
-        byId('height').placeholder = element.h == null ? 'Авто' : String(element.h);
-        byId('title').value = tile.title || '';
-        byId('title').placeholder = tile.title_protected ? 'Защищённое название' : (element.title || element.type);
-        byId('inherit-title').hidden = !tile.title_protected;
-        byId('pad-capability').textContent = element.pad ? 'У типа есть полноэкранный пульт.' : 'У типа нет собственного пульта.';
-        byId('pad').hidden = !element.pad;
-        byId('pad').textContent = padOpen ? 'Скрыть пульт' : 'Показать пульт';
-    }
-
-    function showBinding(tile) {
-        var form = byId('binding-form');
-        var item = tile && (tile.element ? libraryItem(tile.element) : tile);
-        var binding = item && item.binding;
-        form.hidden = !binding;
-        var fields = empty('binding-fields');
-        if (!binding) { return; }
-        byId('binding-title').textContent = tile.element ? 'Общая привязка элемента' : 'Привязка этой плитки';
-        byId('binding-scope').textContent = binding.readonly ? binding.reason :
-            (tile.element ? 'Изменится во всех размещениях элемента ' + tile.element + '. ' : 'Изменится только эта плитка. ') +
-            'Затронутые панели: ' + (item.affected_panels || [panel]).join(', ');
-        byId('save-binding').hidden = !!binding.readonly;
-        (binding.fields || []).forEach(function (field) {
-            var label = node('label', field.label);
-            var input = node('input', '');
-            input.type = 'text'; input.maxLength = 512;
-            input.setAttribute('data-binding', field.name);
-            input.setAttribute('data-initial', field.value);
-            input.value = field.value;
-            input.placeholder = field.protected ? 'Защищённое значение — оставьте пустым, чтобы сохранить' : '';
-            label.appendChild(input); fields.appendChild(label);
-        });
-    }
-
-    function dirtyBinding() {
-        return !byId('binding-form').hidden && Array.prototype.some.call(byId('binding-fields').querySelectorAll('input'), function (input) {
-            return input.value !== input.getAttribute('data-initial');
-        });
-    }
-
-    byId('binding-form').onsubmit = function (event) {
-        event.preventDefault();
-        if (!model || busy || !currentTile()) { return; }
-        if (dirtyTile() && !window.confirm('Не сохранять введённые размеры и название?')) { return; }
-        var fields = {};
-        Array.prototype.forEach.call(byId('binding-fields').querySelectorAll('input'), function (input) {
-            if (input.value !== input.getAttribute('data-initial')) { fields[input.getAttribute('data-binding')] = input.value; }
-        });
-        if (!Object.keys(fields).length) { status('Привязка не изменилась.'); return; }
-        invalidatePreview();
-        run('POST', draftPath('/operation'), {draft_version: model.draft_version,
-            operation: {op: 'update_binding', panel: panel, section: section, id: selected, fields: fields}}, function (result) {
-            model = result; issue = null; affectedPanels = [];
-            empty('details').hidden = true;
-            showModel();
-        });
-    };
-
-    var settingsInitial = {};
-
-    function rememberSettings() {
-        settingsInitial = {};
-        Array.prototype.forEach.call(byId('settings-form').querySelectorAll('[data-setting]'), function (el) {
-            settingsInitial[el.getAttribute('data-setting')] = el.value;
-        });
-    }
-
-    function settingsDirty() {
-        return Array.prototype.some.call(byId('settings-form').querySelectorAll('[data-setting]'), function (el) {
-            return el.value !== settingsInitial[el.getAttribute('data-setting')];
-        });
-    }
-
-    function showSettings(mode) {
-        byId('binding-form').hidden = true;
-        inspectorMode = mode;
-        padOpen = false;
-        refreshPad();
-        byId('placement').hidden = true;
-        byId('selection-empty').hidden = true;
-        byId('inspector-title').textContent = mode === 'panel' ? 'Настройки панели' : 'Настройки раздела';
-        var form = empty('settings-form');
-        form.hidden = false;
-        var values = (mode === 'panel' ? selectedPanel() : selectedSection()).settings || {};
-        function field(key, title, choices, type) {
-            var label = node('label', title);
-            var control = node(choices ? 'select' : 'input', '');
-            control.id = 'setting-' + key;
-            control.setAttribute('data-setting', key);
-            if (choices) { choices.forEach(function (choice) { option(control, choice[0], choice[1]); }); }
-            else { control.type = type || 'text'; }
-            var value = values[key] == null ? '' : String(values[key]);
-            control.value = value;
-            if (choices && control.value !== value) { option(control, value, value); control.value = value; }
-            label.appendChild(control);
-            form.appendChild(label);
-            return control;
-        }
-        field('title', 'Название').maxLength = 512;
-        var booleanChoices = [['', 'Наследовать'], ['true', 'Да'], ['false', 'Нет']];
-        if (mode === 'panel') {
-            field('hidden', 'Скрыть из списка панелей', booleanChoices);
-            var cols = field('cols', 'Колонки (пусто — из общих настроек)', null, 'number');
-            cols.min = '1'; cols.max = '12'; cols.step = '1';
-            field('theme', 'Тема панели', [['', 'Из общих настроек']].concat(model.themes.map(function (name) { return [name, name]; })));
-            field('tabs', 'Вкладки разделов', booleanChoices);
-            field('accordion', 'Сворачиваемые разделы', booleanChoices);
-            field('swipe', 'Перелистывание на ESP32', booleanChoices);
-            field('pad_close', 'Закрытие пульта при бездействии (например, 30s или 2m)');
-        }
-        var saver = values.screensaver;
-        var saverMode = saver == null ? '' : (saver === 0 || saver === 'none' || (typeof saver === 'object' && (saver.after === 0 || saver.after === 'none')) ? 'off' : 'on');
-        var choices = mode === 'panel' ? [['', 'Из общих настроек'], ['off', 'Выключена'], ['on', 'Свои настройки']] :
-            [['', 'Обычный раздел'], ['off', 'Служебный раздел без автопоказа'], ['on', 'Раздел заставки ESP32']];
-        var saverSelect = field('saver_mode', mode === 'panel' ? 'Браузерная заставка' : 'Назначение раздела', choices);
-        saverSelect.value = saverMode;
-        var after = field('saver_after', mode === 'panel' ? 'Бездействие до заставки (например, 1m)' : 'Интервал заставки ESP32 (например, 30s)');
-        after.value = saver && typeof saver === 'object' ? (saver.after == null ? '' : String(saver.after)) : (saverMode === 'on' ? String(saver) : '');
-        var destination;
-        if (mode === 'panel') {
-            destination = field('saver_panel', 'Панель заставки', [['', 'Не переопределять панель']].concat(model.panels.filter(function (p) { return p.id !== panel; }).map(function (p) { return [p.id, p.title + ' · ' + p.id]; })));
-            destination.value = saver && typeof saver === 'object' ? (saver.panel || '') : '';
-            if (saver && typeof saver === 'object' && saver.panel && !destination.value) { option(destination, saver.panel, saver.panel); destination.value = saver.panel; }
-        }
-        function saverFields() {
-            after.parentNode.hidden = saverSelect.value !== 'on';
-            after.required = saverSelect.value === 'on';
-            if (destination) { destination.parentNode.hidden = saverSelect.value !== 'on'; }
-        }
-        saverSelect.onchange = saverFields;
-        saverFields();
-        form.appendChild(node('p', mode === 'panel' ? 'Эти настройки сохраняются в конфигурации панели. Тема и колонки над предпросмотром меняют только просмотр.' :
-            'Служебные разделы не входят в обычные вкладки ESP32. Сейчас первый положительный интервал задаёт и запуск, и смену разделов заставки.'));
-        var submit = node('button', 'Сохранить в черновике');
-        submit.type = 'submit';
-        form.appendChild(submit);
-        rememberSettings();
-    }
-
-    ['panel', 'section'].forEach(function (mode) {
-        byId(mode + '-settings').onclick = function () {
-            if (busy || !leaveEdits()) { return; }
-            showSettings(mode);
-            openInspector(this);
-        };
-    });
-
-    byId('settings-form').onsubmit = function (event) {
-        event.preventDefault();
-        var fields = {};
-        var controls = {};
-        Array.prototype.forEach.call(this.querySelectorAll('[data-setting]'), function (el) {
-            var key = el.getAttribute('data-setting');
-            controls[key] = el.value;
-            if (key.indexOf('saver_') === 0 || el.value === settingsInitial[key]) { return; }
-            fields[key] = el.value === '' ? null : (key === 'cols' ? Number(el.value) :
-                (['hidden', 'tabs', 'accordion', 'swipe'].indexOf(key) >= 0 ? el.value === 'true' : el.value));
-        });
-        var saverChanged = ['saver_mode', 'saver_after', 'saver_panel'].some(function (key) { return controls[key] !== settingsInitial[key]; });
-        if (saverChanged) {
-            if (controls.saver_mode === '') { fields.screensaver = null; }
-            else if (controls.saver_mode === 'off') { fields.screensaver = 0; }
-            else if (inspectorMode === 'section') { fields.screensaver = controls.saver_after; }
-            else {
-                fields.screensaver = {after: controls.saver_after};
-                if (controls.saver_panel !== settingsInitial.saver_panel) { fields.screensaver.panel = controls.saver_panel || null; }
-            }
-        }
-        if (Object.keys(fields).length) { operate('update_' + inspectorMode, {fields: fields}); }
-        else { status('Настройки не изменились.'); }
-    };
-
-    function showTileList(target, current, visited) {
-        if (!current || visited.indexOf(current.id) >= 0) { return; }
-        var branch = visited.concat(current.id);
-        current.sections.forEach(function (part) {
-            if (part.tiles.length) {
-                target.appendChild(node('strong', current.title + ' · ' + part.title));
-                var list = node('div', '');
-                var cols = Math.max(1, Math.min(12, Number(byId('cols').value) || selectedPanel().cols || 4));
-                list.className = 'layout-grid';
-                list.style.gridTemplateColumns = 'repeat(' + (2 * cols) + ', minmax(0, 1fr))';
-                part.tiles.forEach(function (tile) {
-                    var item = tile.element && libraryItem(tile.element);
-                    var cell = node('div', tile.title || (item && item.title) || tile.id);
-                    cell.style.gridColumn = 'span ' + Math.min(cols * 2, Math.max(1, Math.round(2 * (tile.w || (item && item.w) || 1))));
-                    cell.style.gridRow = 'span ' + Math.max(1, Math.round(2 * (tile.h || (item && item.h) || 1)));
-                    list.appendChild(cell);
-                });
-                target.appendChild(list);
-            }
-            (part.sources || []).forEach(function (source) {
-                var panelSource = model.panels.filter(function (entry) { return entry.id === source; })[0];
-                showTileList(target, panelSource, branch);
             });
         });
     }
-
-    function invalidatePreview() {
-        previewToken += 1;
-        padToken += 1;
-        if (previewRequest) { previewRequest.abort(); }
-        if (padRequest) { padRequest.abort(); }
+    function drawLibrary(filter) {
+        var query = (filter == null ? byId('search').value : filter).toLowerCase();
+        byId('elements').innerHTML = model.library.filter(function (item) {
+            return !query || (item.title + ' ' + item.id + ' ' + item.type).toLowerCase().indexOf(query) >= 0;
+        }).map(function (item) {
+            return option(item.id, item.title + ' · ' + item.type, '');
+        }).join('');
+        byId('add').disabled = busy || !byId('elements').children.length || !!selectedPanel().sources.length;
     }
-
-    function image(path, id, message, token) {
-        var target = byId(id);
-        var feedback = byId(message);
-        var isPanel = id === 'preview-image';
-        feedback.textContent = 'Загрузка SVG…';
-        return request('GET', draftPath(path), null, function (error, svg) {
-            if (token !== (isPanel ? previewToken : padToken)) { return; }
-            if (error || typeof svg !== 'string') {
-                feedback.textContent = 'Предпросмотр: ' + (error ? error.message : 'Получен некорректный SVG');
-                if (isPanel) {
-                    byId('refresh-preview').hidden = false;
-                    byId('layout').hidden = !target.hidden;
-                }
-                if (error) { markIssue(error); }
-                return;
-            }
-            if (!isPanel && !padOpen) { return; }
-            // Decode away from the document: the previous preview keeps its height until ready.
-            var ready = new Image();
-            ready.onload = function () {
-                if (token !== (isPanel ? previewToken : padToken)) { return; }
-                target.src = ready.src;
-                target.hidden = false;
-                if (isPanel) { byId('layout').hidden = true; byId('refresh-preview').hidden = true; }
-                feedback.textContent = '';
-            };
-            ready.onerror = function () {
-                if (token !== (isPanel ? previewToken : padToken)) { return; }
-                feedback.textContent = 'Не удалось показать SVG.';
-                if (isPanel) { byId('refresh-preview').hidden = false; }
-            };
-            ready.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    function drawScreens() {
+        var p = selectedPanel();
+        var assigned = (model.screens || []).filter(function (s) { return s.panel === panel; });
+        byId('screen-list').innerHTML = assigned.map(function (s) {
+            return '<li>' + esc(s.id) + ' <button type="button" data-screen="' + esc(s.id) + '">Снять</button></li>';
+        }).join('');
+        Array.prototype.forEach.call(byId('screen-list').querySelectorAll('button'), function (button) {
+            button.disabled = busy;
+            button.onclick = function () { assignScreen(button.dataset.screen, true); };
         });
+        byId('assign-screen').hidden = !(model.screens && model.screens.length);
+        byId('screen-list-wrap').hidden = !assigned.length;
     }
-
-    function previewQuery() {
-        var query = '?draft_version=' + model.draft_version + '&theme=' + encodeURIComponent(byId('theme').value);
-        var cols = byId('cols');
-        if (cols.value && !cols.validity.valid) {
-            byId('preview-status').textContent = 'Введите целое число колонок от 1 до 12.';
-            return null;
-        }
-        if (cols.value) { query += '&cols=' + encodeURIComponent(cols.value); }
-        return query;
-    }
-
-    function refreshPreview() {
-        if (!model || !selectedPanel() || busy) { return; }
-        var query = previewQuery();
-        if (!query) { return; }
-        var current = selectedSection();
-        if (current && current.outside_sections) { query += '&root_tiles=1'; }
-        var layout = empty('layout');
-        layout.hidden = !byId('preview-image').hidden;
-        layout.appendChild(node('h3', 'Схема плиток'));
-        showTileList(layout, selectedPanel(), []);
-        if (previewRequest) { previewRequest.abort(); }
-        previewRequest = image('/preview/' + encodeURIComponent(panel) + '.svg' + query + '&mode=list',
-                               'preview-image', 'preview-status', ++previewToken);
-    }
-
-    function refreshPad() {
-        padToken += 1;
-        if (padRequest) { padRequest.abort(); }
-        byId('pad').textContent = padOpen ? 'Скрыть пульт' : 'Показать пульт';
-        if (!padOpen) { byId('pad-image').hidden = true; byId('pad-status').textContent = ''; return; }
-        var query = previewQuery();
-        if (query) {
-            padRequest = image('/tile/' + encodeURIComponent(panel) + '/' + encodeURIComponent(selected) + '.svg' + query,
-                               'pad-image', 'pad-status', padToken);
-        }
-    }
-
-    function run(method, path, data, success, failure) {
-        if (busy) { return; }
-        busy = true;
-        var focused = document.activeElement;
-        var locked = Array.prototype.map.call(document.querySelectorAll('#workspace input, #workspace textarea, #workspace select, #workspace button, #actions button'), function (el) {
-            var entry = [el, el.disabled]; el.disabled = true; return entry;
-        });
-        byId('workspace').setAttribute('aria-busy', 'true');
-        request(method, path, data, function (error, result) {
-            busy = false;
-            locked.forEach(function (entry) { entry[0].disabled = entry[1]; });
-            if (focused && document.contains(focused)) { focused.focus({preventScroll: true}); }
-            byId('workspace').setAttribute('aria-busy', 'false');
-            if (error) {
-                errorMessage(error);
-                if (failure) { failure(error); }
-            } else { success(result); }
-        });
-    }
-
-    var resumeKey = 'wb-editor:' + location.pathname;
-    function remember() {
-        try {
-            if (model) {
-                sessionStorage.setItem(resumeKey, JSON.stringify({id: model.draft_id, panel: panel, section: section, tile: selected, version: model.draft_version}));
-            } else { sessionStorage.removeItem(resumeKey); }
-        } catch (err) { /* Storage may be disabled by the browser. */ }
-    }
-    window.addEventListener('pagehide', function () { if (model) { remember(); } });
-    function start() {
-        var saved;
-        try { saved = JSON.parse(sessionStorage.getItem(resumeKey)); } catch (err) { saved = null; }
-        if (!saved || !saved.id) { newDraft(); return; }
-        var retry = byId('retry-start');
-        retry.hidden = true;
-        status('Открывается сохранённый черновик…');
-        run('GET', 'drafts/' + encodeURIComponent(saved.id), null, function (result) {
-            model = result;
-            panel = saved.panel;
-            section = saved.version === result.draft_version ? saved.section : null;
-            selected = saved.version === result.draft_version ? saved.tile : null;
-            byId('actions').hidden = false;
-            showModel();
-        }, function (error) {
-            if (error.code === 'draft_unknown' || error.code === 'base_revision') {
-                remember();
-                retry.textContent = 'Новый черновик';
-            }
-            retry.hidden = false;
-        });
-    }
-
-    function newDraft(published) {
-        if (busy) { return; }
-        invalidatePreview();
-        closeInspector(true);
-        inspectorMode = 'tile';
-        var retry = byId('retry-start');
-        function showRetry() { retry.hidden = false; }
-        retry.hidden = true;
-        status(published === true ? 'Опубликовано. Открывается следующий черновик…' : 'Создаётся черновик текущей конфигурации…');
-        empty('details').hidden = true;
-        run('POST', 'drafts', {}, function (result) {
-            model = result;
-            issue = null;
-            panel = panel || initialPanel;
-            byId('legacy').hidden = true;
-            byId('actions').hidden = false;
-            showModel();
-            remember();
-            if (published === true) { status('Опубликовано. Можно продолжать редактирование в новом черновике.'); }
-        }, function (error) {
-            if (error.code === 'legacy') {
-                byId('legacy').hidden = false;
-                byId('actions').hidden = true;
-                byId('workspace').hidden = true;
-                status('Редактор станет доступен после миграции YAML.');
-            } else {
-                if (published === true) { status('Опубликовано. Новый черновик открыть не удалось. ' + error.message, true); }
-                showRetry();
-            }
-        });
-    }
-
-    byId('retry-start').onclick = start;
-
-    function operate(op, fields) {
-        var current = selectedSection();
-        var settings = op === 'update_panel' || op === 'update_section';
-        if ((!settings && (!current || current.readonly)) || !model || busy) { return; }
-        status('Сохранение изменений в черновике…');
-        fields.op = op;
-        fields.panel = panel;
-        fields.section = op === 'update_panel' ? null : section;
-        invalidatePreview();
-        run('POST', draftPath('/operation?result=panel'), {draft_version: model.draft_version, operation: fields}, function (result) {
-            var updated = result.panels[0];
-            model.panels = model.panels.map(function (p) { return p.id === updated.id ? updated : p; });
-            model.draft_version = result.draft_version;
-            model.checked = result.checked;
-            issue = null;
-            if (panel === fields.panel) {
-                byId('panels').options[byId('panels').selectedIndex].textContent = updated.title + ' · ' + updated.id;
-                var part = selectedSection();
-                if (part) { byId('sections').options[byId('sections').selectedIndex].textContent = part.title + (part.readonly ? ' · только чтение' : ''); }
-                if (op === 'add_instance') { byId('new-id').value = ''; search(); }
-                syncInstances();
-                if (op === 'remove_instance') { search(); }
-                if (op === 'remove_instance' && selected === fields.id) { selected = null; closeInspector(true); showInstance(); }
-                if (settings) { rememberSettings(); }
-                if (op === 'update_instance') {
-                    if (fields.fields.title === '') { byId('inherit-title').hidden = true; }
-                }
-            }
-            empty('details').hidden = true;
-            byId('preview-status').textContent = 'Изменения сохранены. Предпросмотр показывает предыдущую версию.';
-            byId('refresh-preview').hidden = false;
-            if (padOpen) { byId('pad-status').textContent = 'Изменения сохранены. Откройте пульт заново для обновления.'; }
-            markIssue(null);
-            progress();
-            byId('edit-status').textContent = 'Сохранено в черновике.';
-        }, function () {
-            if (model) { byId('refresh-preview').hidden = false; }
-        });
-    }
-
-    function changeStructure(operation, form) {
-        if (busy || !model || !leaveEdits()) { return; }
-        byId('structure-status').textContent = 'Сохранение в черновике…';
-        run('POST', draftPath('/operation'), {draft_version: model.draft_version, operation: operation}, function (result) {
-            if (operation.op === 'assign_screen') {
-                model.screens = result.screens;
-                model.checked = result.checked;
-                model.draft_version = result.draft_version;
-                var names = empty('screen-names');
-                model.screens.forEach(function (entry) { if (entry.name) { option(names, entry.name, entry.panel); } });
-                byId('screen-list').textContent = 'Назначенные экраны: ' + model.screens.filter(function (entry) {
-                    return entry.panel === panel;
-                }).map(function (entry) { return entry.name || 'Имя скрыто'; }).join(', ');
-            } else {
-                invalidatePreview(); closeInspector(true); inspectorMode = 'tile'; padOpen = false;
-                issue = null; selected = null; section = null; model = result;
-                if (operation.op === 'add_panel') { panel = operation.panel; }
-                if (operation.op === 'copy_panel') { panel = operation.new_panel; }
-                if (operation.op === 'copy_section') { section = operation.section + 1; }
-                if (operation.op === 'add_section') {
-                    var changed = model.panels.filter(function (p) { return p.id === panel; })[0];
-                    section = changed.sections[changed.sections.length - 1].section;
-                }
-                byId('preview-image').hidden = true;
-                showModel();
-            }
-            if (form) { form.reset(); }
-            empty('details').hidden = true; progress();
-            byId('structure-status').textContent = 'Сохранено в черновике. Для применения нажмите «Опубликовать».';
-        }, function (error) { byId('structure-status').textContent = error.message; });
-    }
-
-    byId('copy-panel').onclick = function () {
-        if (busy || !selectedPanel()) { return; }
-        var id = window.prompt('ID копии панели', (panel + '-copy').slice(0, 64));
-        if (!id) { return; }
-        var title = window.prompt('Название копии', selectedPanel().title + ' — копия');
-        if (!title) { return; }
-        changeStructure({op: 'copy_panel', panel: panel, section: null, new_panel: id.trim(), title: title.trim()});
-    };
-    byId('copy-section').onclick = function () {
-        if (busy || section == null) { return; }
-        var title = window.prompt('Название копии секции', selectedSection().title + ' — копия');
-        if (title) { changeStructure({op: 'copy_section', panel: panel, section: section, title: title.trim()}); }
-    };
-
-    byId('create-panel').onsubmit = function (event) {
-        event.preventDefault();
-        changeStructure({op: 'add_panel', panel: this.elements.key.value.trim(), title: this.elements.caption.value.trim(), section: null}, this);
-    };
-    byId('remove-panel').onclick = function () {
-        if (window.confirm('Удалить панель «' + selectedPanel().title + '» вместе со всеми её разделами и плитками из черновика?')) {
-            changeStructure({op: 'remove_panel', panel: panel, section: null});
-        }
-    };
-    byId('create-section').onsubmit = function (event) {
-        event.preventDefault();
-        var parts = selectedPanel().sections;
-        if (parts.length === 1 && parts[0].section == null && parts[0].tiles.length &&
-            !window.confirm('Существующие плитки панели перейдут в первый раздел. Продолжить?')) { return; }
-        changeStructure({op: 'add_section', panel: panel, section: null, title: this.elements.caption.value.trim()}, this);
-    };
-    byId('remove-section').onclick = function () {
-        if (section != null && window.confirm('Удалить раздел «' + selectedSection().title + '» вместе с его плитками из черновика?')) {
-            changeStructure({op: 'remove_section', panel: panel, section: section});
-        }
-    };
-    byId('assign-screen').onsubmit = function (event) {
-        event.preventDefault();
-        changeStructure({op: 'assign_screen', panel: panel, section: null, screen: this.elements.screen.value.trim()}, this);
-    };
-
-    function receivedRevision(revision, message) {
-        model = null;
+    function showModel(next) {
+        model = next;
+        checked = null;
+        if (!model.panels.length) { return; }
+        if (!selectedPanel()) { panel = model.panels[0].id; section = 0; selected = null; }
+        if (!selectedSection() && selectedPanel().sections.length) { section = 0; selected = null; }
+        if (selected && !findTile(selected)) { selected = null; }
+        byId('workspace').hidden = false;
+        byId('panels').innerHTML = model.panels.map(function (p) {
+            return option(p.id, p.title + ' (' + p.id + ')', panel);
+        }).join('');
+        drawSections();
+        listSignature = '';
+        drawList();
+        drawLibrary();
+        drawScreens();
+        showProperties();
+        byId('remove-panel').disabled = busy || model.panels.length < 2;
+        byId('version').textContent = 'Черновик ' + model.draft_id + ' · версия ' + model.draft_version;
+        byId('publish').disabled = busy || !!model.base_conflict;
         remember();
-        previewToken += 1;
-        byId('workspace').hidden = true;
-        byId('check').disabled = true;
-        byId('publish').disabled = true;
-        status(message + ' · ' + revision.id, false);
     }
-
-    byId('restart').onclick = function () {
-        if (model && model.draft_version && !window.confirm('Открыть новый черновик? Незавершённая работа останется в предыдущем черновике до истечения его срока.')) { return; }
-        newDraft();
-    };
-    byId('panels').onchange = function () {
-        var next = byId('panels').value;
-        byId('panels').value = panel;
-        if (busy || !leaveEdits()) { return; }
-        byId('panels').value = next;
-        closeInspector(true); inspectorMode = 'tile'; section = null; selected = null;
-        byId('preview-image').hidden = true; showPanel();
-    };
-    byId('sections').onchange = function () {
-        var next = byId('sections').selectedIndex;
-        selectedPanel().sections.forEach(function (s, i) { if (s.section === section) { byId('sections').selectedIndex = i; } });
-        if (busy || !leaveEdits()) { return; }
-        byId('sections').selectedIndex = next;
-        closeInspector(true); inspectorMode = 'tile'; selected = null; showSection();
-    };
-    byId('search').oninput = search;
-    byId('theme').onchange = function () { refreshPreview(true); };
-    byId('cols').onchange = function () { refreshPreview(true); };
-    byId('refresh-preview').onclick = function () { refreshPreview(true); };
-    byId('pad').onclick = function () {
-        padOpen = !padOpen;
-        refreshPad();
-    };
-    byId('add').onclick = function () {
-        var source = byId('elements').value;
-        var fields = {element: source};
-        if (model.inline_tiles && source.indexOf('copy:') === 0) { fields = {element: source.slice(5)}; }
-        var id = byId('new-id').value.trim();
-        if (model.inline_tiles && id) { fields.id = id; }
-        operate('add_instance', fields);
-    };
-    byId('remove').onclick = function () {
-        if (window.confirm('Убрать с панели ' + (currentTile().element || selected) + '?')) { operate('remove_instance', {id: selected}); }
-    };
-    byId('inherit-title').onclick = function () {
-        operate('update_instance', {id: selected, fields: {title: ''}});
-    };
-    byId('placement').onsubmit = function (event) {
-        event.preventDefault();
-        var tile = currentTile();
-        if (!tile) { return; }
-        var fields = {};
-        ['width', 'height'].forEach(function (id) {
-            var field = id.charAt(0);
-            var value = byId(id).value;
-            if (value !== (tile[field] == null ? '' : String(tile[field]))) {
-                fields[field] = value === '' ? null : Number(value);
-            }
-        });
-        if (byId('title').value !== (tile.title || '')) { fields.title = byId('title').value; }
-        if (Object.keys(fields).length) { operate('update_instance', {id: selected, fields: fields}); }
-        else { status('Поля плитки не изменились.'); }
-    };
-    byId('check').onclick = function () {
-        run('GET', draftPath('/diff'), null, function (diff) {
-            var target = empty('details');
-            var s = diff.summary;
-            affectedPanels = diff.affected_panels || [];
-            markIssue(null);
-            model.checked = model.draft_version === diff.draft_version;
-            target.hidden = false;
-            target.appendChild(node('h2', 'Изменения черновика'));
-            if (affectedPanels.length) { target.appendChild(node('p', 'Затронутые панели: ' + affectedPanels.join(', '))); }
-            target.appendChild(node('p', 'Файлы к записи · ' + s.writes + '. Экземпляры: добавлено ' +
-                                    s.instances.added + ', удалено ' + s.instances.removed +
-                                    ', изменено ' + s.instances.changed + '.'));
-            var list = node('ul', '');
-            diff.operations.forEach(function (op) {
-                list.appendChild(node('li', operationNames[op.op] + ' · ' + (op.panel ? op.panel + ' · ' : '') +
-                                      (op.new_panel || op.element || op.id || '') + (op.file ? ' · ' + op.file : '') + (op.fields ? ' · ' + op.fields.join(', ') : '')));
-            });
-            target.appendChild(list);
-            progress();
-            byId('publish').disabled = !s.writes && !s.deletes;
-        });
-    };
-    byId('publish').onclick = function () {
-        if (!model || busy || !leaveEdits()) { return; }
-        function confirmPublish() {
-            if (!window.confirm('Применить проверенные изменения? Затронутые панели: ' + affectedPanels.join(', '))) { progress(); return; }
-            status('Публикация изменений…');
-            previewToken += 1;
-            function continueEditing(revision) {
-                empty('details').hidden = true;
-                receivedRevision(revision, 'Опубликовано');
-                newDraft(true);
-            }
-            var receipt = draftPath('/publication');
-            run('POST', draftPath('/publish'), {draft_version: model.draft_version}, continueEditing, function (error) {
-                if (error.code && error.code !== 'editor_failure') { return; }
-                status('Ответ о публикации не получен. Проверяется результат…');
-                busy = true;
-                function checkResult() {
-                    request('GET', receipt, null, function (problem, result) {
-                        if (!problem && result.pending) {
-                            window.setTimeout(checkResult, 1500);
-                            return;
-                        }
-                        busy = false;
-                        if (!problem && result.revision) { continueEditing(result.revision); }
-                        else { status('Публикация не подтверждена. Откройте историю и проверьте рабочую панель.', true); }
-                    });
-                }
-                checkResult();
-            });
+    function mergeModel(next) {
+        if (!next || !next.panels || next.panels.length !== 1 || next.library.length) {
+            return next;
         }
-        status('Проверка черновика перед публикацией…');
-        run('GET', draftPath('/diff'), null, function (diff) {
-            if (!diff.summary.writes && !diff.summary.deletes) {
-                status('Черновик совпадает с рабочей конфигурацией.');
+        var merged = Object.assign({}, model, next);
+        merged.library = model.library;
+        merged.themes = model.themes;
+        merged.screens = model.screens;
+        merged.panels = model.panels.map(function (p) {
+            return p.id === next.panels[0].id ? next.panels[0] : p;
+        });
+        return merged;
+    }
+    function showPreview() {
+        if (!model || !panel) { return; }
+        var seq = ++previewCounter;
+        var preview = byId('preview');
+        var image = byId('preview-image');
+        var old = image.getAttribute('src') || '';
+        var query = '?draft_version=' + model.draft_version + '&theme=' + encodeURIComponent(byId('theme').value) +
+            '&cols=' + encodeURIComponent(byId('cols').value || '') + '&_=' + seq;
+        preview.classList.add('loading');
+        image.onload = function () {
+            if (seq !== previewCounter) { return; }
+            preview.classList.remove('loading');
+            image.hidden = false;
+            if (old && old !== image.src) { URL.revokeObjectURL(old); }
+            byId('refresh-preview').hidden = true;
+        };
+        image.onerror = function () {
+            if (seq !== previewCounter) { return; }
+            preview.classList.remove('loading');
+            image.hidden = !old;
+            byId('refresh-preview').hidden = false;
+            byId('preview-error').textContent = 'Не удалось построить SVG. Исправьте кандидат или повторите предпросмотр.';
+        };
+        byId('preview-error').textContent = '';
+        image.src = api + '/drafts/' + encodeURIComponent(model.draft_id) + '/preview/' + encodeURIComponent(panel) + '.svg' + query;
+    }
+    function fieldRow(field) {
+        var id = 'setting-' + field.key;
+        var value = field.value == null ? '' : field.value;
+        if (field.type === 'bool') {
+            return '<label for="' + id + '">' + esc(field.label) + '</label><select id="' + id + '" name="' + esc(field.key) + '">' +
+                option('', 'По умолчанию', value == null ? '' : String(value)) + option('true', 'Да', value) + option('false', 'Нет', value) + '</select>';
+        }
+        if (field.choices) {
+            return '<label for="' + id + '">' + esc(field.label) + '</label><select id="' + id + '" name="' + esc(field.key) + '">' +
+                option('', 'По умолчанию', value) + field.choices.map(function (x) { return option(x, x, value); }).join('') + '</select>';
+        }
+        return '<label for="' + id + '">' + esc(field.label) + '</label><input id="' + id + '" name="' + esc(field.key) + '" value="' + esc(value) + '">';
+    }
+    function openInspector() {
+        inspectorOpen = true;
+        byId('inspector').classList.add('open');
+        if (mobileMedia.matches) {
+            byId('inspector').setAttribute('aria-modal', 'true');
+            byId('inspector').setAttribute('role', 'dialog');
+            document.body.classList.add('inspector-open');
+        }
+    }
+    function closeInspector() {
+        inspectorOpen = false;
+        byId('inspector').classList.remove('open');
+        byId('inspector').removeAttribute('aria-modal');
+        byId('inspector').setAttribute('role', 'region');
+        document.body.classList.remove('inspector-open');
+        var active = byId('instances').querySelector('[aria-pressed=true]');
+        if (active) { active.focus(); }
+    }
+    function showProperties() {
+        var tile = findTile(selected);
+        var hasTile = !!tile;
+        byId('placement').hidden = !hasTile;
+        byId('instance-error').hidden = !hasTile || tile.valid !== false;
+        byId('no-selection').hidden = hasTile;
+        if (!hasTile) { return; }
+        byId('selected-title').textContent = tile.effective_title || tile.title || tile.element;
+        ['width', 'height', 'title'].forEach(function (id, i) {
+            var key = ['w', 'h', 'title'][i];
+            var field = byId(id);
+            if (document.activeElement !== field) { field.value = tile[key] == null ? '' : tile[key]; }
+        });
+        byId('element-id').textContent = tile.element || 'inline: ' + tile.id;
+        byId('pad').disabled = busy || !tile.pad;
+        byId('remove').disabled = busy;
+        if (tile.valid === false) {
+            byId('instance-error').textContent = 'У плитки неполные или неверные настройки. Откройте проверку кандидата.';
+        }
+    }
+    function operation(op, keep) {
+        op.panel = panel;
+        op.section = selectedPanel().sections.length ? section : null;
+        return run('POST', '/drafts/' + encodeURIComponent(model.draft_id) + '/operation?result=panel', {
+            draft_version: model.draft_version,
+            operation: op
+        }, function (next) {
+            showModel(mergeModel(next));
+            if (!keep) { selected = null; showProperties(); }
+            status('Сохранено. Проверьте кандидат перед публикацией.');
+        });
+    }
+    function assignScreen(screen, clear) {
+        run('POST', '/drafts/' + encodeURIComponent(model.draft_id) + '/operation', {
+            draft_version: model.draft_version,
+            operation: {op: 'assign_screen', screen: screen, panel: clear ? null : panel}
+        }, function (next) {
+            showModel(next);
+            status(clear ? 'Назначение снято' : 'Экран назначен в черновике');
+        }).catch(function () {});
+    }
+    function check() {
+        return run('GET', '/drafts/' + encodeURIComponent(model.draft_id) + '/diff?draft_version=' + model.draft_version, undefined, function (result) {
+            checked = {version: model.draft_version, id: model.draft_id};
+            var d = result.diff || {};
+            byId('diff').textContent = JSON.stringify({
+                version: result.draft_version,
+                changes: d.summary || d,
+                affected_panels: result.affected_panels || [],
+                errors: result.errors || [],
+                warnings: result.warnings || []
+            }, null, 2);
+            byId('diff-wrap').hidden = false;
+            byId('publish').disabled = busy || !result.ok || !!model.base_conflict;
+            drawList();
+            status(result.ok ? 'Проверка пройдена. Можно публиковать.' : 'Проверка нашла ошибки.', !result.ok);
+        });
+    }
+    function publish(force) {
+        var version = model.draft_version;
+        var id = model.draft_id;
+        return run('POST', '/drafts/' + encodeURIComponent(id) + '/publish' + (force ? '?force=1' : ''), {draft_version: version}, function (result) {
+            if (result.conflict) {
+                status('Активная конфигурация изменилась. Создайте новый черновик.', true);
                 byId('publish').disabled = true;
                 return;
             }
-            model.checked = model.draft_version === diff.draft_version;
-            affectedPanels = diff.affected_panels || [];
-            if (model.checked) { confirmPublish(); }
+            status('Опубликовано: ' + result.revision.id);
+            return restart(panel);
         });
-    };
-    byId('history').onclick = function () {
-        run('GET', 'revisions', null, function (history) {
-            var target = empty('details');
-            target.hidden = false;
-            target.appendChild(node('h2', 'История ревизий'));
-            if (!history.revisions.length) { target.appendChild(node('p', 'Ревизий пока нет.')); }
-            history.revisions.forEach(function (item) {
-                var row = node('p', item.timestamp + ' · ' + item.id + ' · ' + item.action + ' ');
-                if (item.id !== history.head) {
-                    var original = item.id === 'legacy-0';
-                    var button = node('button', original ? 'Вернуть конфигурацию до миграции' : 'Откатить к этой ревизии');
-                    button.onclick = function () {
-                        if (!window.confirm(original ? 'Восстановить исходные файлы? Панели вернутся к состоянию до миграции. Для дальнейшего редактирования потребуется миграция через терминал.' : 'Восстановить ' + item.id + ' как новую ревизию?')) { return; }
-                        run('POST', 'rollback', {revision: item.id, base_revision: history.head, confirm: true}, function (rev) {
-                            receivedRevision(rev, 'Откат выполнен');
-                            if (original) { newDraft(); } else { byId('history').click(); }
-                        });
-                    };
-                    row.appendChild(button);
-                    var remove = node('button', 'Удалить ревизию');
-                    remove.onclick = function () {
-                        if (!window.confirm('Удалить снимок ' + item.id + '? Откат к нему станет недоступен.')) { return; }
-                        run('POST', 'revisions/delete', {revision: item.id, base_revision: history.head, confirm: true}, function () {
-                            status('Ревизия удалена.');
-                            byId('history').click();
-                        });
-                    };
-                    row.appendChild(remove);
-                }
-                target.appendChild(row);
+    }
+    function restart(preferred, savedTile, savedSection) {
+        return run('POST', '/drafts', {}, function (next) {
+            showModel(next);
+            if (preferred && model.panels.some(function (p) { return p.id === preferred; })) { panel = preferred; }
+            if (typeof savedSection === 'number') { section = savedSection; }
+            selected = savedTile || null;
+            showModel(model);
+            showPreview();
+            status('Новый черновик готов. Можно продолжать.');
+        });
+    }
+    function restoreDraft(saved) {
+        return run('GET', '/drafts/' + encodeURIComponent(saved.id), undefined, function (next) {
+            showModel(next);
+            if (next.panels.some(function (p) { return p.id === saved.panel; })) { panel = saved.panel; }
+            if (typeof saved.section === 'number') { section = saved.section; }
+            selected = saved.tile || null;
+            showModel(next);
+            showPreview();
+            status('Восстановлены подтверждённые правки. Несохранённые поля формы не восстанавливаются.');
+        });
+    }
+    function recoverPublish(id, preferred) {
+        status('Ответ публикации потерян. Проверяю результат…');
+        return request('GET', '/drafts/' + encodeURIComponent(id)).then(function (result) {
+            if (result.publish_result && result.publish_result.ok) {
+                status('Опубликовано: ' + result.publish_result.revision.id);
+                return restart(preferred);
+            }
+            if (result.publish_result && result.publish_result.error) {
+                throw {error: result.publish_result.error};
+            }
+            showModel(result);
+            status('Публикация не подтверждена. Повторите проверку и публикацию.', true);
+        }).catch(function (err) {
+            status('Результат публикации не получен: ' + explainError(err), true);
+        });
+    }
+    function history() {
+        return run('GET', '/revisions', undefined, function (result) {
+            byId('details').innerHTML = (result.revisions || []).map(function (r) {
+                return '<details><summary>' + esc(r.id) + ' · ' + esc(r.created_at || '') + '</summary>' +
+                    '<pre>' + esc(JSON.stringify({parent: r.parent, files: r.files, operation: r.operation}, null, 2)) + '</pre>' +
+                    '<button type="button" data-rollback="' + esc(r.id) + '">Откатить к этой ревизии</button> ' +
+                    '<button type="button" data-delete="' + esc(r.id) + '">Удалить ревизию</button></details>';
+            }).join('') || '<p>История пуста.</p>';
+            byId('history-view').hidden = false;
+            Array.prototype.forEach.call(byId('details').querySelectorAll('[data-rollback]'), function (button) {
+                button.disabled = busy;
+                button.onclick = function () {
+                    if (!window.confirm('Откатить конфигурацию к ' + button.dataset.rollback + '?')) { return; }
+                    run('POST', '/rollback', {revision: button.dataset.rollback, base_revision: result.current, confirm: true}, function () {
+                        status('Откат выполнен');
+                        return restart(panel);
+                    }).catch(function () {});
+                };
+            });
+            Array.prototype.forEach.call(byId('details').querySelectorAll('[data-delete]'), function (button) {
+                button.disabled = busy;
+                button.onclick = function () {
+                    if (!window.confirm('Удалить снимок ' + button.dataset.delete + '?')) { return; }
+                    run('DELETE', '/revisions/' + encodeURIComponent(button.dataset.delete), {}, function () {
+                        status('Ревизия удалена');
+                        return history();
+                    }).catch(function () {});
+                };
+            });
+            status('История загружена');
+        });
+    }
+    function openPad() {
+        var tile = findTile(selected);
+        if (!tile || !tile.pad) { return; }
+        var seq = ++padCounter;
+        byId('pad-view').hidden = false;
+        byId('pad-title').textContent = tile.effective_title || tile.title || tile.element;
+        byId('pad-status').textContent = 'Загрузка пульта…';
+        var image = byId('pad-image');
+        image.onload = function () {
+            if (seq !== padCounter) { return; }
+            byId('pad-status').textContent = '';
+            image.hidden = false;
+            padImage = image.src;
+        };
+        image.onerror = function () {
+            if (seq !== padCounter) { return; }
+            byId('pad-status').textContent = 'Пульт для этой плитки недоступен.';
+            image.hidden = true;
+        };
+        image.hidden = true;
+        image.src = api + '/drafts/' + encodeURIComponent(model.draft_id) + '/tile/' + encodeURIComponent(panel) + '/' + encodeURIComponent(tile.id) + '.svg?draft_version=' + model.draft_version + '&_=' + seq;
+    }
+    function closePad() {
+        padCounter++;
+        byId('pad-view').hidden = true;
+        byId('pad-image').hidden = true;
+        byId('pad-image').removeAttribute('src');
+        byId('pad-status').textContent = '';
+    }
+    function formDirty() {
+        var forms = [byId('placement'), byId('settings-form')];
+        return forms.some(function (form) {
+            if (!form || form.hidden || form.closest('[hidden]')) { return false; }
+            return Array.prototype.some.call(form.querySelectorAll('input,select,textarea'), function (field) {
+                if (field.disabled || !field.name || field.type === 'submit' || field.type === 'button') { return false; }
+                var initial = field.tagName === 'SELECT' ?
+                    Array.prototype.filter.call(field.options, function (o) { return o.defaultSelected; }).map(function (o) { return o.value; }).join(',') :
+                    field.defaultValue;
+                var current = field.tagName === 'SELECT' ?
+                    Array.prototype.filter.call(field.selectedOptions, function (o) { return true; }).map(function (o) { return o.value; }).join(',') :
+                    field.value;
+                return current !== initial;
             });
         });
-    };
+    }
+    function bind() {
+        byId('restart').onclick = function () { if (leaveEdits()) { restart(panel); } };
+        byId('check').onclick = function () { check().catch(function () {}); };
+        byId('publish').onclick = function () {
+            if (!checked || checked.version !== model.draft_version || checked.id !== model.draft_id) {
+                status('Сначала выполните проверку текущей версии.', true);
+                return;
+            }
+            if (!window.confirm('Опубликовать проверенный черновик? Рабочие панели изменятся.')) { return; }
+            publish(false).catch(function (err) {
+                if (!err || !err.status || err.status < 500) { return; }
+                recoverPublish(model.draft_id, panel);
+            });
+        };
+        byId('history').onclick = function () { history().catch(function () {}); };
+        byId('panels').onchange = function () {
+            if (!leaveEdits()) { byId('panels').value = panel; return; }
+            panel = byId('panels').value; section = 0; selected = null;
+            remember();
+            showModel(model); showPreview();
+        };
+        byId('sections').onchange = function () {
+            if (!leaveEdits()) { byId('sections').value = section; return; }
+            section = +byId('sections').value; selected = null;
+            remember();
+            listSignature = ''; drawList(); showProperties();
+        };
+        byId('search').oninput = function () { drawLibrary(); };
+        byId('add').onclick = function () {
+            var element = byId('elements').value;
+            if (!element) { return; }
+            operation({op: 'add_instance', element: element}, true);
+        };
+        byId('placement').onsubmit = function (event) {
+            event.preventDefault();
+            if (!selected) { return; }
+            var fields = {};
+            ['width', 'height', 'title'].forEach(function (id, i) {
+                var key = ['w', 'h', 'title'][i];
+                var raw = byId(id).value.trim();
+                fields[key] = raw === '' ? null : (key === 'title' ? raw : +raw);
+            });
+            operation({op: 'update_instance', id: selected, fields: fields}, true);
+        };
+        byId('remove').onclick = function () {
+            if (selected && window.confirm('Удалить выбранную плитку из черновика?')) {
+                operation({op: 'remove_instance', id: selected}, false);
+            }
+        };
+        byId('create-panel').onsubmit = function (event) {
+            event.preventDefault();
+            var key = byId('create-panel').querySelector('[name=key]').value.trim();
+            var caption = byId('create-panel').querySelector('[name=caption]').value.trim();
+            if (!key) { return; }
+            operation({op: 'create_panel', panel: key, title: caption}, false);
+        };
+        byId('remove-panel').onclick = function () {
+            if (window.confirm('Удалить панель «' + panel + '» из черновика?')) {
+                operation({op: 'remove_panel'}, false);
+            }
+        };
+        byId('create-section').onsubmit = function (event) {
+            event.preventDefault();
+            var caption = byId('create-section').querySelector('[name=caption]').value.trim();
+            operation({op: 'create_section', title: caption}, false);
+        };
+        byId('remove-section').onclick = function () {
+            if (selectedPanel().sections.length && window.confirm('Удалить текущий раздел?')) {
+                operation({op: 'remove_section'}, false);
+            }
+        };
+        byId('assign-screen').onsubmit = function (event) {
+            event.preventDefault();
+            var screen = byId('assign-screen').querySelector('[name=screen]').value.trim();
+            if (screen) { assignScreen(screen, false); }
+        };
+        byId('refresh-preview').onclick = showPreview;
+        byId('theme').onchange = showPreview;
+        byId('cols').onchange = showPreview;
+        byId('pad').onclick = openPad;
+        byId('close-pad').onclick = closePad;
+        byId('close-inspector').onclick = closeInspector;
+        byId('panel-settings').onclick = function () {
+            var p = selectedPanel();
+            byId('settings-title').textContent = 'Настройки панели';
+            byId('settings-kind').value = 'panel';
+            var fields = [
+                {key: 'title', label: 'Название', value: p.title},
+                {key: 'hidden', label: 'Скрыть панель', type: 'bool', value: p.hidden},
+                {key: 'cols', label: 'Колонки', value: p.cols},
+                {key: 'theme', label: 'Тема', value: p.theme, choices: model.themes},
+                {key: 'tabs', label: 'Вкладки', value: p.tabs, choices: ['true', 'bottom']},
+                {key: 'accordion', label: 'Гармошка', type: 'bool', value: p.accordion},
+                {key: 'swipe', label: 'Свайп', type: 'bool', value: p.swipe},
+                {key: 'pad_close', label: 'Закрытие пульта, с', value: p.pad_close},
+                {key: 'saver_mode', label: 'Заставка', value: p.screensaver && p.screensaver.mode, choices: ['on', 'off']},
+                {key: 'saver_after', label: 'Бездействие', value: p.screensaver && p.screensaver.after},
+                {key: 'saver_panel', label: 'Панель заставки', value: p.screensaver && p.screensaver.panel, choices: model.panels.map(function (x) { return x.id; })}
+            ];
+            byId('settings-fields').innerHTML = fields.map(fieldRow).join('');
+            byId('settings-form').hidden = false;
+            openInspector();
+        };
+        byId('section-settings').onclick = function () {
+            var s = selectedSection();
+            if (!s) { return; }
+            byId('settings-title').textContent = 'Настройки раздела';
+            byId('settings-kind').value = 'section';
+            byId('settings-fields').innerHTML = [
+                {key: 'title', label: 'Название', value: s.title},
+                {key: 'saver_mode', label: 'Заставка', value: s.screensaver && s.screensaver.mode, choices: ['on', 'off']},
+                {key: 'saver_after', label: 'Бездействие', value: s.screensaver && s.screensaver.after},
+                {key: 'saver_panel', label: 'Панель заставки', value: s.screensaver && s.screensaver.panel, choices: model.panels.map(function (x) { return x.id; })}
+            ].map(fieldRow).join('');
+            byId('settings-form').hidden = false;
+            openInspector();
+        };
+        byId('settings-form').onsubmit = function (event) {
+            event.preventDefault();
+            var fields = {};
+            Array.prototype.forEach.call(byId('settings-fields').querySelectorAll('[name]'), function (field) {
+                var value = field.value;
+                if (value === '') { fields[field.name] = null; }
+                else if (value === 'true') { fields[field.name] = true; }
+                else if (value === 'false') { fields[field.name] = false; }
+                else { fields[field.name] = value; }
+            });
+            var kind = byId('settings-kind').value;
+            operation({op: kind === 'panel' ? 'update_panel' : 'update_section', fields: fields}, true);
+        };
+        byId('library-link').onclick = function (event) {
+            if (busy || !leaveEdits()) { event.preventDefault(); return; }
+            remember();
+        };
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                if (!byId('pad-view').hidden) { closePad(); }
+                else if (inspectorOpen) { closeInspector(); }
+            }
+        });
+        window.addEventListener('beforeunload', function (event) {
+            if (formDirty()) { event.preventDefault(); event.returnValue = ''; }
+        });
+        if (mobileMedia.addEventListener) {
+            mobileMedia.addEventListener('change', function () {
+                if (!mobileMedia.matches) { closeInspector(); }
+            });
+        }
+    }
+    function start() {
+        bind();
+        var saved = null;
+        try {
+            saved = JSON.parse(
+                sessionStorage.getItem(resumeKey) ||
+                sessionStorage.getItem(legacyResumeKey)
+            );
+        } catch (ignore) {}
+        if (saved && saved.id) {
+            restoreDraft(saved).catch(function () {
+                forget();
+                restart().catch(function (err) {
+                    byId('workspace').hidden = true;
+                    var retry = byId('retry-load');
+                    retry.hidden = false;
+                    retry.onclick = function () {
+                        retry.hidden = true;
+                        restart().catch(function () { retry.hidden = false; });
+                    };
+                    status(explainError(err), true);
+                });
+            });
+            return;
+        }
+        restart().catch(function (err) {
+            byId('workspace').hidden = true;
+            var retry = byId('retry-load');
+            retry.hidden = false;
+            retry.onclick = function () {
+                retry.hidden = true;
+                restart().catch(function () { retry.hidden = false; });
+            };
+            status(explainError(err), true);
+        });
+    }
     start();
 
 }());

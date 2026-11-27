@@ -87,6 +87,13 @@ async function editorFlow(browser) {
        && await p.locator('#library-list [data-element]').count() === 0);
     await p.fill('#library-search', 'Подсветка');
     await p.locator('#library-list [data-element="light"]').click();
+    const command = p.locator('#property-fields [name=command_topic_brightness]');
+    ok('библиотека: топик команды изначально свёрнут', await command.isHidden());
+    await p.locator('#advanced-properties > summary').click();
+    ok('библиотека: топик команды доступен после раскрытия', await command.isVisible());
+    await p.locator('#advanced-properties > summary').click();
+    await p.locator('#property-guide summary').click();
+    ok('библиотека: пример для диммера', (await p.locator('#guide-example').innerText()).includes('wb-mdm3_119/Channel 1'));
     await p.fill('#property-fields [name=channel_brightness]', 'dm/Edited level');
     const [edited] = await Promise.all([
       p.waitForResponse(r => r.url().endsWith('/operation') && r.request().method() === 'POST'),

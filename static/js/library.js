@@ -226,8 +226,80 @@
             host.appendChild(list);
         }
     }
+    // The first group describes a working setup; alternatives are explained per type.
+    // Examples are documentation only. They never become form values.
+    var guides = {
+        switch: ['channel', 'Для включения и выключения укажите канал реле.', 'channel: wb-mr6c_183/K1'],
+        scene: ['channel', 'Укажите канал виртуальной кнопки, запускающей сцену.', 'channel: lighting_scenes/evening'],
+        scenes: ['items', 'Добавьте хотя бы одну кнопку и укажите её канал. Название и иконку можно добавить позже.', 'items: [{channel: lighting_scenes/evening, title: Вечер}]'],
+        value: ['channel', 'Для показания нужен канал датчика. Единицу измерения панель может получить из его метаданных.', 'channel: sensor/Temperature'],
+        header: ['title', 'Для простого заголовка достаточно названия. При необходимости разверните настройки и добавьте чипы состояния.', 'title: Кухня'],
+        camera: ['camera', 'Укажите имя камеры из раздела cameras. В старых конфигурациях эту же роль выполняет поле name.', 'camera: entrance'],
+        link: ['panel url', 'Выберите одно назначение: ID панели или веб-адрес. Если заполнены оба поля, откроется веб-адрес.', 'panel: kitchen'],
+        light: ['channel_switch channel_brightness channel_temp', 'Подключите каналы доступных функций ленты. Для регулировки яркости нужен канал яркости, для оттенка белого — канал цветовой температуры.', 'channel_switch: wb-led_122/CCT1\nchannel_brightness: wb-led_122/CCT1 Brightness'],
+        dimmer: ['channel_brightness channel', 'Для регулировки уровня укажите канал яркости. Канал включения добавьте, если требуется отдельно включать и выключать свет.', 'channel_brightness: wb-mdm3_119/Channel 1\nchannel: wb-mdm3_119/K1'],
+        curtain: ['channel channel_left channel_right', 'Для общего привода укажите канал положения. Для независимых створок задайте отдельные каналы левой и правой створок.', 'channel: curtain/Position'],
+        roller: ['channel', 'Для управления положением укажите канал привода. Каналы цели, движения и остановки добавляются отдельно.', 'channel: blind/Position'],
+        thermostat: ['channel_target channel_current', 'Для изменения температуры нужна уставка. Для показа измеренной температуры подключите канал датчика.', 'channel_target: heating/Target\nchannel_current: heating/Temperature'],
+        fancoil: ['channel_target channel_current channel_switch', 'Начните с нужной функции: для уставки укажите целевую температуру, для измерения — текущую, для питания — канал включения. Режимы и скорости доступны ниже.', 'channel_target: climate/Target\nchannel_current: climate/Temperature'],
+        ac: ['device', 'Укажите MQTT-имя устройства кондиционера. Панель построит адреса его контролов по этому имени.', 'device: haier_livingroom'],
+        tv: ['device', 'Укажите MQTT-имя устройства телевизора. Список кнопок приложений можно добавить позже.', 'device: tv_livingroom'],
+        chart: ['series', 'Добавьте ряд и укажите канал с историей значений. Цвет, шкалу и пороги можно оставить по умолчанию.', 'series: [{channel: sensor/Temperature}]'],
+        forecast: ['device', 'По умолчанию прогноз читается из устройства weather. Укажите другое имя, только если ваш источник называется иначе.', 'device: weather'],
+        clock: ['view', 'Для часов дополнительные привязки не нужны. Выберите clock для показа только времени. По умолчанию видны часы и погода устройства weather.', 'view: clock'],
+        leak: ['sensors channel channel_alarm', 'Если датчики уже описаны в water, поля можно оставить пустыми. Для одного отдельного датчика укажите канал, для выбора группы — имена датчиков. Также можно использовать общий канал тревоги.', 'channel: leak/Input F1'],
+        valve: ['valve channel', 'Укажите имя крана из раздела water или непосредственно канал его выхода.', 'valve: bathroom'],
+        agenda: ['calendars', 'Нужен хотя бы один календарь в разделе calendars проекта. Пустое поле означает все настроенные календари.', 'calendars: ["family"]'],
+        list: ['list', 'Укажите имя существующего списка из раздела lists проекта.', 'list: shopping'],
+        today: ['list calendars', 'Можно показать дела из списка, события календарей или оба источника. Если календари уже настроены, плитка покажет их и без заполнения полей.', 'list: shopping']
+    };
+
+    var fieldHints = {
+        title: 'Название для этой плитки во всей библиотеке.',
+        w: 'Ширина в ячейках, например 1,5. Размер в размещении имеет приоритет.',
+        h: 'Высота в ячейках, например 1. Размер в размещении имеет приоритет.',
+        source: 'Источник MQTT. Обычно панель определяет его по адресу канала или службы.',
+        service: 'Путь MQTT к службе Sprut.hub для автоматической привязки ролей.',
+        range: 'Период истории, например 12h или 7d.',
+        subtitle: 'Дополнительная строка текста на плитке.',
+        color: 'Цвет плитки, например sand. Без значения используется оформление панели.',
+        screen: 'Выберите «Нет», чтобы скрыть плитку на экране ESP32.',
+        grid_labels: 'Показывать числа у горизонтальных линий графика.',
+        time_labels: 'Показывать время вдоль горизонтальной оси.',
+        step: 'Изменение уставки за одно нажатие, например 0,5 °C.',
+        scale_min: 'Нижняя отметка видимой шкалы, например 14 °C.',
+        scale_max: 'Верхняя отметка видимой шкалы, например 30 °C.',
+        target_min: 'Наименьшая разрешённая уставка, например 16 °C.',
+        target_max: 'Наибольшая разрешённая уставка, например 28 °C.',
+        command_stop: 'Значение команды остановки из документации привода.',
+        invert: 'Меняет местами включённое и выключенное состояния.',
+        inverted: 'Меняет направление шкалы положения привода.',
+        plain: 'Отображает заголовок без фоновой плашки.',
+        grid: 'Расстояние между линиями сетки по вертикали.',
+        icon: 'Имя иконки панели, например bulb или thermo.',
+        facing: 'Азимут окна в градусах или сторона света, например ЮЗ.',
+        stale_after: 'Через сколько секунд без данных считать значение устаревшим.',
+        command_on: 'Значение, отправляемое устройству при включении, например 1 или true.',
+        command_off: 'Значение, отправляемое устройству при выключении, например 0 или false.'
+    };
+    function fieldHint(field) {
+        if (field.protected) { return 'Значение задаётся в YAML и защищено от изменения здесь.'; }
+        if (fieldHints[field.key]) { return fieldHints[field.key]; }
+        if (field.spec[1] === 'topic' && field.key.indexOf('command_topic') === 0) {
+            return 'Явный MQTT-топик записи. Для обычного канала Wiren Board адрес команды строится автоматически.';
+        }
+        if (field.spec[1] === 'channel') { return 'Адрес MQTT, например устройство/контрол.'; }
+        if (field.spec[1] === 'boolean') { return '«По умолчанию» снимает явное значение этого параметра.'; }
+        if (field.spec[1] === 'integer') { return 'Целое число от ' + field.spec[2] + ' до ' + field.spec[3] + '.'; }
+        return '';
+    }
+
     function showProperties() {
-        var item = selectedItem(), fields = empty('property-fields');
+        var item = selectedItem(), previous = byId('advanced-properties');
+        var expanded = previous && item && previous.dataset.element === item.id && previous.open;
+        var fields = empty('property-fields');
+        var help = byId('property-guide');
+        help.hidden = !item;
         previewToken++;
         if (!item) {
             byId('property-title').textContent = 'Элемент не выбран';
@@ -242,6 +314,28 @@
         byId('property-id').textContent = item.id;
         byId('save-properties').disabled = false;
         showUsage(item);
+        var guide = Object.prototype.hasOwnProperty.call(guides, item.type) ? guides[item.type] : ['', 'Укажите источник данных для этого типа плитки.', ''];
+        var primary = guide[0].split(' ');
+        var service = item.properties.find(function (f) { return f.key === 'service'; });
+        var automatic = service && (service.value || service.protected);
+        if (automatic) { primary = ['service'].concat(primary); }
+        if (item.type === 'camera' && item.properties.some(function (f) {
+            return f.key === 'name' && (f.value || f.protected);
+        })) { primary.push('name'); }
+        byId('guide-minimum').textContent = automatic ?
+            'Роли каналов могут определяться по службе Sprut.hub. Заполняйте явные каналы, когда требуется переопределение.' : guide[1];
+        var sample = byId('guide-example');
+        sample.textContent = automatic ? 'service: Sprut.hub/accessories/100/13' : guide[2];
+        sample.parentNode.hidden = !sample.textContent;
+        var advanced = node('details', '');
+        advanced.id = 'advanced-properties';
+        advanced.dataset.element = item.id;
+        advanced.open = Boolean(expanded);
+        var summary = node('summary', '');
+        advanced.appendChild(summary);
+        var basic = node('div', '');
+        fields.appendChild(basic);
+        var optionalCount = 0, configured = 0;
         item.properties.forEach(function (field) {
             var spec = field.spec;
             var label = node('label', spec[0]);
@@ -266,13 +360,28 @@
             input.dataset.initial = input.value;
             if (field.protected) { input.placeholder = 'Задаётся в YAML'; }
             input.addEventListener('input', function () { byId('edit-status').textContent = 'Есть несохранённые изменения свойств.'; });
+            var main = primary.indexOf(field.key) >= 0;
+            var target = main ? basic : advanced;
+            if (!main) {
+                optionalCount++;
+                if (field.value != null || field.protected) { configured++; }
+            }
+            if (!automatic && ((field.key === 'channel' && ['switch', 'value', 'scene'].indexOf(item.type) >= 0) ||
+                (field.key === 'device' && ['ac', 'tv'].indexOf(item.type) >= 0) ||
+                (item.type === 'list' && field.key === 'list'))) {
+                label.appendChild(node('small', 'Нужно для работы плитки'));
+            }
             label.appendChild(input);
+            var hint = fieldHint(field);
+            if (hint) { label.appendChild(node('small', hint)); }
             if (kind === 'json' && rowColumns[field.key] && !field.protected) {
                 var group = node('fieldset', '');
-                group.appendChild(node('legend', spec[0])); group.appendChild(label); fields.appendChild(group);
+                group.appendChild(node('legend', spec[0])); group.appendChild(label); target.appendChild(group);
                 propertyRows(group, field, input);
-            } else { fields.appendChild(label); }
+            } else { target.appendChild(label); }
         });
+        summary.textContent = 'Дополнительные настройки (' + optionalCount + ')' + (configured ? ' · задано: ' + configured : '');
+        if (optionalCount) { fields.appendChild(advanced); }
         var preview = byId('property-preview'), feedback = byId('property-preview-status'), token = ++previewToken;
         feedback.hidden = false; feedback.textContent = 'Загрузка предпросмотра…'; preview.hidden = true;
         preview.onload = function () { if (token === previewToken) { feedback.hidden = true; preview.hidden = false; } };
@@ -291,6 +400,12 @@
     }
 
     byId('library-search').oninput = drawList;
+    function revealField(input) {
+        for (var parent = input.parentNode; parent && parent !== byId('property-form'); parent = parent.parentNode) {
+            if (parent.tagName === 'DETAILS') { parent.open = true; }
+        }
+    }
+    byId('property-form').addEventListener('invalid', function (event) { revealField(event.target); }, true);
     byId('property-form').onsubmit = function (event) {
         event.preventDefault();
         var fields = {}, invalid = false;
@@ -318,6 +433,9 @@
         }}, function (result) {
             model = result; empty('details').hidden = true; showModel();
             byId('edit-status').textContent = 'Сохранено в черновике.';
+        }, function (error) {
+            var input = error.field && byId('property-form').elements.namedItem(error.field);
+            if (input && input.focus) { revealField(input); input.focus(); }
         });
     };
 

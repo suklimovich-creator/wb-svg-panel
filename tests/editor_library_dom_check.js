@@ -139,9 +139,17 @@ function brightness(w) {
     preview.dispatchEvent(new w.Event('load'));
     assert(!preview.hidden && d.getElementById('property-preview-status').hidden);
 
+    const advanced = d.getElementById('advanced-properties');
+    assert(!advanced.open && advanced.querySelector('[name="command_topic_brightness"]'));
+    assert(!advanced.contains(d.querySelector('[name="channel_brightness"]')));
+    assert(d.getElementById('guide-example').textContent.includes('wb-mdm3_119/Channel 1'));
+    advanced.open = true;
+    advanced.querySelector('[name="command_topic_brightness"]').value = '/demo/brightness/set';
+    advanced.open = false;
     d.querySelector('#property-fields [name="channel_brightness"]').value = 'dev/new-level';
     submit(w, 'property-form');
     await until(() => d.getElementById('edit-status').textContent.includes('Сохранено'));
+    assert.strictEqual(d.getElementById('advanced-properties').querySelector('[name="command_topic_brightness"]').value, '/demo/brightness/set');
     assert.strictEqual(brightness(w), 'dev/new-level');
     assert.strictEqual(stored(w).version, 2);
     assert.strictEqual(stored(w).panel, 'b');

@@ -153,3 +153,8 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(288px, 400px)
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }
+
+#property-guide { margin: 12px 0; padding: 12px; border-left: 3px solid var(--ink); background: var(--field); border-radius: 6px; }
+#property-guide h3, #property-guide p { margin: 0 0 6px; }
+#property-guide pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+#property-guide summary, #advanced-properties > summary { cursor: pointer; padding: 6px 0; }

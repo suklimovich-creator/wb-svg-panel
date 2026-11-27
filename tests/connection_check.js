@@ -13,7 +13,9 @@ const assert = require('assert');
     if(fault==='broken') return route.fulfill({status:200,contentType:'image/svg+xml',body:'<svg><g data-main="1">'});
     if(fault==='auth') return route.fulfill({status:401,body:'Unauthorized'});
     const response=await route.fetch();
-    if(fault==='version') return route.fulfill({response,headers:{...response.headers(),'x-panel-app':'99.0.0'}});
+    if(fault==='editor') return route.fulfill({response,headers:{...response.headers(),'x-panel-app':'99.0.0'}});
+    if(fault==='compatible') return route.fulfill({response,headers:{...response.headers(),'x-panel-app':'99.0.0','x-panel-client':'changed-assets'}});
+    if(fault==='version') return route.fulfill({response,headers:{...response.headers(),'x-panel-app':'99.0.0','x-panel-protocol':'incompatible'}});
     return route.fulfill({response});
   });
   const base='http://127.0.0.1:'+(process.env.PORT||8899)+'/';
@@ -61,6 +63,20 @@ const assert = require('assert');
     assert.equal(await p.locator('.sv-panel').getAttribute('src'),src);
     assert(await p.locator('.sv-panel').isVisible());
     fault='';await p.evaluate(()=>saverHide());
+    // Compatible upgrades keep fresh data, controls and fullscreen alive.
+    for (const f of ['editor','compatible']) {
+      fault=f;
+      await p.evaluate(()=>refresh(true));
+      await p.waitForFunction(()=>inflight===0);
+      assert(await p.evaluate(()=>!panelBlocked && !panelIncompatible));
+      assert.equal(await p.evaluate(()=>appReload),f==='compatible');
+      const before=requests.length;
+      await p.evaluate(()=>poll());
+      await p.waitForFunction(()=>!pollBusy);
+      assert(requests.length>before,'polling must continue after an upgrade');
+      assert(await p.evaluate(()=>!!document.fullscreenElement));
+      assert.equal(documents,navs);
+    }
     // Server version changes must not reload, including overlay close.
     fault='version';await p.evaluate(()=>refresh(true));
     await p.waitForFunction(()=>appReload);

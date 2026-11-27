@@ -15,6 +15,7 @@ import os
 import time
 from flask import Response, request
 
+from .panel_client import client_revision, PANEL_PROTOCOL
 from . import web
 from . import __version__, checkup, demo, palette, showcase, stats, themes
 from .assemble import resolve_sections, section_mode
@@ -323,6 +324,8 @@ def panel_html(name):
                 # бездействие (1.57): окно закрывается само, заставка
                 **web.idle_of(panel_conf, name)})),
             ("__APP_JS__", json.dumps(__version__)),
+            ("__CLIENT_JS__", json.dumps(client_revision())),
+            ("__PROTOCOL_JS__", json.dumps(PANEL_PROTOCOL)),
             ("__APP__", html.escape(__version__)),
             # Список тем для меню и цвета полей страницы - из данных тем,
             # а не из копии в скрипте страницы (с 1.24).

@@ -16,6 +16,7 @@ import time
 from collections import OrderedDict
 from flask import Response, abort, request
 
+from .panel_client import client_headers
 from . import web
 from . import __version__, palette, showcase, stats
 from .assemble import resolve_sections
@@ -278,11 +279,11 @@ def panel_svg(name):
     # бы версии, до которой счётчик дойдёт нескоро.
     base_headers = {"Access-Control-Allow-Origin": "*",
                     "Access-Control-Expose-Headers":
-                        "X-Panel-Version, X-Panel-App, X-Panel-Head, X-Panel-Lean, "
+                        "X-Panel-Version, X-Panel-App, X-Panel-Client, X-Panel-Protocol, X-Panel-Head, X-Panel-Lean, "
                         "X-Panel-Height",
-                    # версия демона: страница со старыми скриптами
-                    # перезагрузится сама (см. APP в wrapper.html)
-                    "X-Panel-App": __version__}
+                    # Версия приложения диагностическая; совместимость страницы
+                    # определяется отдельными заголовками протокола и файлов.
+                    "X-Panel-App": __version__, **client_headers()}
     # Ждём, если страница видела текущую версию или с её версии не
     # менялось ничего из того, что панель показывает сразу: датчик CO2 в
     # спальне не повод слать прихожей всю картинку заново. Версия больше
@@ -379,8 +380,8 @@ def demo_svg(cols, name=None):
     except (TypeError, ValueError):
         since = None
     headers = {"Access-Control-Allow-Origin": "*",
-               "Access-Control-Expose-Headers": "X-Panel-Version, X-Panel-App",
-               "X-Panel-App": __version__, "Cache-Control": "no-store"}
+               "Access-Control-Expose-Headers": "X-Panel-Version, X-Panel-App, X-Panel-Client, X-Panel-Protocol",
+               "X-Panel-App": __version__, **client_headers(), "Cache-Control": "no-store"}
     if since is not None and since == st.version:
         sem = _waiters()
         if not sem.acquire(blocking=False):
@@ -397,7 +398,7 @@ def demo_svg(cols, name=None):
     headers["X-Panel-Version"] = str(version)
     # демо своей панели - как обычная: без повторной головы (1.45)
     if name and name != showcase.NAME:
-        headers["Access-Control-Expose-Headers"] = ("X-Panel-Version, X-Panel-App, X-Panel-Head, "
+        headers["Access-Control-Expose-Headers"] = ("X-Panel-Version, X-Panel-App, X-Panel-Client, X-Panel-Protocol, X-Panel-Head, "
                                                     "X-Panel-Lean, X-Panel-Height")
         svg = lean_head(svg, request.args.get("have"), headers)
     return Response(svg, mimetype="image/svg+xml", headers=headers)

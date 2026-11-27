@@ -304,7 +304,7 @@ var SCROLL_QUIET = 400;
 function scrolling(){ return Date.now() - lastScroll < SCROLL_QUIET; }
 
 function applySvg(svg, seq, fresh){
-  if (appReload || seq < shownSeq || seq < connectionSeq) return;
+  if (panelIncompatible || seq < shownSeq || seq < connectionSeq) return;
   if (fingerHeld() || scrolling()) {
     if (!pendingSvg || seq > pendingSvg.seq) pendingSvg = {svg: svg, seq: seq, fresh: fresh};
     if (!fingerHeld()) setTimeout(flushPending, SCROLL_QUIET + 50);
@@ -385,13 +385,13 @@ function connectionState(reason, seq){
   if (seq && seq < connectionSeq) return;
   if (seq) connectionSeq = seq;
   connectionReason = reason || '';
-  var blocked = !!connectionReason || appReload;
+  var blocked = !!connectionReason || panelIncompatible;
   if (blocked && !panelBlocked) commandEpoch++;
   panelBlocked = blocked;
   document.body.classList.toggle('panel-offline', blocked);
   var box = document.getElementById('connection');
   box.textContent = connectionReason || (appReload ? 'Доступна новая версия панели' : '');
-  box.style.display = blocked ? 'block' : 'none';
+  box.style.display = (blocked || appReload) ? 'block' : 'none';
   if (appReload || connectionReason === 'Требуется вход') {
     var button = document.createElement('button');
     button.textContent = appReload ? 'Обновить панель' : 'Войти';
@@ -413,11 +413,14 @@ function connectionError(e, seq){
   host.classList.remove('wait');
 }
 function checkApp(r){
-  var app = r.headers && r.headers.get ? r.headers.get('X-Panel-App') : null;
-  if (app && APP && app !== APP) {
-    appReload = true;
-    connectionState(connectionReason);
-    var e = new Error('Новая версия'); e.app = true; throw e;
+  var get = function(name){ return r.headers && r.headers.get ? r.headers.get(name) : null; };
+  var protocol = get('X-Panel-Protocol'), client = get('X-Panel-Client'), app = get('X-Panel-App');
+  // A legacy server cannot declare compatibility: require an explicit update.
+  panelIncompatible = protocol ? protocol !== PROTOCOL : !!(app && APP && app !== APP);
+  appReload = panelIncompatible || !!(client && client !== CLIENT);
+  connectionState(connectionReason);
+  if (panelIncompatible) {
+    var e = new Error('Несовместимая версия панели'); e.app = true; throw e;
   }
 }
 function noteVersion(r){
@@ -495,7 +498,7 @@ function panelRequest(url, opts, read, timeout, controller){
   });
 }
 function refresh(force){
-  if(appReload || (paused && !force)) return;
+  if(panelIncompatible || (paused && !force)) return;
   var q = Q(), seq = ++reqSeq, settled = false;
   function settle(){ if(!settled){ settled = true; inflight--; } }
   inflight++; lastReqAt = Date.now();
@@ -540,7 +543,7 @@ function schedule(ms){
   pollTimer = setTimeout(poll, ms);
 }
 function poll(){
-  if (pollBusy || STILL || appReload) return;
+  if (pollBusy || STILL || panelIncompatible) return;
   if (document.hidden) return;          // продолжим, когда вкладку покажут
   if (!LIVE) { if (!paused) refresh(); schedule(EVERY); return; }
   pollBusy = true;

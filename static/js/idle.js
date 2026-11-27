@@ -139,7 +139,7 @@ function saverInline(svg){
 var saverVer = null, saverLast = '', saverAbort = null;
 function saverPanel(){
   clearTimeout(saverTimer);
-  if (!saverOn || !CONTROLS.saver_panel || appReload) return;
+  if (!saverOn || !CONTROLS.saver_panel || panelIncompatible) return;
   var seq = ++saverSeq, cols = saverCols(), again = 300;
   saverAbort = window.AbortController ? new AbortController() : null;
   // Тема - устройства, если у панели заставки нет своей.

@@ -619,7 +619,7 @@ def prepare(panel_conf, state, history, cols=None, all_panels=None, name=None,
         if title and mode != "tabs":
             # Было 6: чипы высотой 36 подходили вплотную к плиткам сверху.
             y_cursor += 14
-            plate_h = max(36, round(48 * scale)) if mode == "accordion" else 36
+            plate_h = max(36, round(24 * scale)) if mode == "accordion" else 36
             font = min(32, max(18, round(15 * scale))) if mode == "accordion" else 18
             offset = (plate_h - 36) // 2
             hd = {"plate_h": plate_h, "font": font, "title": title, "x": PAD,

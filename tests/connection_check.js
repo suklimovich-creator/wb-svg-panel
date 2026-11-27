@@ -32,7 +32,10 @@ const assert = require('assert');
       await p.setViewportSize({width,height:width===390?844:390});
       await p.waitForFunction(()=>{
         const plate=host.querySelector('[data-accordion] .section-plate');
-        return layoutWidth===host.clientWidth && plate && plate.getBoundingClientRect().height>=47;
+        if (!plate || layoutWidth!==host.clientWidth) return false;
+        const svg=plate.ownerSVGElement;
+        const scale=svg.getBoundingClientRect().width/svg.viewBox.baseVal.width;
+        return Math.abs(plate.getBoundingClientRect().height-Math.max(24,36*scale))<=scale;
       });
     }
     assert.equal(new URL(requests[0]).searchParams.get('theme'),'light');

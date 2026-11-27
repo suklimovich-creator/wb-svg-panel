@@ -73,18 +73,35 @@ async function editorFlow(browser) {
     if (draft.status() !== 201) {
       throw new Error('Повторное создание черновика: HTTP ' + draft.status() + ', ожидался 201');
     }
-    await p.locator('#library-editor summary').click();
-    await p.selectOption('#property-element', 'light');
+    const createdDraft = await draft.json();
+    await p.click('#library-link');
+    await p.waitForURL(url => url.pathname === '/editor/library');
+    await p.locator('#workspace').waitFor();
+    ok('библиотека: переход сохраняет черновик', await p.evaluate(id =>
+      JSON.parse(sessionStorage.getItem('wb-editor:shared')).id === id, createdDraft.draft_id));
+    await p.fill('#library-search', 'dimmer');
+    ok('библиотека: поиск по типу', await p.locator('#library-list [data-element]').count() === 2
+       && await p.locator('#library-list [data-element="light"]').isVisible());
+    await p.fill('#library-search', 'нет-такого-элемента');
+    ok('библиотека: пустой результат', await p.locator('#library-empty').isVisible()
+       && await p.locator('#library-list [data-element]').count() === 0);
+    await p.fill('#library-search', 'Подсветка');
+    await p.locator('#library-list [data-element="light"]').click();
     await p.fill('#property-fields [name=channel_brightness]', 'dm/Edited level');
     const [edited] = await Promise.all([
       p.waitForResponse(r => r.url().endsWith('/operation') && r.request().method() === 'POST'),
-      p.click('#property-form button')
+      p.click('#save-properties')
     ]);
-    ok('редактор: поле яркости диммера в черновике', edited.ok() &&
+    ok('библиотека: поле яркости диммера в черновике', edited.ok() &&
        (await edited.json()).library.find(e => e.id === 'light').properties
          .some(f => f.key === 'channel_brightness' && f.value === 'dm/Edited level'));
     await p.waitForFunction(() => document.querySelector('#property-preview').naturalWidth > 0);
-    await p.locator('#library-editor summary').first().click();
+    ok('библиотека: предпросмотр и затронутые панели', (await p.locator('#element-usage').innerText()).includes('room'));
+    await p.click('#editor-link');
+    await p.waitForURL(url => url.pathname === '/editor');
+    await p.locator('#workspace').waitFor();
+    ok('библиотека: возврат к тому же черновику', await p.evaluate(id =>
+      JSON.parse(sessionStorage.getItem('wb-editor:shared')).id === id, createdDraft.draft_id));
     await p.locator('#structure summary').click();
     await p.fill('#create-panel [name=key]', 'new-room');
     await p.fill('#create-panel [name=caption]', 'Новая комната');
@@ -211,7 +228,7 @@ async function editorFlow(browser) {
        && await p.evaluate(() => window.savedForm === document.querySelector('#width')));
     await p.keyboard.press('Escape');
     ok('редактор: закрытие возвращает прокрутку и фокус', await p.evaluate(y => Math.abs(window.pageYOffset - y) < 2 && document.activeElement === document.querySelector('#instances li:last-child [aria-pressed]'), scrollBefore));
-    const resumePath = base + 'api/editor/drafts/' + (await draft.json()).draft_id;
+    const resumePath = base + 'api/editor/drafts/' + createdDraft.draft_id;
     const [resumed] = await Promise.all([p.waitForResponse(r => r.url() === resumePath), p.reload()]);
     await p.locator('#instances [aria-pressed=true]').waitFor();
     ok('редактор: вкладка восстановила черновик и выбор', resumed.ok()

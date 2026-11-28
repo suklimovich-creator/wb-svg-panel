@@ -173,7 +173,17 @@ function saverPanel(){
       if (svg === null) return null;
       svg = svg.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); saverCamsFrom(svg); return svg;
     })
-    .then(function(svg){ return svg === null ? null : saverInline(svg); })
+    .then(function(svg){
+      if (svg === null || !saverOn || seq !== saverSeq) return null;
+      // Firefox 68 на планшете: используем тот же SVG DOM, что и на основной панели.
+      var firefox = /Firefox\/(\d+)/.exec(window.navigator && window.navigator.userAgent);
+      if (firefox && +firefox[1] <= 68 && saverMarkup(svg)) {
+        saverEl.querySelector('.sv-panel').style.display = 'none';
+        saverFail(null);
+        return null;
+      }
+      return saverInline(svg);
+    })
     .then(function(svg){
       if (svg === null || !saverOn || seq !== saverSeq) return;
       if (svg.indexOf('<svg') < 0) { saverFail(svg ? 'нет картинки' : 'нет ответа'); again = 5000; return; }
@@ -193,7 +203,7 @@ function saverPanel(){
       img.onload = function(){
         img.onload = img.onerror = null;
         if (saverPending && saverPending.img === img) saverPending = null;
-        if (!saverOn || seq !== saverSeq) { URL.revokeObjectURL(url); return; }
+        if (!saverOn) { URL.revokeObjectURL(url); return; }
         previous.onload = previous.onerror = null;
         previous.parentNode.replaceChild(img, previous);
         previous.removeAttribute('src');
@@ -208,7 +218,7 @@ function saverPanel(){
         img.onload = img.onerror = null;
         if (saverPending && saverPending.img === img) saverPending = null;
         URL.revokeObjectURL(url);
-        if (!saverOn || seq !== saverSeq) return;
+        if (!saverOn) return;
         if (previous.getAttribute('src')) { saverFail('нет свежих данных'); return; }
         var why = '';
         try {

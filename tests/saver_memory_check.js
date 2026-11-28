@@ -26,7 +26,7 @@ context.saverCamsFrom=noop;context.saverCamLayout=noop;context.saverMarkup=noop;
 async function start(){context.saverPanel();await new Promise(setImmediate);return made[made.length-1];}
 (async()=>{
  for(let i=0;i<300;i++){
-   const old=current, next=await start();assert(next.onload);next.onload();
+   const old=current, next=await start();assert(next.onload);context.saverSeq++;next.onload();
    assert.strictEqual(next.onload,null,'loaded frame retains its callback and previous frame');
    assert.strictEqual(next.onerror,null,'loaded frame retains SVG through error callback');
    assert.strictEqual(old.getAttribute('src'),null,'old decoded image is still referenced');
@@ -37,5 +37,10 @@ async function start(){context.saverPanel();await new Promise(setImmediate);retu
  const pending=await start();assert.equal(live.size,2);context.saverHide();
  assert.strictEqual(pending.onload,null);assert.strictEqual(pending.onerror,null);assert.equal(live.size,1);
  assert.strictEqual(pending.getAttribute('src'),null);
+ context.window.navigator={userAgent:'Mozilla/5.0 (Android) Firefox/68.0'};
+ context.saverOn=true;
+ const retained=live.size;let inline=false;
+ context.saverMarkup=svg=>{inline=svg.includes('<text>');return true;};
+ await start();assert(inline);assert.equal(live.size,retained);
  console.log('OK: 300 frames; callbacks detached; one retained URL; failed frame preserved; pending image cancelled on hide');
 })().catch(e=>{console.error(e.message);process.exitCode=1;});

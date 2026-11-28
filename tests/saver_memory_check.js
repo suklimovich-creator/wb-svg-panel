@@ -16,7 +16,7 @@ const noop=()=>{};
 const context={console,Promise,Date,Blob:class{},URL:{createObjectURL(){let u='blob:'+ ++id;live.add(u);return u;},revokeObjectURL:u=>live.delete(u)},
  document:{addEventListener:noop,createElement(){let i=image();made.push(i);return i;}},window:{addEventListener:noop},
  setTimeout:()=>1,clearTimeout:noop,setInterval:noop,
- CONTROLS:{saver_panel:'test',saver_img:'background',saver_clock:false},COLS:2,THEME:'',LITE:true,appReload:false,
+ CONTROLS:{saver_panel:'test',saver_img:'background',saver_clock:false},COLS:2,THEME:'',LITE:true,panelIncompatible:false,
  checkApp:noop,completeSvg:s=>s,parseSvg:()=>({}),
  fetch:()=>Promise.resolve({ok:true,status:200,headers:{get:()=>null},text:()=>Promise.resolve('<svg xmlns="http://www.w3.org/2000/svg"><text>'+ ++frame +'</text></svg>')}),
  refresh:noop,SHIELD_MS:1};

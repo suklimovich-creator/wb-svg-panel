@@ -112,6 +112,21 @@ const assert = require('assert');
       light.tap()
     ]);
     assert(command.ok(),'tap with update banner must publish to the fixture');
+    await controls.evaluate(()=>{
+      const tile=document.createElement('div');
+      tile.setAttribute('data-cam-poll','icon.svg');
+      padCamera(tile);
+      CONTROLS.saver=60;
+      SAVER_MODE='60';
+      PADCLOSE_MODE='1';
+      idleAt=Date.now()-120000;
+    });
+    await controls.waitForTimeout(1200); // both idle deadlines have passed
+    assert(await controls.evaluate(()=>cameraOpen() && !saverOn));
+    await controls.evaluate(()=>closeOv());
+    assert(await controls.evaluate(()=>Date.now()-idleAt<1000 && !saverOn));
+    await controls.evaluate(()=>{idleAt=Date.now()-61000;});
+    await controls.waitForFunction(()=>saverOn);
     await controls.unrouteAll({behavior:'ignoreErrors'});
     await controls.close();
     // Server version changes must not reload, including overlay close.

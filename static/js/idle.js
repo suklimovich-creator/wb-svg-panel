@@ -70,8 +70,11 @@ function saverCancelImage(){
   pending.img.removeAttribute('src');
   URL.revokeObjectURL(pending.url);
 }
+function cameraOpen(){
+  return ov.classList.contains('open') && !!ov.querySelector('.camwrap');
+}
 function saverShow(){
-  if (saverOn) return;
+  if (saverOn || cameraOpen()) return;
   if (ov.classList.contains('open')) closeOv();
   if (menuOpen) closeMenu();
   if (!saverEl) {
@@ -364,6 +367,7 @@ function saverHide(){
   refresh(true);
 }
 setInterval(function(){
+  if (cameraOpen()) return;
   var idle = (Date.now() - idleAt) / 1000, pc = padCloseSec(), sv = saverSec();
   if (pc > 0 && idle >= pc && ov.classList.contains('open')) closeOv();
   if (sv > 0 && idle >= sv && !saverOn) saverShow();

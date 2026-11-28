@@ -70,6 +70,7 @@ function padCamera(node){
   /* Пока панель обновляется в фоне, кадр камеры тянуть незачем: он и
      так перед глазами. Останавливаем на время просмотра. */
   ovCleanup = function(){
+    idleTouch();
     alive = false;
     if(timer) clearInterval(timer);
     if(revive) clearTimeout(revive);

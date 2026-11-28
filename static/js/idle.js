@@ -314,6 +314,7 @@ function saverCamLayout(){
   var keep = {};
   for (var i = 0; i < old.length; i++) keep[old[i].getAttribute('data-poll')] = old[i];
   if (!img || !saverVB || img.style.display === 'none') saverCams = [];
+  if (!saverVB) return;
   var cw = img ? img.clientWidth : 0, ch = img ? img.clientHeight : 0;
   var k = Math.min(cw / saverVB.w || 0, ch / saverVB.h || 0), ox = (img ? img.offsetLeft : 0) + (cw - saverVB.w * k) / 2,
       oy = img ? img.offsetTop : 0;
@@ -339,9 +340,23 @@ function camFrame(poll, every, put){
   pre.onload = function(){ put(src); };
   pre.src = src;
 }
+function updateCameraTiles(root, limit){
+  var tiles = root.querySelectorAll('[data-cam-poll][data-cam-every]');
+  for (var j = 0; j < tiles.length; j++) (function(t){
+    var every = +t.getAttribute('data-cam-every');
+    if (!(every > 0 && every < limit)) return;
+    var image = t.querySelector('image');
+    if (image) camFrame(t.getAttribute('data-cam-poll'), every, function(src){
+      image.setAttribute('href', src);
+      image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', src);
+    });
+  })(tiles[j]);
+}
 setInterval(function(){
   if (document.hidden) return;
   if (saverOn) {
+    var inline = saverEl && saverEl.querySelector('.sv-inline svg');
+    if (inline) { updateCameraTiles(inline, 30); return; }
     for (var i = 0; i < saverCams.length; i++) (function(c){
       var el = saverEl && saverEl.querySelector('.sv-cam[data-poll="' + c.poll + '"]');
       if (el) camFrame(c.poll, c.every, function(src){ el.src = src; });
@@ -349,16 +364,7 @@ setInterval(function(){
     return;
   }
   if (ov.classList.contains('open')) return;
-  var tiles = host.querySelectorAll('[data-cam-poll][data-cam-every]');
-  for (var j = 0; j < tiles.length; j++) (function(t){
-    var every = +t.getAttribute('data-cam-every');
-    if (!(every > 0 && every < 10)) return;
-    var image = t.querySelector('image');
-    if (image) camFrame(t.getAttribute('data-cam-poll'), every, function(src){
-      image.setAttribute('href', src);
-      image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', src);
-    });
-  })(tiles[j]);
+  updateCameraTiles(host, 10);
 }, 250);
 window.addEventListener('resize', function(){ if (saverOn) saverCamLayout(); });
 function saverHide(){

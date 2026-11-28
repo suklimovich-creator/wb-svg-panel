@@ -47,7 +47,7 @@ function padCamera(node){
     polling = true;
     if(revive){ clearTimeout(revive); revive = null; }
     shot();
-    timer = setInterval(shot, 700);
+
   }
   function connect(){
     if(!alive) return;
@@ -60,8 +60,12 @@ function padCamera(node){
   /* Ошибка загрузки означает разное: у потока - что он не пошёл, у
      снимка - что камера прямо сейчас не ответила. В первом случае
      переключаемся, во втором просто ждём следующего кадра. */
+  function nextShot(){
+    if(alive && polling) timer = setTimeout(shot, 700);
+  }
+  img.onload = nextShot;
   img.onerror = function(){
-    if(!polling) toPolling();
+    if(polling) nextShot(); else toPolling();
   };
 
   openOv([ttl, card]);
@@ -72,12 +76,12 @@ function padCamera(node){
   ovCleanup = function(){
     idleTouch();
     alive = false;
-    if(timer) clearInterval(timer);
+    if(timer) clearTimeout(timer);
     if(revive) clearTimeout(revive);
     /* Пустой src обрывает соединение с сервером немедленно. Без этого
        браузер держит его открытым ещё какое-то время, а на той стороне
        занят поток. */
-    img.onerror = null;
+    img.onload = img.onerror = null;
     img.src = '';
   };
 

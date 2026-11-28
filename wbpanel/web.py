@@ -183,7 +183,7 @@ def render_panel(name, cols=None, *, candidate=None):
         tab_nav=sect.get("tab_nav", False),
         # префикс идентификаторов: панель и раскрытая плитка живут в одном
         # документе, и без него их clipPath и градиенты перекрывают друг друга
-        uid="p-",
+        uid="saver-" if request.args.get("inline") == "1" else "p-",
         fs=1,
         tiles=tiles,
         headers=headers,

@@ -121,6 +121,10 @@ def web_checks():
     try:
         web, _palette, _cfg, _sent = env.setup(config=path, freeze_time=True)
         client = web.app.test_client()
+        for query, prefix in (("", "p-"), ("?inline=1", "saver-")):
+            svg = client.get("/wall.svg" + query).get_data(as_text=True)
+            assert 'clip-path="url(#%sclip0)"' % prefix in svg
+            assert 'id="%sclip0"' % prefix in svg
         response = client.get("/api/screen/wall")
         assert response.status_code == 200
         raw = response.get_data(as_text=True)
